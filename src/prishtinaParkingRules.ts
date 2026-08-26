@@ -15,6 +15,7 @@ export type MunicipalParkingData = {
 }
 
 const categoryByCode: Record<string, MunicipalParkingCategory> = {
+  X: 'barrier',
   A: 'residential',
   B: 'residential',
   U: 'residential',

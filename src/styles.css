@@ -1948,6 +1948,25 @@ input:focus-visible {
 .parking-report-panel__status strong { font-size: 12px; }
 .parking-report-panel__status span { font-size: 10px; }
 
+.quick-report-groups {
+  display: grid;
+  gap: 9px;
+}
+
+.quick-report-group {
+  display: grid;
+  gap: 5px;
+}
+
+.quick-report-group p {
+  margin: 0;
+  color: #66758a;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
 .quick-report-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;

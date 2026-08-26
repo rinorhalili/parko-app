@@ -1,5 +1,6 @@
 import { PARKINGS } from './data'
 import { OSM_PARKING_SNAPSHOT } from './osmParkingSnapshot'
+import { OFFICIAL_PRISHTINA_PARKING_MARKERS } from './officialPrishtinaParking'
 import { deriveMunicipalParkingData } from './prishtinaParkingRules'
 import type { Parking, ParkingAccess } from './types'
 
@@ -136,6 +137,63 @@ function fromOsm(element: OsmElement): Parking | null {
   }
 }
 
+function categoryLabel(category: NonNullable<Parking['municipalCategory']>) {
+  if (category === 'barrier') return 'Parking me laure'
+  if (category === 'commercial') return 'Parking komercial'
+  if (category === 'combined') return 'Parking i kombinuar'
+  return 'Parking rezidencial'
+}
+
+function fromOfficialPrishtinaParkingMarker(marker: (typeof OFFICIAL_PRISHTINA_PARKING_MARKERS)[number]): Parking {
+  const municipal = deriveMunicipalParkingData({
+    name: marker.title,
+    operator: 'Prishtina Parking',
+    ref: marker.code ?? '',
+  })
+  const coordinates = { lat: marker.lat, lng: marker.lng }
+  const distance = distanceMeters(USER_LOCATION, coordinates)
+  const pricePerHour = marker.pricePerHour ?? municipal.officialVisitorPrice
+
+  return {
+    id: `prishtina-parking-${marker.markerId}`,
+    name: marker.title,
+    zone: marker.code ? `Prishtina Parking ${marker.code}` : categoryLabel(marker.category),
+    address: marker.address === 'Prishtinë' ? 'Prishtinë, Kosovë' : `${marker.address}, Prishtinë`,
+    capacity: marker.capacity,
+    spaces: null,
+    status: 'unknown',
+    pricePerHour,
+    distanceMeters: distance,
+    driveMinutes: Math.max(2, Math.round(distance / 230)),
+    confidence: 'high',
+    updatedMinutesAgo: 0,
+    type: marker.category === 'commercial' || marker.category === 'barrier' ? 'public' : 'street',
+    open24h: false,
+    covered: false,
+    cardPayment: marker.category === 'barrier',
+    evCharging: false,
+    accessible: false,
+    free: pricePerHour === 0,
+    coordinates,
+    access: 'public',
+    source: 'municipal',
+    operator: 'Prishtina Parking',
+    openingHours: null,
+    municipalManaged: true,
+    municipalCode: marker.code,
+    municipalCategory: marker.category,
+    municipalZone: municipal.municipalZone,
+    usageHours: municipal.usageHours,
+    pricingSource: marker.pricePerHour !== null || municipal.officialVisitorPrice !== null ? 'official-zone' : null,
+  }
+}
+
+function withoutDuplicates(parkings: Parking[], existing: Parking[], thresholdMeters = 30) {
+  return parkings.filter((parking) => (
+    !existing.some((candidate) => parking.id === candidate.id || distanceMeters(parking.coordinates, candidate.coordinates) < thresholdMeters)
+  ))
+}
+
 export async function loadPrishtinaParkings(signal?: AbortSignal) {
   const query = `[out:json][timeout:30];nwr["amenity"="parking"](${PRISHTINA_BOUNDS});out body center geom;`
   let payload: OverpassResponse | null = null
@@ -166,15 +224,15 @@ export async function loadPrishtinaParkings(signal?: AbortSignal) {
   if (!payload) throw lastError
   const osmParkings = (payload.elements ?? []).map(fromOsm).filter((parking): parking is Parking => parking !== null)
   if (!osmParkings.length) throw new Error('No parking data returned')
+  const officialParkings = OFFICIAL_PRISHTINA_PARKING_MARKERS.map(fromOfficialPrishtinaParkingMarker)
 
   const enrichedSeeds = PARKINGS.map((seed) => {
     const liveMatch = osmParkings.find((parking) => parking.id === seed.id || distanceMeters(seed.coordinates, parking.coordinates) < 45)
     return liveMatch ? { ...seed, ...liveMatch, name: seed.name } : seed
   })
-  const withoutSeedDuplicates = osmParkings.filter((parking) => (
-    !PARKINGS.some((seed) => seed.id === parking.id || distanceMeters(seed.coordinates, parking.coordinates) < 45)
-  ))
-  return [...enrichedSeeds, ...withoutSeedDuplicates].sort((a, b) => a.distanceMeters - b.distanceMeters)
+  const seedParkings = withoutDuplicates(enrichedSeeds, officialParkings, 30)
+  const osmWithoutDuplicates = withoutDuplicates(osmParkings, [...officialParkings, ...seedParkings], 30)
+  return [...officialParkings, ...seedParkings, ...osmWithoutDuplicates].sort((a, b) => a.distanceMeters - b.distanceMeters)
 }
 
 type OsmApiElement = {
@@ -233,14 +291,14 @@ export function getPrishtinaParkingSnapshot() {
   const snapshotParkings = OSM_PARKING_SNAPSHOT
     .map(([type, id, lat, lng, tags]) => fromOsm({ type, id, lat, lon: lng, tags }))
     .filter((parking): parking is Parking => parking !== null)
+  const officialParkings = OFFICIAL_PRISHTINA_PARKING_MARKERS.map(fromOfficialPrishtinaParkingMarker)
   const enrichedSeeds = PARKINGS.map((seed) => {
     const snapshotMatch = snapshotParkings.find((parking) => parking.id === seed.id || distanceMeters(seed.coordinates, parking.coordinates) < 45)
     return snapshotMatch ? { ...seed, ...snapshotMatch, name: seed.name } : seed
   })
-  const withoutSeedDuplicates = snapshotParkings.filter((parking) => (
-    !PARKINGS.some((seed) => seed.id === parking.id || distanceMeters(seed.coordinates, parking.coordinates) < 45)
-  ))
-  return [...enrichedSeeds, ...withoutSeedDuplicates].sort((a, b) => a.distanceMeters - b.distanceMeters)
+  const seedParkings = withoutDuplicates(enrichedSeeds, officialParkings, 30)
+  const snapshotWithoutDuplicates = withoutDuplicates(snapshotParkings, [...officialParkings, ...seedParkings], 30)
+  return [...officialParkings, ...seedParkings, ...snapshotWithoutDuplicates].sort((a, b) => a.distanceMeters - b.distanceMeters)
 }
 
 export { USER_LOCATION }
