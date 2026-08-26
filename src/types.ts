@@ -96,7 +96,7 @@ export type Filters = {
   availableOnly: boolean
   verifiedOnly: boolean
   maxPrice: number
-  type: 'all' | Parking['type']
+  type: 'all' | Parking['type'] | 'municipal'
   freeOnly: boolean
   evCharging: boolean
   accessible: boolean

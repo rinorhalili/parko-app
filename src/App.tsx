@@ -26,7 +26,68 @@ const initialFilters: Filters = {
 }
 
 const RECENT_DESTINATIONS_KEY = 'parko-recent-destinations'
+const PARKING_REPORTS_KEY = 'parko-live-parking-reports'
 
+type ParkingReport = {
+  parkingId: string
+  availability?: 'free-spots' | 'full'
+  payment?: 'free' | 'paid'
+  policeRisk?: boolean
+  updatedAt: number
+}
+
+type ParkingReportPatch = Omit<Partial<ParkingReport>, 'parkingId' | 'updatedAt'>
+
+function loadParkingReports() {
+  try {
+    const value = JSON.parse(localStorage.getItem(PARKING_REPORTS_KEY) ?? '{}') as Record<string, ParkingReport>
+    return value && typeof value === 'object' ? value : {}
+  } catch {
+    return {}
+  }
+}
+
+function saveParkingReports(reports: Record<string, ParkingReport>) {
+  try { localStorage.setItem(PARKING_REPORTS_KEY, JSON.stringify(reports)) } catch { /* storage can be unavailable */ }
+}
+
+function reportAgeLabel(report?: ParkingReport) {
+  if (!report) return ''
+  const minutes = Math.max(0, Math.round((Date.now() - report.updatedAt) / 60_000))
+  if (minutes < 1) return 'tani'
+  return `${minutes} min me pare`
+}
+
+function reportMessage(parking: Parking, report?: ParkingReport) {
+  if (report?.availability === 'free-spots' || (parking.spaces !== null && parking.spaces > 0)) {
+    const spaces = parking.spaces !== null && parking.spaces > 0 ? `${parking.spaces} vende te lira` : 'ka vende te lira'
+    return `Raportim live: ${spaces}${report ? ` • ${reportAgeLabel(report)}` : ''}`
+  }
+  if (report?.availability === 'full' || parking.status === 'full') return `Raportim live: parkingu duket plot${report ? ` • ${reportAgeLabel(report)}` : ''}`
+  return 'Ska raportime per parking te lire ne kete zone'
+}
+
+function policeRiskLabel(report?: ParkingReport) {
+  if (!report || report.policeRisk === undefined) return 'Rreziku nga policia nuk eshte raportuar'
+  return report.policeRisk ? 'Ka rrezik per polici sipas raportimit' : 'Pa rrezik te raportuar per polici'
+}
+function applyParkingReport(parking: Parking, report?: ParkingReport): Parking {
+  if (!report) return parking
+  const ageMinutes = Math.max(0, Math.round((Date.now() - report.updatedAt) / 60_000))
+  const paymentUpdate = report.payment === 'free'
+    ? { pricePerHour: 0, free: true }
+    : report.payment === 'paid' && parking.pricePerHour === 0
+      ? { pricePerHour: null, free: false }
+      : report.payment === 'paid'
+        ? { free: false }
+        : {}
+  const availabilityUpdate = report.availability === 'free-spots'
+    ? { spaces: parking.spaces && parking.spaces > 0 ? parking.spaces : 1, status: 'available' as const, availabilitySource: 'Raport perdoruesi', updatedMinutesAgo: ageMinutes, availabilityUpdatedAt: new Date(report.updatedAt).toISOString() }
+    : report.availability === 'full'
+      ? { spaces: 0, status: 'full' as const, availabilitySource: 'Raport perdoruesi', updatedMinutesAgo: ageMinutes, availabilityUpdatedAt: new Date(report.updatedAt).toISOString() }
+      : {}
+  return { ...parking, ...paymentUpdate, ...availabilityUpdate }
+}
 function loadRecentDestinations(): Destination[] {
   try {
     const value = JSON.parse(localStorage.getItem(RECENT_DESTINATIONS_KEY) ?? '[]') as Destination[]
@@ -154,11 +215,58 @@ function ParkingCard({ parking, smartMatch, onOpen }: { parking: Parking; smartM
   )
 }
 
+type CommunityStats = {
+  reports: number
+  freeSignals: number
+  policeSignals: number
+  municipalParkings: number
+}
+
+function ParkingReportPanel({ parking, report, compact = false, onReport, streetViewHref }: { parking: Parking; report?: ParkingReport; compact?: boolean; onReport: (parkingId: string, patch: ParkingReportPatch) => void; streetViewHref: string }) {
+  const reportSource = report ? `Raportuar ${reportAgeLabel(report)}` : parking.availabilitySource ? parking.availabilitySource : 'Pa raport komuniteti'
+  return (
+    <section className={`parking-report-panel ${compact ? 'parking-report-panel--compact' : ''}`} aria-label="Raportimet live per zonen e zgjedhur">
+      <header className="parking-report-panel__header">
+        <span><small>Community driven</small><strong>Raporto zonën</strong></span>
+        <b>{reportSource}</b>
+      </header>
+      <div className="parking-report-panel__status">
+        <strong>{reportMessage(parking, report)}</strong>
+        <span>{policeRiskLabel(report)}</span>
+      </div>
+      <div className="quick-report-grid" aria-label="Raporto parkingun">
+        <button className={report?.availability === 'free-spots' ? 'selected' : ''} onClick={() => onReport(parking.id, { availability: 'free-spots' })} aria-pressed={report?.availability === 'free-spots'}><span>+</span>Ka vende</button>
+        <button className={report?.availability === 'full' ? 'selected' : ''} onClick={() => onReport(parking.id, { availability: 'full' })} aria-pressed={report?.availability === 'full'}><span>0</span>Plot</button>
+        <button className={(report?.payment === 'free' || parking.free) ? 'selected' : ''} onClick={() => onReport(parking.id, { payment: 'free' })} aria-pressed={report?.payment === 'free'}><span>€0</span>Free</button>
+        <button className={report?.payment === 'paid' ? 'selected' : ''} onClick={() => onReport(parking.id, { payment: 'paid' })} aria-pressed={report?.payment === 'paid'}><span>€</span>Me pagesë</button>
+        <button className={report?.policeRisk === true ? 'selected danger' : ''} onClick={() => onReport(parking.id, { policeRisk: true })} aria-pressed={report?.policeRisk === true}><span>!</span>Polici</button>
+        <button className={report?.policeRisk === false ? 'selected safe' : ''} onClick={() => onReport(parking.id, { policeRisk: false })} aria-pressed={report?.policeRisk === false}><span>✓</span>Pa rrezik</button>
+      </div>
+      <a className="street-view-inline" href={streetViewHref} target="_blank" rel="noreferrer"><span>360°</span>Shiko vendin</a>
+    </section>
+  )
+}
+
+function CommunityStrip({ stats, loadStatus }: { stats: CommunityStats; loadStatus: ParkingLoadStatus }) {
+  return (
+    <section className="community-strip" aria-label="Gjendja live nga komuniteti">
+      <div>
+        <span className="community-strip__pulse" />
+        <span><small>Live community</small><strong>{stats.reports ? `${stats.reports} raporte aktive` : 'Në pritje të raportimeve'}</strong></span>
+      </div>
+      <span><small>Vende</small><strong>{stats.freeSignals}</strong></span>
+      <span><small>Polici</small><strong>{stats.policeSignals}</strong></span>
+      <span><small>PP</small><strong>{stats.municipalParkings}</strong></span>
+      <b>{loadStatus === 'live' ? 'OSM live' : loadStatus === 'loading' ? 'Sync' : 'Offline'}</b>
+    </section>
+  )
+}
+
 function matchesFilters(parking: Parking, filters: Filters) {
   const matchesAvailability = !filters.availableOnly || parking.status === 'available' || parking.status === 'limited'
   const matchesVerified = !filters.verifiedOnly || parking.confidence !== 'low'
   const matchesPrice = filters.maxPrice >= 2 || (parking.pricePerHour !== null && parking.pricePerHour <= filters.maxPrice)
-  const matchesType = filters.type === 'all' || parking.type === filters.type
+  const matchesType = filters.type === 'all' || (filters.type === 'municipal' ? Boolean(parking.municipalManaged) : parking.type === filters.type)
   return matchesAvailability && matchesVerified && matchesPrice && matchesType && (!filters.freeOnly || parking.free) && (!filters.evCharging || parking.evCharging) && (!filters.accessible || parking.accessible)
 }
 
@@ -194,6 +302,9 @@ function HomeView({
   onToggleShowAll,
   onStartMapPick,
   onPickDestination,
+  communityStats,
+  selectedReport,
+  onReport,
   streetViewHref,
   recenterToken,
   onRecenter,
@@ -236,6 +347,9 @@ function HomeView({
   onToggleShowAll: () => void
   onStartMapPick: () => void
   onPickDestination: (coordinates: { lat: number; lng: number }) => void
+  communityStats: CommunityStats
+  selectedReport?: ParkingReport
+  onReport: (parkingId: string, patch: ParkingReportPatch) => void
   streetViewHref: string
   recenterToken: number
   onRecenter: () => void
@@ -373,6 +487,8 @@ function HomeView({
           </div>
         )}
 
+        <CommunityStrip stats={communityStats} loadStatus={loadStatus} />
+
         {destination ? (
           <section className="smart-planner">
             <header><span><small>Destinacioni</small><strong>{destination.name}</strong></span><div className="planner-header-actions"><button onClick={onFilters} aria-label="Hap filtrat">☰</button><button onClick={onClearDestination} aria-label="Pastro destinacionin">×</button></div></header>
@@ -432,7 +548,10 @@ function HomeView({
             </div>
           )}
           {sheetState === 'medium' && mapParkings.length ? (
-            <ParkingCard parking={selected} smartMatch={selectedMatch} onOpen={onDetails} />
+            <>
+              <ParkingCard parking={selected} smartMatch={selectedMatch} onOpen={onDetails} />
+              <ParkingReportPanel parking={selected} report={selectedReport} compact onReport={onReport} streetViewHref={streetViewHref} />
+            </>
           ) : sheetState === 'medium' ? (
             <div className="empty-state">
               <strong>Nuk gjetëm parking në këtë zonë</strong>
@@ -534,14 +653,14 @@ function FiltersView({ filters, count, hasLiveAvailability, onChange, onApply, o
         <fieldset>
           <legend>Lloji i parkingut</legend>
           <div className="type-pills">
-            {(['public', 'private', 'street'] as const).map((type) => (
+            {(['public', 'private', 'street', 'municipal'] as const).map((type) => (
               <button
                 key={type}
                 className={filters.type === type ? 'selected' : ''}
                 aria-pressed={filters.type === type}
                 onClick={() => onChange({ ...filters, type: filters.type === type ? 'all' : type })}
               >
-                {{ public: 'Publik', private: 'Privat', street: 'Në rrugë' }[type]}
+                {{ public: 'Publik', private: 'Privat', street: 'Në rrugë', municipal: 'Prishtina Parking' }[type]}
               </button>
             ))}
           </div>
@@ -560,7 +679,7 @@ function FiltersView({ filters, count, hasLiveAvailability, onChange, onApply, o
   )
 }
 
-function DetailsView({ parking, route, destination, smartMatch, streetViewHref, saved, userLocation, onToggleSaved, onBack, onNavigate }: { parking: Parking; route: DrivingRoute | null; destination: Destination | null; smartMatch?: RankedParking; streetViewHref: string; saved: boolean; userLocation: Parking['coordinates']; onToggleSaved: () => void; onBack: () => void; onNavigate: () => void }) {
+function DetailsView({ parking, report, onReport, route, destination, smartMatch, streetViewHref, saved, userLocation, onToggleSaved, onBack, onNavigate }: { parking: Parking; report?: ParkingReport; onReport: (parkingId: string, patch: ParkingReportPatch) => void; route: DrivingRoute | null; destination: Destination | null; smartMatch?: RankedParking; streetViewHref: string; saved: boolean; userLocation: Parking['coordinates']; onToggleSaved: () => void; onBack: () => void; onNavigate: () => void }) {
   const routeMinutes = route ? Math.max(1, Math.ceil(route.durationSeconds / 60)) : parking.driveMinutes
   const routeDistance = route?.distanceMeters ?? parking.distanceMeters
   const categoryLabel = municipalCategoryLabel(parking)
@@ -577,6 +696,7 @@ function DetailsView({ parking, route, destination, smartMatch, streetViewHref, 
         <span className={`availability-badge availability-badge--${parking.status}`}>● {availabilityLabel(parking)}</span>
         <DataTrustBadge parking={parking} detailed />
         <p className="muted-copy">{accessLabel(parking)} • {parking.availabilitySource ? `Disponueshmëri nga ${parking.availabilitySource}` : 'Të dhëna të hartës OpenStreetMap'}</p>
+        <ParkingReportPanel parking={parking} report={report} onReport={onReport} streetViewHref={streetViewHref} />
 
         <div className="stat-grid">
           <div><span>Largësia</span><strong>{routeDistance >= 1000 ? `${(routeDistance / 1000).toFixed(1)} km` : `${routeDistance} m`}</strong></div>
@@ -816,6 +936,7 @@ export default function App() {
   const [pickingDestination, setPickingDestination] = useState(false)
   const [recenterToken, setRecenterToken] = useState(0)
   const [savedParkingIds, setSavedParkingIds] = useState<Set<string>>(() => new Set(persistedPreferences.savedParkingIds ?? []))
+  const [parkingReports, setParkingReports] = useState<Record<string, ParkingReport>>(loadParkingReports)
   const [userLocation, setUserLocation] = useState(USER_LOCATION)
   const [locationStatus, setLocationStatus] = useState<'idle' | 'locating' | 'ready' | 'denied' | 'unavailable'>('idle')
   const parkingSelectedByUserRef = useRef(false)
@@ -911,10 +1032,11 @@ export default function App() {
     return () => navigator.geolocation.clearWatch(watchId)
   }, [locationStatus])
 
-  const locatedParkings = useMemo(() => parkings.map((parking) => ({
+  const reportedParkings = useMemo(() => parkings.map((parking) => applyParkingReport(parking, parkingReports[parking.id])), [parkings, parkingReports])
+  const locatedParkings = useMemo(() => reportedParkings.map((parking) => ({
     ...parking,
     distanceMeters: distanceMeters(userLocation, parking.coordinates),
-  })), [parkings, userLocation])
+  })), [reportedParkings, userLocation])
   const currentSelected = locatedParkings.find((parking) => parking.id === selected.id) ?? selected
   const hasLiveAvailability = useMemo(() => locatedParkings.some((parking) => parking.spaces !== null && parking.availabilitySource), [locatedParkings])
   const filteredParkings = useMemo(() => locatedParkings
@@ -961,6 +1083,15 @@ export default function App() {
   const mapRankedParkings = showAllResults ? rankedParkings : rankedParkings.slice(0, 3)
   const mapParkings = destination ? mapRankedParkings.map(({ parking }) => parking) : filteredParkings
   const selectedRankedParking = rankedParkings.find((match) => match.parking.id === currentSelected.id)
+  const communityStats = useMemo<CommunityStats>(() => {
+    const reports = Object.values(parkingReports)
+    return {
+      reports: reports.length,
+      freeSignals: reports.filter((report) => report.availability === 'free-spots').length,
+      policeSignals: reports.filter((report) => report.policeRisk === true).length,
+      municipalParkings: locatedParkings.filter((parking) => parking.municipalManaged).length,
+    }
+  }, [parkingReports, locatedParkings])
   const selectedStreetViewHref = useMemo(() => streetViewUrl(currentSelected, route), [currentSelected, route])
   const findCarHref = useMemo(() => findCarDirectionsUrl(currentSelected), [currentSelected])
   const selectedWalkingDirectionsHref = useMemo(() => destination ? walkingDirectionsUrl(currentSelected, destination) : '', [currentSelected, destination])
@@ -1054,6 +1185,15 @@ export default function App() {
   function selectParking(nextParking: Parking) {
     parkingSelectedByUserRef.current = true
     setSelected(nextParking)
+  }
+
+  function reportParking(parkingId: string, patch: ParkingReportPatch) {
+    setParkingReports((current) => {
+      const nextReport = { ...(current[parkingId] ?? { parkingId }), ...patch, updatedAt: Date.now() }
+      const next = { ...current, [parkingId]: nextReport }
+      saveParkingReports(next)
+      return next
+    })
   }
 
   function toggleSavedParking() {
@@ -1166,6 +1306,9 @@ export default function App() {
             onToggleShowAll={() => setShowAllResults((value) => !value)}
             onStartMapPick={() => { setSearchOpen(false); setPickingDestination(true); setDestination(null) }}
             onPickDestination={pickDestinationOnMap}
+            communityStats={communityStats}
+            selectedReport={parkingReports[currentSelected.id]}
+            onReport={reportParking}
             streetViewHref={selectedStreetViewHref}
             recenterToken={recenterToken}
             onRecenter={requestUserLocation}
@@ -1182,7 +1325,7 @@ export default function App() {
         {screen === 'filters' && (
           <FiltersView filters={draftFilters} count={draftFilteredCount} hasLiveAvailability={hasLiveAvailability} onChange={setDraftFilters} onApply={() => { setFilters(draftFilters); setScreen('home') }} onClose={() => setScreen('home')} />
         )}
-        {screen === 'details' && <DetailsView parking={currentSelected} route={route} destination={destination} smartMatch={selectedRankedParking} streetViewHref={selectedStreetViewHref} saved={savedParkingIds.has(currentSelected.id)} userLocation={userLocation} onToggleSaved={toggleSavedParking} onBack={() => setScreen('home')} onNavigate={() => setScreen('navigation')} />}
+        {screen === 'details' && <DetailsView parking={currentSelected} report={parkingReports[currentSelected.id]} onReport={reportParking} route={route} destination={destination} smartMatch={selectedRankedParking} streetViewHref={selectedStreetViewHref} saved={savedParkingIds.has(currentSelected.id)} userLocation={userLocation} onToggleSaved={toggleSavedParking} onBack={() => setScreen('home')} onNavigate={() => setScreen('navigation')} />}
         {screen === 'navigation' && <NavigationView parking={currentSelected} route={route} userLocation={userLocation} onStop={() => setScreen('details')} onArrive={() => setScreen(destination ? 'walking' : 'parked')} />}
         {screen === 'walking' && destination && displayedWalkingRoute && selectedRankedParking && <WalkingView parking={currentSelected} destination={destination} route={displayedWalkingRoute} match={selectedRankedParking} directionsHref={selectedWalkingDirectionsHref} userLocation={userLocation} onFinish={() => setScreen('parked')} />}
         {screen === 'parked' && <ParkedView parking={currentSelected} parkedAt={locationStatus === 'ready' ? userLocation : currentSelected.coordinates} directionsHref={findCarHref} onFinish={() => setScreen('home')} />}

@@ -899,7 +899,7 @@ input:focus-visible {
   left: 0;
   right: 0;
   bottom: 78px;
-  height: 214px;
+  height: 318px;
   min-height: 0;
   padding: 12px 20px 10px;
   border-radius: 28px 28px 0 0;
@@ -909,7 +909,7 @@ input:focus-visible {
   transition: height 180ms ease, padding 180ms ease;
 }
 
-.home-sheet--smart { height: 270px; padding-top: 10px; }
+.home-sheet--smart { height: 346px; padding-top: 10px; }
 .home-sheet--smart .sheet-heading { margin-bottom: 7px; }
 .home-sheet--smart .sheet-heading h1 { max-width: 245px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; }
 
@@ -958,14 +958,14 @@ input:focus-visible {
 .screen--sheet-collapsed .parking-footprint-badge,
 .screen--sheet-collapsed .map-canvas--destination .parking-footprint-badge { bottom: 148px; }
 .screen--sheet-collapsed .map-canvas--home .leaflet-bottom { bottom: 136px; }
-.screen--sheet-medium .locate-button { bottom: 306px; }
-.screen--sheet-medium .street-view-fab { bottom: 363px; }
-.screen--sheet-medium.screen--smart .locate-button { bottom: 362px; }
-.screen--sheet-medium.screen--smart .street-view-fab { bottom: 419px; }
-.screen--sheet-medium .price-legend { bottom: 306px; }
-.screen--sheet-medium.screen--smart .price-legend { bottom: 362px; }
-.screen--sheet-medium .map-canvas--home .leaflet-bottom { bottom: 292px; }
-.screen--sheet-medium.screen--smart .map-canvas--home .leaflet-bottom { bottom: 348px; }
+.screen--sheet-medium .locate-button { bottom: 410px; }
+.screen--sheet-medium .street-view-fab { bottom: 467px; }
+.screen--sheet-medium.screen--smart .locate-button { bottom: 438px; }
+.screen--sheet-medium.screen--smart .street-view-fab { bottom: 495px; }
+.screen--sheet-medium .price-legend { bottom: 410px; }
+.screen--sheet-medium.screen--smart .price-legend { bottom: 438px; }
+.screen--sheet-medium .map-canvas--home .leaflet-bottom { bottom: 396px; }
+.screen--sheet-medium.screen--smart .map-canvas--home .leaflet-bottom { bottom: 424px; }
 .screen--sheet-expanded .locate-button,
 .screen--sheet-expanded .street-view-fab,
 .screen--sheet-expanded .price-legend { opacity: 0; pointer-events: none; }
@@ -1747,4 +1747,254 @@ input:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+}
+
+.parking-report-panel {
+  margin: 10px 0 14px;
+  padding: 12px;
+  border: 1px solid #dfe7f0;
+  border-radius: 16px;
+  background: #f8fafc;
+  display: grid;
+  gap: 10px;
+}
+
+.parking-report-panel--compact {
+  margin-top: 9px;
+  padding: 10px;
+  gap: 8px;
+}
+
+.parking-report-panel__status {
+  display: grid;
+  gap: 3px;
+}
+
+.parking-report-panel__status strong {
+  color: #20304a;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.parking-report-panel__status span {
+  color: #6b788c;
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.3;
+}
+
+.quick-report-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.quick-report-grid button {
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 7px;
+  border: 1px solid #d9e2ec;
+  border-radius: 12px;
+  background: #fff;
+  color: #435169;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.quick-report-grid button.selected {
+  border-color: #8db7ff;
+  background: #eaf2ff;
+  color: #1f58c7;
+}
+
+.quick-report-grid button.danger {
+  border-color: #ffc0c0;
+  background: #fff0f0;
+  color: #b8202b;
+}
+
+.quick-report-grid button.safe {
+  border-color: #a8e5c8;
+  background: #edfff5;
+  color: #0d8052;
+}
+
+.street-view-inline {
+  min-height: 34px;
+  border-radius: 12px;
+  background: var(--primary);
+  color: #fff;
+  display: grid;
+  place-content: center;
+  font-size: 11px;
+  font-weight: 900;
+  text-decoration: none;
+}
+.community-strip {
+  margin-top: 9px;
+  min-height: 56px;
+  padding: 8px 9px;
+  border: 1px solid rgba(206, 216, 229, .9);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, .94);
+  box-shadow: 0 6px 18px rgba(13, 27, 42, .08);
+  backdrop-filter: blur(12px);
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) repeat(3, minmax(38px, .48fr)) auto;
+  align-items: center;
+  gap: 7px;
+}
+
+.community-strip > div,
+.community-strip > span {
+  min-width: 0;
+  min-height: 39px;
+  border-radius: 13px;
+  background: #f5f8fc;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.community-strip > div { padding: 0 9px; }
+.community-strip > span { justify-content: center; flex-direction: column; gap: 1px; padding: 4px 5px; }
+.community-strip small { color: #7a8798; font-size: 8px; font-weight: 900; line-height: 1; text-transform: uppercase; }
+.community-strip strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #17233a; font-size: 10px; font-weight: 900; line-height: 1.15; }
+.community-strip > span strong { font-size: 13px; }
+.community-strip > b {
+  min-height: 28px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #eaf7f0;
+  color: #0b8b5c;
+  display: grid;
+  place-content: center;
+  font-size: 8px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.community-strip__pulse {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #19c37d;
+  box-shadow: 0 0 0 5px rgba(25, 195, 125, .13);
+}
+
+.parking-report-panel {
+  border-color: #d8e2ee;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+  box-shadow: 0 8px 24px rgba(13, 27, 42, .08);
+}
+
+.parking-report-panel--compact {
+  margin-top: 10px;
+}
+
+.parking-report-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.parking-report-panel__header > span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.parking-report-panel__header small {
+  color: #0d8f61;
+  font-size: 8px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.parking-report-panel__header strong {
+  color: #152238;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.parking-report-panel__header b {
+  max-width: 142px;
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: #eef6ff;
+  color: #2861ce;
+  display: grid;
+  place-content: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.parking-report-panel__status {
+  padding: 9px 10px;
+  border: 1px solid #e4ebf3;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.parking-report-panel__status strong { font-size: 12px; }
+.parking-report-panel__status span { font-size: 10px; }
+
+.quick-report-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.quick-report-grid button {
+  min-height: 42px;
+  padding: 0 10px;
+  border-radius: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 7px;
+  text-align: left;
+}
+
+.quick-report-grid button span {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #eef3f8;
+  color: inherit;
+  display: grid;
+  place-content: center;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.quick-report-grid button.selected span { background: #fff; }
+
+.street-view-inline {
+  min-height: 42px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 8px 16px rgba(47, 107, 255, .18);
+}
+
+.street-view-inline span {
+  width: 30px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .18);
+  display: grid;
+  place-content: center;
+  font-size: 9px;
 }
