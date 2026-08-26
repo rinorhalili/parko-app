@@ -1,0 +1,9 @@
+{
+  "name": "Parko Prishtina",
+  "short_name": "Parko",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#eef3f8",
+  "theme_color": "#2f6bff",
+  "lang": "sq"
+}

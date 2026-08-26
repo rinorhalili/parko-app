@@ -1,0 +1,28 @@
+import type { Destination } from './types'
+
+export const PRISHTINA_DESTINATIONS: Destination[] = [
+  { id: 'nene-tereza', name: 'Sheshi Nënë Tereza', subtitle: 'Qendër, Prishtinë', category: 'place', coordinates: { lat: 42.66291, lng: 21.16551 }, aliases: ['mother teresa square', 'sheshi nena tereza', 'qender'], source: 'local' },
+  { id: 'zahir-pajaziti', name: 'Sheshi Zahir Pajaziti', subtitle: 'Qendër, Prishtinë', category: 'place', coordinates: { lat: 42.66076, lng: 21.16345 }, aliases: ['zahir pajaziti square', 'sheshi zahir'], source: 'local' },
+  { id: 'fakulteti-ekonomik', name: 'Fakulteti Ekonomik', subtitle: 'Universiteti i Prishtinës', category: 'building', coordinates: { lat: 42.65703, lng: 21.16402 }, aliases: ['economic faculty', 'fakulteti ekonomik up', 'universiteti'], source: 'local' },
+  { id: 'biblioteka', name: 'Biblioteka Kombëtare', subtitle: 'Rr. Agim Ramadani', category: 'building', coordinates: { lat: 42.65754, lng: 21.16281 }, aliases: ['national library', 'biblioteka kombetare kosoves', 'biblioteka'], source: 'local' },
+  { id: 'katedralja', name: 'Katedralja Nënë Tereza', subtitle: 'Rr. Justiniani, Prishtinë', category: 'building', coordinates: { lat: 42.65766, lng: 21.15939 }, aliases: ['cathedral', 'katedralja', 'mother teresa cathedral'], source: 'local' },
+  { id: 'stadiumi', name: 'Stadiumi Fadil Vokrri', subtitle: 'Qendër, Prishtinë', category: 'building', coordinates: { lat: 42.66342, lng: 21.15618 }, aliases: ['fadil vokrri stadium', 'stadiumi i qytetit'], source: 'local' },
+  { id: 'qkuk', name: 'QKUK', subtitle: 'Qendra Klinike Universitare', category: 'building', coordinates: { lat: 42.64891, lng: 21.16482 }, aliases: ['spitali', 'hospital', 'qendra klinike', 'klinika'], source: 'local' },
+  { id: 'albi-mall', name: 'Albi Mall', subtitle: 'Veternik, Prishtinë', category: 'building', coordinates: { lat: 42.62341, lng: 21.15331 }, aliases: ['albi shopping mall', 'veternik'], source: 'local' },
+  { id: 'teatri', name: 'Teatri Kombëtar i Kosovës', subtitle: 'Sheshi Skënderbeu', category: 'building', coordinates: { lat: 42.66358, lng: 21.16518 }, aliases: ['national theatre', 'teatri kombetar'], source: 'local' },
+  { id: 'stacioni-autobuseve', name: 'Stacioni i Autobusëve', subtitle: 'Dardani, Prishtinë', category: 'building', coordinates: { lat: 42.64583, lng: 21.15092 }, aliases: ['bus station', 'stacioni autobusave', 'terminali'], source: 'local' },
+  { id: 'germia', name: 'Parku i Gërmisë', subtitle: 'Gërmi, Prishtinë', category: 'place', coordinates: { lat: 42.67496, lng: 21.20072 }, aliases: ['germia park', 'parku germia'], source: 'local' },
+  { id: 'rruga-b', name: 'Rruga B', subtitle: 'Mati 1, Prishtinë', category: 'street', coordinates: { lat: 42.65563, lng: 21.17618 }, aliases: ['rr b', 'street b', 'mati 1'], source: 'local' },
+  { id: 'agim-ramadani', name: 'Rruga Agim Ramadani', subtitle: 'Qendër, Prishtinë', category: 'street', coordinates: { lat: 42.65842, lng: 21.16635 }, aliases: ['agim ramadani', 'rr agim ramadani'], source: 'local' },
+  { id: 'garibaldi', name: 'Rruga Garibaldi', subtitle: 'Qendër, Prishtinë', category: 'street', coordinates: { lat: 42.66017, lng: 21.15861 }, aliases: ['garibaldi', 'rr garibaldi'], source: 'local' },
+  { id: 'bill-klinton', name: 'Bulevardi Bill Klinton', subtitle: 'Dardani, Prishtinë', category: 'street', coordinates: { lat: 42.64954, lng: 21.14929 }, aliases: ['bill clinton', 'bill klinton', 'bulevardi klinton'], source: 'local' },
+  { id: 'uck', name: 'Rruga UÇK', subtitle: 'Qendër, Prishtinë', category: 'street', coordinates: { lat: 42.66353, lng: 21.15921 }, aliases: ['uck street', 'rr uck', 'uçk'], source: 'local' },
+  { id: 'muharrem-fejza', name: 'Rruga Muharrem Fejza', subtitle: 'Mati 1, Prishtinë', category: 'street', coordinates: { lat: 42.65312, lng: 21.18311 }, aliases: ['muharrem fejza', 'rr muharrem fejza'], source: 'local' },
+  { id: 'dardania', name: 'Dardania', subtitle: 'Lagje, Prishtinë', category: 'area', coordinates: { lat: 42.65048, lng: 21.15192 }, aliases: ['dardani', 'lagjja dardania'], source: 'local' },
+  { id: 'ulpiana', name: 'Ulpiana', subtitle: 'Lagje, Prishtinë', category: 'area', coordinates: { lat: 42.65186, lng: 21.16518 }, aliases: ['ulpiane', 'lagjja ulpiana'], source: 'local' },
+  { id: 'pejton', name: 'Pejton', subtitle: 'Lagje, Prishtinë', category: 'area', coordinates: { lat: 42.66153, lng: 21.15363 }, aliases: ['payton', 'lagjja pejton'], source: 'local' },
+  { id: 'bregu-diellit', name: 'Bregu i Diellit', subtitle: 'Lagje, Prishtinë', category: 'area', coordinates: { lat: 42.65694, lng: 21.17921 }, aliases: ['sunny hill', 'bregu diellit'], source: 'local' },
+  { id: 'arberia', name: 'Arbëria', subtitle: 'Lagje, Prishtinë', category: 'area', coordinates: { lat: 42.65937, lng: 21.14481 }, aliases: ['dragodan', 'arberia', 'arbëria'], source: 'local' },
+  { id: 'lakrishte', name: 'Lakrishtë', subtitle: 'Lagje, Prishtinë', category: 'area', coordinates: { lat: 42.65503, lng: 21.15113 }, aliases: ['lakrishte', 'lagjja lakrishte'], source: 'local' },
+  { id: 'mati-1', name: 'Mati 1', subtitle: 'Lagje, Prishtinë', category: 'area', coordinates: { lat: 42.65385, lng: 21.18142 }, aliases: ['mat 1', 'mati një'], source: 'local' },
+]
