@@ -2,14 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { loadVerifiedAvailability, mergeVerifiedAvailability } from './availabilityApi'
 import { defaultParking } from './data'
 import LiveParkingMap from './LiveParkingMap'
-import { searchDestinationOnline, searchLocalDestinations } from './geocodingApi'
+import { reverseGeocodeLocation, searchDestinationOnline, searchLocalDestinations } from './geocodingApi'
 import { distanceMeters, rankParkings, walkableParkingCandidates } from './parkingRanking'
 import { getPrishtinaParkingSnapshot, loadParkingGeometry, loadPrishtinaParkings, USER_LOCATION } from './parkingApi'
 import { parkingAccessPoint } from './parkingGeometry'
 import { PRISHTINA_PARKING_RULES_URL } from './prishtinaParkingRules'
 import { loadPreferences, savePreferences } from './persistence'
 import { loadDrivingMatrix, loadDrivingRoute, loadWalkingRoute } from './routingApi'
-import { streetViewEmbedUrl, walkingDirectionsUrl } from './streetView'
+import { streetViewUrl, walkingDirectionsUrl } from './streetView'
 import { captureEvent } from './telemetry'
 import type { DrivingMatrixEntry } from './routingApi'
 import type { Destination, DrivingRoute, Filters, Parking, ParkingLoadStatus, ParkingPreference, RankedParking, Screen } from './types'
@@ -137,7 +137,7 @@ function parkingTrust(parking: Parking) {
   }
   if (parking.municipalManaged) return {
     tone: 'official',
-    label: 'Prishtina Parking',
+    label: 'Operator i identifikuar',
     detail: 'Operatori është i identifikuar; shfaqen vetëm të dhënat e konfirmuara.',
   }
   if (parking.confidence === 'high') return {
@@ -177,11 +177,20 @@ function municipalCategoryLabel(parking: Parking) {
   }[parking.municipalCategory]
 }
 
-function BottomNav({ active = 'home', onHome, onLogin }: { active?: 'home' | 'login'; onHome?: () => void; onLogin: () => void }) {
+function parkingTypeLabel(parking: Parking) {
+  if (parking.municipalManaged) return 'Prishtina Parking'
+  return {
+    public: 'Publik · OSM',
+    private: 'Privat',
+    street: 'Në rrugë',
+  }[parking.type]
+}
+
+function BottomNav({ active = 'home', onHome, onSaved }: { active?: 'home' | 'saved'; onHome?: () => void; onSaved: () => void }) {
   return (
     <nav className="bottom-nav" aria-label="Navigimi kryesor">
       <button className={`bottom-nav__item ${active === 'home' ? 'bottom-nav__item--active' : ''}`} onClick={onHome} aria-current={active === 'home' ? 'page' : undefined}><span>➤</span>Harta</button>
-      <button className={`bottom-nav__item ${active === 'login' ? 'bottom-nav__item--active' : ''}`} onClick={onLogin} aria-current={active === 'login' ? 'page' : undefined}><span>◎</span>Log in</button>
+      <button className={`bottom-nav__item ${active === 'saved' ? 'bottom-nav__item--active' : ''}`} onClick={onSaved} aria-current={active === 'saved' ? 'page' : undefined}><span>♡</span>Ruajtur</button>
     </nav>
   )
 }
@@ -206,7 +215,10 @@ function ParkingCard({ parking, smartMatch, onOpen }: { parking: Parking; smartM
         <strong>{parking.name}</strong>
         {liveAvailability && <span className={`availability-text availability-text--${parking.status}`}>{liveAvailability}</span>}
         <small>{[...journey, verifiedPrice].filter(Boolean).join(' • ')}</small>
-        <DataTrustBadge parking={parking} />
+        <span className="parking-card__badges">
+          <span className={`parking-kind parking-kind--${parking.municipalManaged ? 'municipal' : parking.type}`}>{parkingTypeLabel(parking)}</span>
+          <DataTrustBadge parking={parking} />
+        </span>
       </div>
       <span className="parking-card__chevron" aria-hidden="true">›</span>
     </article>
@@ -221,32 +233,35 @@ type CommunityStats = {
 }
 
 type ParkingTypeFilter = Extract<Filters['type'], 'all' | 'public' | 'private' | 'street' | 'municipal'>
-type ParkingTypeCounts = Record<Exclude<ParkingTypeFilter, 'all'>, number>
+type ParkingTypeCounts = Record<ParkingTypeFilter, number>
 
-const parkingTypeOptions: Array<[Exclude<ParkingTypeFilter, 'all'>, string]> = [
-  ['public', 'Publik'],
-  ['private', 'Privat'],
-  ['street', 'Në rrugë'],
-  ['municipal', 'Prishtina Parking'],
+const parkingTypeOptions: Array<[ParkingTypeFilter, string, string]> = [
+  ['all', 'Të gjitha', 'Çdo operator'],
+  ['municipal', 'Prishtina Parking', 'Operatori zyrtar'],
+  ['public', 'Publike', 'Burim OpenStreetMap'],
+  ['street', 'Në rrugë', 'Parking anësor'],
+  ['private', 'Private', 'Biznes ose klientë'],
 ]
 
 function parkingMatchesType(parking: Parking, type: ParkingTypeFilter) {
   if (type === 'all') return true
   if (type === 'municipal') return Boolean(parking.municipalManaged)
+  if (parking.municipalManaged) return false
   return parking.type === type
 }
 
 function ParkingTypeChooser({ value, counts, onChange }: { value: ParkingTypeFilter; counts: ParkingTypeCounts; onChange: (type: ParkingTypeFilter) => void }) {
   return (
     <div className="parking-type-chooser" aria-label="Zgjedh llojin e parkingut">
-      {parkingTypeOptions.map(([type, label]) => (
+      {parkingTypeOptions.map(([type, label, description]) => (
         <button
           key={type}
           className={value === type ? 'selected' : ''}
           aria-pressed={value === type}
-          onClick={() => onChange(value === type ? 'all' : type)}
+          disabled={type !== 'all' && counts[type] === 0}
+          onClick={() => onChange(type)}
         >
-          <span>{label}</span>
+          <span><strong>{label}</strong><small>{description}</small></span>
           <b>{counts[type]}</b>
         </button>
       ))}
@@ -260,11 +275,11 @@ function ParkingReportPanel({ parking, report, compact = false, onReport }: { pa
     <section className={`parking-report-panel ${compact ? 'parking-report-panel--compact' : ''}`} aria-label="Raportimet live per zonen e zgjedhur">
       <header className="parking-report-panel__header">
         <span><small>Live</small><strong>Raporto shpejt</strong></span>
-        <b>{reportSource}</b>
+        <b title={parking.name}>{parking.name}</b>
       </header>
       <div className="parking-report-panel__status">
         <strong>{reportMessage(parking, report)}</strong>
-        <span>{policeRiskLabel(report)}</span>
+        <span>{reportSource} • {policeRiskLabel(report)}</span>
       </div>
       <div className="quick-report-groups" aria-label="Raporto parkingun">
         <div className="quick-report-group">
@@ -293,26 +308,11 @@ function ParkingReportPanel({ parking, report, compact = false, onReport }: { pa
   )
 }
 
-function CommunityStrip({ stats, loadStatus }: { stats: CommunityStats; loadStatus: ParkingLoadStatus }) {
-  return (
-    <section className="community-strip" aria-label="Gjendja live nga komuniteti">
-      <div>
-        <span className="community-strip__pulse" />
-        <span><small>Live community</small><strong>{stats.reports ? `${stats.reports} raporte aktive` : 'Në pritje të raportimeve'}</strong></span>
-      </div>
-      <span><small>Vende</small><strong>{stats.freeSignals}</strong></span>
-      <span><small>Polici</small><strong>{stats.policeSignals}</strong></span>
-      <span><small>PP</small><strong>{stats.municipalParkings}</strong></span>
-      <b>{loadStatus === 'live' ? 'OSM live' : loadStatus === 'loading' ? 'Sync' : 'Offline'}</b>
-    </section>
-  )
-}
-
 function matchesFilters(parking: Parking, filters: Filters) {
   const matchesAvailability = !filters.availableOnly || parking.status === 'available' || parking.status === 'limited'
   const matchesVerified = !filters.verifiedOnly || parking.confidence !== 'low'
   const matchesPrice = filters.maxPrice >= 2 || (parking.pricePerHour !== null && parking.pricePerHour <= filters.maxPrice)
-  const matchesType = filters.type === 'all' || (filters.type === 'municipal' ? Boolean(parking.municipalManaged) : parking.type === filters.type)
+  const matchesType = parkingMatchesType(parking, filters.type as ParkingTypeFilter)
   return matchesAvailability && matchesVerified && matchesPrice && matchesType && (!filters.freeOnly || parking.free) && (!filters.evCharging || parking.evCharging) && (!filters.accessible || parking.accessible)
 }
 
@@ -339,6 +339,8 @@ function HomeView({
   route,
   rankedParkings,
   showAllResults,
+  pickingDestination,
+  parkingPreviewOpen,
   typeCounts,
   onSelect,
   onSelectDestination,
@@ -350,7 +352,10 @@ function HomeView({
   onWalkingMinutes,
   onPreference,
   onParkingType,
+  onFiltersChange,
   onToggleShowAll,
+  onStartMapPick,
+  onPickDestination,
   communityStats,
   selectedReport,
   onReport,
@@ -359,7 +364,9 @@ function HomeView({
   locationStatus,
   userLocation,
   onDetails,
-  onLogin,
+  onNavigate,
+  onCloseParkingPreview,
+  onSaved,
   loadStatus,
 }: {
   mapParkings: Parking[]
@@ -380,6 +387,8 @@ function HomeView({
   route: DrivingRoute | null
   rankedParkings: RankedParking[]
   showAllResults: boolean
+  pickingDestination: boolean
+  parkingPreviewOpen: boolean
   typeCounts: ParkingTypeCounts
   onSelect: (parking: Parking) => void
   onSelectDestination: (destination: Destination) => void
@@ -391,7 +400,10 @@ function HomeView({
   onWalkingMinutes: (minutes: 5 | 10 | 15) => void
   onPreference: (preference: ParkingPreference) => void
   onParkingType: (type: ParkingTypeFilter) => void
+  onFiltersChange: (filters: Filters) => void
   onToggleShowAll: () => void
+  onStartMapPick: () => void
+  onPickDestination: (coordinates: { lat: number; lng: number }) => void
   communityStats: CommunityStats
   selectedReport?: ParkingReport
   onReport: (parkingId: string, patch: ParkingReportPatch) => void
@@ -400,11 +412,14 @@ function HomeView({
   locationStatus: 'idle' | 'locating' | 'ready' | 'denied' | 'unavailable'
   userLocation: Parking['coordinates']
   onDetails: () => void
-  onLogin: () => void
+  onNavigate: () => void
+  onCloseParkingPreview: () => void
+  onSaved: () => void
   loadStatus: ParkingLoadStatus
 }) {
   const [sheetState, setSheetState] = useState<'collapsed' | 'medium' | 'expanded'>('medium')
   const [reportOpen, setReportOpen] = useState(false)
+  const [plannerOpen, setPlannerOpen] = useState(false)
   const controlsRef = useRef<HTMLDivElement>(null)
   const selectedMatch = rankedParkings.find((match) => match.parking.id === selected.id)
   const categoryIcon = { building: '▦', street: '↔', area: '⌂', place: '●' }
@@ -428,32 +443,50 @@ function HomeView({
     ? `${rankedParkings.length} parkingje • Hape`
     : sheetState === 'medium' ? 'Shfaq listën' : 'Mbylle listën'
   const selectedParkingType = filters.type as ParkingTypeFilter
-  const visibleRoute = selectedParkingType === 'all' ? null : route
+  const visibleRoute = (destination && selectedMatch) || parkingPreviewOpen ? route : null
+  const routeMinutes = route ? Math.max(1, Math.ceil(route.durationSeconds / 60)) : selected.driveMinutes
+  const routeDistance = route?.distanceMeters ?? selected.distanceMeters
+  const nextRoad = route?.steps.find((step) => step.roadName && step.roadName !== 'rruga pa emër')
+  const activeFilterCount = [filters.type !== 'all', filters.verifiedOnly, filters.freeOnly, filters.evCharging, filters.accessible, filters.availableOnly].filter(Boolean).length
 
   useEffect(() => {
-    if (!searchOpen) return
+    if (!searchOpen && !reportOpen && !plannerOpen) return
     const closeOnOutside = (event: PointerEvent) => {
-      if (!controlsRef.current?.contains(event.target as Node)) onCloseSearch()
+      if (controlsRef.current?.contains(event.target as Node)) return
+      onCloseSearch()
+      setReportOpen(false)
+      setPlannerOpen(false)
     }
-    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') onCloseSearch() }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      onCloseSearch()
+      setReportOpen(false)
+      setPlannerOpen(false)
+    }
     document.addEventListener('pointerdown', closeOnOutside)
     document.addEventListener('keydown', closeOnEscape)
     return () => {
       document.removeEventListener('pointerdown', closeOnOutside)
       document.removeEventListener('keydown', closeOnEscape)
     }
-  }, [searchOpen, onCloseSearch])
+  }, [searchOpen, reportOpen, plannerOpen, onCloseSearch])
 
   useEffect(() => {
     if (destination) setSheetState('medium')
+    setPlannerOpen(false)
   }, [destination?.id])
+
+  useEffect(() => {
+    if (pickingDestination) setSheetState('collapsed')
+    else if (destination) setSheetState('medium')
+  }, [pickingDestination, destination?.id])
 
   useEffect(() => {
     setReportOpen(false)
   }, [destination?.id, selected.id])
 
   return (
-    <div className={`screen screen--map ${destination ? `screen--smart screen--sheet-${sheetState}` : ''}`}>
+    <div className={`screen screen--map ${destination ? `screen--smart screen--sheet-${sheetState}` : ''} ${parkingPreviewOpen && !destination ? 'screen--parking-preview' : ''} ${plannerOpen || reportOpen || searchOpen ? 'screen--top-panel-open' : ''}`}>
       <StatusBar />
       <LiveParkingMap
         parkings={mapParkings}
@@ -465,6 +498,8 @@ function HomeView({
         walkMinutes={walkingMinutes}
         recommendationRanks={recommendationRankMap}
         route={visibleRoute}
+        pickingDestination={pickingDestination}
+        onPickDestination={onPickDestination}
         recenterToken={recenterToken}
         userLocation={userLocation}
       />
@@ -476,15 +511,21 @@ function HomeView({
             <small>Ku po shkon?</small>
             <input
               value={query}
-              onFocus={onSearchFocus}
+              onFocus={() => { setReportOpen(false); setPlannerOpen(false); onSearchFocus() }}
               onChange={(event) => onQuery(event.target.value)}
-              onKeyDown={(event) => { if (event.key === 'Enter') onSearchOnline() }}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter') return
+                event.preventDefault()
+                const firstResult = localResults[0] ?? remoteResults[0]
+                if (firstResult) onSelectDestination(firstResult)
+                else onSearchOnline()
+              }}
               placeholder="Zonë, rrugë ose ndërtesë"
               aria-label="Kërko destinacion"
             />
           </span>
           {destination ? (
-            <button type="button" className="round-button" onClick={onSearchFocus} aria-label="Ndrysho destinacionin">⌕</button>
+            <button type="button" className="round-button" onClick={onClearDestination} aria-label="Pastro destinacionin">×</button>
           ) : query ? (
             <button type="button" className="round-button" onClick={onClearDestination} aria-label="Pastro kërkimin">×</button>
           ) : (
@@ -525,21 +566,38 @@ function HomeView({
               </button>
             )}
             {searchError && <p className="search-message search-message--error" role="status">{searchError}</p>}
+            <button className="map-pick-search-row" onClick={() => { setReportOpen(false); setPlannerOpen(false); onStartMapPick() }}>
+              <i>⌖</i>
+              <span><strong>Zgjidh në hartë</strong><small>Vendose pin-in në lokacionin e saktë</small></span>
+              <b>›</b>
+            </button>
             {!recentResults.length && !searchResults.length && query.trim().length < 2 && <p className="search-message">Shkruaj të paktën dy shkronja.</p>}
           </div>
         )}
 
-        <CommunityStrip stats={communityStats} loadStatus={loadStatus} />
-
-        <div className="report-control-row">
+        <div className="map-action-row" aria-label="Veprimet e hartës">
           <button
-            className={`report-warning-button ${reportOpen ? 'report-warning-button--active' : ''}`}
-            onClick={() => setReportOpen((value) => !value)}
+            className={`map-action-button map-action-button--pick ${pickingDestination ? 'map-action-button--active' : ''}`}
+            onClick={() => { setReportOpen(false); setPlannerOpen(false); onStartMapPick() }}
+            aria-pressed={pickingDestination}
+          >
+            <span>⌖</span><b>{pickingDestination ? 'Anulo zgjedhjen' : 'Zgjidh në hartë'}</b>
+          </button>
+          <button
+            className={`map-action-button ${plannerOpen ? 'map-action-button--active' : ''}`}
+            onClick={() => { onCloseSearch(); setReportOpen(false); setPlannerOpen((value) => !value) }}
+            aria-expanded={plannerOpen}
+            aria-label={plannerOpen ? 'Mbyll filtrat' : 'Hap filtrat'}
+          >
+            <span>≡</span><b>{activeFilterCount ? `Filtra (${activeFilterCount})` : 'Filtra'}</b>
+          </button>
+          <button
+            className={`map-action-button map-action-button--report ${reportOpen ? 'map-action-button--active' : ''}`}
+            onClick={() => { onCloseSearch(); setPlannerOpen(false); setReportOpen((value) => !value) }}
             aria-expanded={reportOpen}
             aria-label={reportOpen ? 'Mbyll raportimet' : 'Hap raportimet'}
           >
-            <span>⚠</span>
-            <b>Raporto</b>
+            <span>!</span><b>Raporto</b>{communityStats.reports > 0 && <small>{communityStats.reports}</small>}
           </button>
         </div>
 
@@ -547,14 +605,29 @@ function HomeView({
           <ParkingReportPanel parking={selected} report={selectedReport} compact onReport={onReport} />
         )}
 
-        {destination ? (
-          <section className="smart-planner">
-            <header><span><small>Destinacioni</small><strong>{destination.name}</strong></span><div className="planner-header-actions"><button onClick={onClearDestination} aria-label="Pastro destinacionin">×</button></div></header>
-            <div className="planner-options">
-              <label><span>Ecje</span><select value={walkingMinutes} onChange={(event) => onWalkingMinutes(Number(event.target.value) as 5 | 10 | 15)} aria-label="Koha maksimale e ecjes"><option value="5">5 min</option><option value="10">10 min</option><option value="15">15 min</option></select></label>
-              <label><span>Rendit</span><select value={preference} onChange={(event) => onPreference(event.target.value as ParkingPreference)} aria-label="Mënyra e renditjes">{preferenceLabels.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-            </div>
+        {plannerOpen ? (
+          <section className="smart-planner" aria-label="Filtrat e parkingjeve">
+            <header>
+              <span><small>Filtrat</small><strong>{destination ? `Parking për ${destination.name}` : 'Cilat parkingje dëshiron?'}</strong></span>
+              <div className="planner-header-actions"><button onClick={() => setPlannerOpen(false)} aria-label="Mbyll filtrat">×</button></div>
+            </header>
+            {destination && (
+              <div className="planner-options">
+                <label><span>Ecje</span><select value={walkingMinutes} onChange={(event) => onWalkingMinutes(Number(event.target.value) as 5 | 10 | 15)} aria-label="Koha maksimale e ecjes"><option value="5">5 min</option><option value="10">10 min</option><option value="15">15 min</option></select></label>
+                <label><span>Rendit</span><select value={preference} onChange={(event) => onPreference(event.target.value as ParkingPreference)} aria-label="Mënyra e renditjes">{preferenceLabels.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+              </div>
+            )}
+            <p className="filter-section-label">Lloji dhe operatori</p>
             <ParkingTypeChooser value={selectedParkingType} counts={typeCounts} onChange={onParkingType} />
+            <p className="filter-section-label">Veçori</p>
+            <div className="filter-chip-grid">
+              <button className={filters.verifiedOnly ? 'selected' : ''} aria-pressed={filters.verifiedOnly} onClick={() => onFiltersChange({ ...filters, verifiedOnly: !filters.verifiedOnly })}>✓ Të dokumentuara</button>
+              <button className={filters.freeOnly ? 'selected' : ''} aria-pressed={filters.freeOnly} onClick={() => onFiltersChange({ ...filters, freeOnly: !filters.freeOnly })}>€0 Falas</button>
+              <button className={filters.evCharging ? 'selected' : ''} aria-pressed={filters.evCharging} onClick={() => onFiltersChange({ ...filters, evCharging: !filters.evCharging })}>⚡ Karikim EV</button>
+              <button className={filters.accessible ? 'selected' : ''} aria-pressed={filters.accessible} onClick={() => onFiltersChange({ ...filters, accessible: !filters.accessible })}>♿ Qasje e lehtë</button>
+              {hasLiveAvailability && <button className={filters.availableOnly ? 'selected' : ''} aria-pressed={filters.availableOnly} onClick={() => onFiltersChange({ ...filters, availableOnly: !filters.availableOnly })}>● Ka vende live</button>}
+            </div>
+            {activeFilterCount > 0 && <button className="clear-filters-button" onClick={() => onFiltersChange(initialFilters)}>Pastro të gjithë filtrat</button>}
           </section>
         ) : null}
       </div>
@@ -565,6 +638,25 @@ function HomeView({
         aria-label={locationStatus === 'locating' ? 'Duke gjetur lokacionin' : locationStatus === 'denied' ? 'Leja e lokacionit është refuzuar' : locationStatus === 'unavailable' ? 'GPS nuk është i disponueshëm' : 'Përdor lokacionin tim'}
         title={locationStatus === 'denied' ? 'Leja e lokacionit është refuzuar' : locationStatus === 'unavailable' ? 'GPS nuk u gjet; po përdoret pika fillestare' : 'Përdor GPS-in'}
       >{locationStatus === 'locating' ? '…' : locationStatus === 'ready' ? '●' : '➤'}</button>
+      {parkingPreviewOpen && !destination && (
+        <section className="parking-preview-sheet" aria-label={`Parkingu i zgjedhur: ${selected.name}`}>
+          <div className="parking-preview-sheet__handle" />
+          <header>
+            <span><small>{parkingTypeLabel(selected)}</small><strong>{selected.name}</strong></span>
+            <button onClick={onCloseParkingPreview} aria-label="Mbyll parkingun e zgjedhur">×</button>
+          </header>
+          <div className="parking-route-summary">
+            <span><small>Me veturë</small><strong>{routeMinutes} min</strong></span>
+            <span><small>Largësia</small><strong>{routeDistance >= 1000 ? `${(routeDistance / 1000).toFixed(1)} km` : `${routeDistance} m`}</strong></span>
+            <span><small>Hyrja</small><strong>{selected.accessPoint ? 'E hartuar' : 'E përafërt'}</strong></span>
+          </div>
+          <p className="parking-route-road"><b>↗</b><span><small>Rruga e ardhshme</small><strong>{nextRoad?.roadName ?? selected.address}</strong></span></p>
+          <div className="parking-preview-actions">
+            <button className="button button--secondary" onClick={onDetails}>Detaje</button>
+            <button className="button" onClick={onNavigate}>Nisu</button>
+          </div>
+        </section>
+      )}
       {destination && (
       <section className={`home-sheet home-sheet--smart home-sheet--${sheetState}`}>
         <button
@@ -594,21 +686,7 @@ function HomeView({
           {sheetState === 'medium' && mapParkings.length ? (
             <>
               <ParkingCard parking={selected} smartMatch={selectedMatch} onOpen={onDetails} />
-              {selectedParkingType !== 'all' && (
-                <div className="street-view-preview">
-                  <div className="street-view-preview__header">
-                    <span>360° Street View</span>
-                    <small>Shiko zonën këtu në app</small>
-                  </div>
-                  <iframe
-                    title={`Street View ${selected.name}`}
-                    src={streetViewEmbedUrl(selected, visibleRoute)}
-                    loading="lazy"
-                    allowFullScreen
-                    referrerPolicy="no-referrer-when-downgrade"
-                  />
-                </div>
-              )}
+              <a className="street-view-inline" href={streetViewUrl(selected, visibleRoute)} target="_blank" rel="noreferrer">◎ Street View 360°</a>
             </>
           ) : sheetState === 'medium' ? (
             <div className="empty-state">
@@ -632,7 +710,7 @@ function HomeView({
       </section>
       )}
 
-      <BottomNav onLogin={onLogin} />
+      <BottomNav onSaved={onSaved} />
     </div>
   )
 }
@@ -647,26 +725,7 @@ function SavedView({ parkings, onHome, onOpen }: { parkings: Parking[]; onHome: 
           <ParkingCard key={parking.id} parking={parking} onOpen={() => onOpen(parking)} />
         )) : <div className="empty-state"><strong>Nuk ke parkingje të ruajtura</strong><span>Prek ＋ te detajet e një parkingu për ta ruajtur.</span></div>}
       </main>
-    </div>
-  )
-}
-
-function LoginView({ onHome }: { onHome: () => void }) {
-  return (
-    <div className="screen login-screen">
-      <StatusBar />
-      <main className="login-content">
-        <button className="floating-back" onClick={onHome} aria-label="Kthehu">‹</button>
-        <section className="login-panel">
-          <span className="login-panel__icon">◎</span>
-          <small>Parko account</small>
-          <h1>Log in</h1>
-          <p>Ruaj parkingjet, raportimet dhe preferencat në një vend.</p>
-          <button className="button button--wide" type="button">Vazhdo me telefon</button>
-          <button className="button button--wide button--ghost" type="button">Vazhdo me email</button>
-        </section>
-      </main>
-      <BottomNav active="login" onHome={onHome} onLogin={() => undefined} />
+      <BottomNav active="saved" onHome={onHome} onSaved={() => undefined} />
     </div>
   )
 }
@@ -676,12 +735,14 @@ function DetailsView({ parking, report, onReport, route, destination, smartMatch
   const routeMinutes = route ? Math.max(1, Math.ceil(route.durationSeconds / 60)) : parking.driveMinutes
   const routeDistance = route?.distanceMeters ?? parking.distanceMeters
   const categoryLabel = municipalCategoryLabel(parking)
+  const usefulRouteSteps = (route?.steps ?? []).filter((step) => step.maneuverType !== 'depart').slice(0, 4)
+  const routeSourceLabel = route?.source === 'osrm' ? 'Rutë reale nga rrjeti rrugor' : route ? 'Rutë paraprake' : 'Duke llogaritur rutën…'
   return (
     <div className="screen screen--map">
       <StatusBar />
       <LiveParkingMap parkings={[parking]} selected={parking} onSelect={() => undefined} mode="details" route={route} destination={destination} userLocation={userLocation} />
       <button className="floating-back" onClick={onBack} aria-label="Kthehu">‹</button>
-      <button className={`floating-add ${saved ? 'floating-add--saved' : ''}`} onClick={onToggleSaved} aria-label={saved ? 'Hiqe parkingun nga të ruajturat' : 'Ruaje parkingun'}>{saved ? '✓' : '＋'}</button>
+      <button className={`floating-add ${saved ? 'floating-add--saved' : ''}`} onClick={onToggleSaved} aria-label={saved ? 'Hiqe parkingun nga të ruajturat' : 'Ruaje parkingun'}>{saved ? '♥' : '♡'}</button>
 
       <section className="details-sheet">
         <div className="drag-handle" />
@@ -708,6 +769,25 @@ function DetailsView({ parking, report, onReport, route, destination, smartMatch
           <div><span>Çmimi</span><strong>{priceLabel(parking)}</strong></div>
         </div>
 
+        <section className="parking-route-card" aria-label="Rruga deri te parkingu">
+          <header><span><small>Si të shkosh</small><strong>Rruga deri te hyrja</strong></span><b>{routeSourceLabel}</b></header>
+          <div className="parking-entry-note">
+            <i>↗</i>
+            <span><strong>{parking.accessPoint ? 'Hyrja e parkingut është e hartuar' : 'Hyrja është llogaritur nga konturi më i afërt'}</strong><small>{parking.address}</small></span>
+          </div>
+          {usefulRouteSteps.length ? (
+            <ol>
+              {usefulRouteSteps.map((step, index) => (
+                <li key={`${step.maneuverType}-${step.roadName}-${index}`}>
+                  <b>{index + 1}</b>
+                  <span><strong>{step.instruction}</strong><small>{step.roadName} • {step.distanceMeters >= 1000 ? `${(step.distanceMeters / 1000).toFixed(1)} km` : `${step.distanceMeters} m`}</small></span>
+                </li>
+              ))}
+            </ol>
+          ) : <p>Rruga po përgatitet. Mund të nisësh navigimin sapo të shfaqet vija blu në hartë.</p>}
+        </section>
+        <a className="street-view-inline street-view-inline--details" href={streetViewUrl(parking, route)} target="_blank" rel="noreferrer">◎ Hap Street View 360°</a>
+
         <h2>Detajet</h2>
         <div className="detail-tags">
           {parking.open24h && <span>24/7 hapur</span>}
@@ -733,18 +813,18 @@ function DetailsView({ parking, report, onReport, route, destination, smartMatch
         )}
         {destination && smartMatch && <p className="walk-after-parking">Pastaj <strong>{smartMatch.walkMinutes} min ecje</strong> deri te {destination.name}</p>}
 
-        <div className="details-actions">
-          <button className="button" onClick={onNavigate}>Nisu drejt parkingut</button>
-        </div>
         {parking.osmUrl
           ? <a className="text-button report-link" href={parking.osmUrl} target="_blank" rel="noreferrer">Kontrollo ose korrigjo në OpenStreetMap</a>
           : <span className="text-button report-link report-link--disabled">Burimi nuk ka faqe raportimi</span>}
       </section>
+      <div className="details-actions">
+        <button className="button" onClick={onNavigate}>Nisu drejt parkingut</button>
+      </div>
     </div>
   )
 }
 
-function NavigationView({ parking, route, userLocation, onStop, onArrive }: { parking: Parking; route: DrivingRoute | null; userLocation: Parking['coordinates']; onStop: () => void; onArrive: () => void }) {
+function NavigationView({ parking, route, userLocation, hasDestination, onStop, onArrive }: { parking: Parking; route: DrivingRoute | null; userLocation: Parking['coordinates']; hasDestination: boolean; onStop: () => void; onArrive: () => void }) {
   const [showSteps, setShowSteps] = useState(false)
   const directionRef = useRef<HTMLElement>(null)
   const stepsRef = useRef<HTMLElement>(null)
@@ -790,7 +870,7 @@ function NavigationView({ parking, route, userLocation, onStop, onArrive }: { pa
         <b>{routeMinutes} min • {routeDistance >= 1000 ? `${(routeDistance / 1000).toFixed(1)} km` : `${routeDistance} m`}</b>
         <span className="confidence-badge">● {parking.spaces !== null ? `${parking.spaces} vende të lira` : accessLabel(parking)}</span>
         <button className="stop-button" onClick={(event) => { event.stopPropagation(); onStop() }}><i />Ndalo</button>
-        <button className="arrival-hint" onClick={(event) => { event.stopPropagation(); onArrive() }}>Parkova • vazhdo në këmbë</button>
+        <button className="arrival-hint" onClick={(event) => { event.stopPropagation(); onArrive() }}>{hasDestination ? 'Parkova • vazhdo në këmbë' : 'Parkova • përfundo navigimin'}</button>
       </section>
     </div>
   )
@@ -839,6 +919,8 @@ export default function App() {
   const [preference, setPreference] = useState<ParkingPreference>('best')
   const [showAllResults, setShowAllResults] = useState(true)
   const [drivingMatrix, setDrivingMatrix] = useState<DrivingMatrixEntry[]>([])
+  const [pickingDestination, setPickingDestination] = useState(false)
+  const [parkingPreviewOpen, setParkingPreviewOpen] = useState(false)
   const [recenterToken, setRecenterToken] = useState(0)
   const [savedParkingIds, setSavedParkingIds] = useState<Set<string>>(() => new Set(persistedPreferences.savedParkingIds ?? []))
   const [parkingReports, setParkingReports] = useState<Record<string, ParkingReport>>(loadParkingReports)
@@ -846,6 +928,7 @@ export default function App() {
   const [locationStatus, setLocationStatus] = useState<'idle' | 'locating' | 'ready' | 'denied' | 'unavailable'>('idle')
   const parkingSelectedByUserRef = useRef(false)
   const parkingDetailsAttemptedRef = useRef(new Set<string>())
+  const onlineSearchRequestRef = useRef(0)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -945,8 +1028,7 @@ export default function App() {
   const currentSelected = locatedParkings.find((parking) => parking.id === selected.id) ?? selected
   const hasLiveAvailability = useMemo(() => locatedParkings.some((parking) => parking.spaces !== null && parking.availabilitySource), [locatedParkings])
   const effectiveFilters = useMemo(() => filtersForAvailability(filters, hasLiveAvailability), [filters, hasLiveAvailability])
-  const workflowType = destination ? effectiveFilters.type as ParkingTypeFilter : 'all'
-  const workflowFilters = useMemo<Filters>(() => ({ ...initialFilters, type: workflowType }), [workflowType])
+  const workflowFilters = effectiveFilters
   const filteredParkings = useMemo(() => locatedParkings
     .filter((parking) => matchesFilters(parking, workflowFilters))
     .sort((first, second) => first.distanceMeters - second.distanceMeters), [workflowFilters, locatedParkings])
@@ -971,6 +1053,7 @@ export default function App() {
     [destination, locatedParkings, walkingMinutes],
   )
   const typeCounts = useMemo<ParkingTypeCounts>(() => ({
+    all: typeCountSource.length,
     public: typeCountSource.filter((parking) => parkingMatchesType(parking, 'public')).length,
     private: typeCountSource.filter((parking) => parkingMatchesType(parking, 'private')).length,
     street: typeCountSource.filter((parking) => parkingMatchesType(parking, 'street')).length,
@@ -1048,6 +1131,8 @@ export default function App() {
 
   async function runOnlineSearch() {
     if (query.trim().length < 2 || searchingOnline) return
+    const searchTerm = query.trim()
+    const requestId = ++onlineSearchRequestRef.current
     setSearchOpen(true)
     setSearchError('')
     if (!online) {
@@ -1056,14 +1141,16 @@ export default function App() {
     }
     setSearchingOnline(true)
     try {
-      const results = await searchDestinationOnline(query)
+      const results = await searchDestinationOnline(searchTerm)
+      if (requestId !== onlineSearchRequestRef.current) return
       setOnlineSearchResults(results)
       if (!results.length) setSearchError('Nuk u gjet asnjë rezultat online. Provo emrin e rrugës ose zonës.')
     } catch {
+      if (requestId !== onlineSearchRequestRef.current) return
       setOnlineSearchResults([])
       setSearchError('Kërkimi online dështoi. Provo përsëri.')
     } finally {
-      setSearchingOnline(false)
+      if (requestId === onlineSearchRequestRef.current) setSearchingOnline(false)
     }
   }
 
@@ -1076,29 +1163,74 @@ export default function App() {
   }
 
   function selectDestination(nextDestination: Destination) {
+    onlineSearchRequestRef.current += 1
+    setSearchingOnline(false)
     parkingSelectedByUserRef.current = false
     setDestination(nextDestination)
     setQuery(nextDestination.name)
-    setFilters(initialFilters)
+    setParkingPreviewOpen(false)
     setSearchOpen(false)
     setOnlineSearchResults([])
     setSearchError('')
     setShowAllResults(true)
+    setPickingDestination(false)
     rememberDestination(nextDestination)
   }
 
   function clearDestination() {
+    onlineSearchRequestRef.current += 1
+    setSearchingOnline(false)
     setDestination(null)
     setQuery('')
     setSearchOpen(false)
     setOnlineSearchResults([])
     setSearchError('')
     setShowAllResults(true)
+    setPickingDestination(false)
+    setParkingPreviewOpen(false)
+  }
+
+  function toggleMapDestinationPicker() {
+    if (pickingDestination) {
+      setPickingDestination(false)
+      return
+    }
+    setQuery(destination?.name ?? '')
+    onlineSearchRequestRef.current += 1
+    setSearchingOnline(false)
+    setSearchOpen(false)
+    setOnlineSearchResults([])
+    setSearchError('')
+    setParkingPreviewOpen(false)
+    setPickingDestination(true)
+  }
+
+  async function pickDestinationOnMap(coordinates: { lat: number; lng: number }) {
+    const pendingDestination: Destination = {
+      id: `map-${coordinates.lat.toFixed(5)}-${coordinates.lng.toFixed(5)}`,
+      name: 'Pika e zgjedhur',
+      subtitle: 'Duke identifikuar rrugën…',
+      category: 'place',
+      coordinates,
+      aliases: [],
+      source: 'map',
+    }
+    selectDestination(pendingDestination)
+    try {
+      const resolved = await reverseGeocodeLocation(coordinates)
+      setDestination((current) => current?.id === pendingDestination.id ? resolved : current)
+      setQuery((current) => current === pendingDestination.name ? resolved.name : current)
+      rememberDestination(resolved)
+    } catch {
+      setDestination((current) => current?.id === pendingDestination.id ? { ...pendingDestination, subtitle: 'Destinacion nga harta' } : current)
+    }
   }
 
   function selectParking(nextParking: Parking) {
     parkingSelectedByUserRef.current = true
+    setRoute(null)
     setSelected(nextParking)
+    setParkingPreviewOpen(true)
   }
 
   function reportParking(parkingId: string, patch: ParkingReportPatch) {
@@ -1160,7 +1292,7 @@ export default function App() {
             filters={workflowFilters}
             hasLiveAvailability={hasLiveAvailability}
             query={query}
-            onQuery={(value) => { setQuery(value); setSearchOpen(true); setOnlineSearchResults([]); setSearchError('') }}
+            onQuery={(value) => { onlineSearchRequestRef.current += 1; setSearchingOnline(false); setQuery(value); setSearchOpen(true); setOnlineSearchResults([]); setSearchError('') }}
             searchResults={searchResults}
             recentDestinations={recentDestinations}
             searchOpen={searchOpen}
@@ -1173,6 +1305,8 @@ export default function App() {
             route={route}
             rankedParkings={rankedParkings}
             showAllResults={showAllResults}
+            pickingDestination={pickingDestination}
+            parkingPreviewOpen={parkingPreviewOpen}
             typeCounts={typeCounts}
             onSelect={selectParking}
             onSelectDestination={selectDestination}
@@ -1183,8 +1317,11 @@ export default function App() {
             onClearDestination={clearDestination}
             onWalkingMinutes={setWalkingMinutes}
             onPreference={setPreference}
-            onParkingType={(type) => setFilters({ ...initialFilters, type })}
+            onParkingType={(type) => setFilters((current) => ({ ...current, type }))}
+            onFiltersChange={setFilters}
             onToggleShowAll={() => setShowAllResults((value) => !value)}
+            onStartMapPick={toggleMapDestinationPicker}
+            onPickDestination={pickDestinationOnMap}
             communityStats={communityStats}
             selectedReport={parkingReports[currentSelected.id]}
             onReport={reportParking}
@@ -1193,14 +1330,15 @@ export default function App() {
             locationStatus={locationStatus}
             userLocation={userLocation}
             onDetails={() => setScreen('details')}
-            onLogin={() => setScreen('login')}
+            onNavigate={() => setScreen('navigation')}
+            onCloseParkingPreview={() => setParkingPreviewOpen(false)}
+            onSaved={() => setScreen('saved')}
             loadStatus={loadStatus}
           />
         )}
         {screen === 'saved' && <SavedView parkings={locatedParkings.filter((parking) => savedParkingIds.has(parking.id))} onHome={() => setScreen('home')} onOpen={(parking) => { setSelected(parking); setDestination(null); setScreen('details') }} />}
-        {screen === 'login' && <LoginView onHome={() => setScreen('home')} />}
         {screen === 'details' && <DetailsView parking={currentSelected} report={parkingReports[currentSelected.id]} onReport={reportParking} route={route} destination={destination} smartMatch={selectedRankedParking} saved={savedParkingIds.has(currentSelected.id)} userLocation={userLocation} onToggleSaved={toggleSavedParking} onBack={() => setScreen('home')} onNavigate={() => setScreen('navigation')} />}
-        {screen === 'navigation' && <NavigationView parking={currentSelected} route={route} userLocation={userLocation} onStop={() => setScreen('details')} onArrive={() => setScreen(destination ? 'walking' : 'home')} />}
+        {screen === 'navigation' && <NavigationView parking={currentSelected} route={route} userLocation={userLocation} hasDestination={Boolean(destination)} onStop={() => setScreen('details')} onArrive={() => setScreen(destination ? 'walking' : 'home')} />}
         {screen === 'walking' && destination && displayedWalkingRoute && selectedRankedParking && <WalkingView parking={currentSelected} destination={destination} route={displayedWalkingRoute} match={selectedRankedParking} directionsHref={selectedWalkingDirectionsHref} userLocation={userLocation} onFinish={() => setScreen('home')} />}
       </div>
       <p className="desktop-caption">Parko • prototip interaktiv për Prishtinën</p>

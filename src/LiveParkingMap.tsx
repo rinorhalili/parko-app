@@ -56,6 +56,8 @@ export default function LiveParkingMap({
   destination,
   walkMinutes = 10,
   recommendationRanks,
+  pickingDestination = false,
+  onPickDestination,
   recenterToken = 0,
   userLocation = USER_LOCATION,
 }: {
@@ -68,6 +70,8 @@ export default function LiveParkingMap({
   destination?: Destination | null
   walkMinutes?: 5 | 10 | 15
   recommendationRanks?: Map<string, number>
+  pickingDestination?: boolean
+  onPickDestination?: (coordinates: { lat: number; lng: number }) => void
   recenterToken?: number
   userLocation?: Parking['coordinates']
 }) {
@@ -76,10 +80,15 @@ export default function LiveParkingMap({
   const parkingLayerRef = useRef<L.LayerGroup | null>(null)
   const routeLayerRef = useRef<L.LayerGroup | null>(null)
   const onSelectRef = useRef(onSelect)
+  const onPickDestinationRef = useRef(onPickDestination)
+  const pickingDestinationRef = useRef(pickingDestination)
   const modeRef = useRef(mode)
   const focusParkingRef = useRef<string | null>(null)
+  const automaticViewportRef = useRef<string | null>(null)
   const [mapZoom, setMapZoom] = useState(14)
   onSelectRef.current = onSelect
+  onPickDestinationRef.current = onPickDestination
+  pickingDestinationRef.current = pickingDestination
   modeRef.current = mode
 
   useEffect(() => {
@@ -116,6 +125,10 @@ export default function LiveParkingMap({
     if (parkingPane) parkingPane.style.zIndex = '420'
     parkingLayerRef.current = L.layerGroup().addTo(map)
     routeLayerRef.current = L.layerGroup().addTo(map)
+    map.on('click', (event) => {
+      if (modeRef.current !== 'home' || !pickingDestinationRef.current) return
+      onPickDestinationRef.current?.({ lat: event.latlng.lat, lng: event.latlng.lng })
+    })
     map.on('zoomend', () => setMapZoom(map.getZoom()))
     mapRef.current = map
     window.setTimeout(() => map.invalidateSize(), 0)
@@ -138,11 +151,13 @@ export default function LiveParkingMap({
     if (!map || !parkingLayer || !routeLayer) return
     parkingLayer.clearLayers()
     routeLayer.clearLayers()
+    if (mode === 'home' && !destination && !route) automaticViewportRef.current = null
 
     const visibleParkings = mode === 'navigation' || mode === 'walking' ? [selected] : parkings
 
     visibleParkings.forEach((parking) => {
-      if (!parking.geometry?.length && mapZoom < 13.5) return
+      const usefulOverviewPoint = parking.pricePerHour !== null || parking.free || Boolean(parking.availabilitySource)
+      if (!parking.geometry?.length && mapZoom < (destination ? 13.5 : 15) && !usefulOverviewPoint) return
       const category = priceClass(parking.pricePerHour)
       const isSelected = selected.id === parking.id
       const rank = recommendationRanks?.get(parking.id)
@@ -182,6 +197,10 @@ export default function LiveParkingMap({
         })
         layer.on('click', (event) => {
           if (event.originalEvent) L.DomEvent.stopPropagation(event.originalEvent)
+          if (pickingDestinationRef.current) {
+            onPickDestinationRef.current?.({ lat: event.latlng.lat, lng: event.latlng.lng })
+            return
+          }
           focusParkingRef.current = parking.id
           onSelectRef.current(parking)
         })
@@ -222,9 +241,10 @@ export default function LiveParkingMap({
         interactive: false,
         }).addTo(routeLayer)
       }
+      const isMapDestination = destination.source === 'map'
       const destinationIcon = L.divIcon({
         className: '',
-        html: '<span class="destination-marker"><b>⌂</b></span>',
+        html: `<span class="destination-marker${isMapDestination ? ' destination-marker--map' : ''}"><b>${isMapDestination ? '●' : '⌂'}</b></span>`,
         iconSize: [44, 44],
         iconAnchor: [22, 38],
       })
@@ -232,6 +252,7 @@ export default function LiveParkingMap({
         icon: destinationIcon,
         title: destination.name,
         alt: destination.name,
+        interactive: false,
         zIndexOffset: 1200,
       }).addTo(routeLayer)
 
@@ -256,24 +277,8 @@ export default function LiveParkingMap({
       L.marker([accessPoint.lat, accessPoint.lng], { icon: accessIcon, interactive: false, zIndexOffset: 1100 }).addTo(routeLayer)
     }
 
-    if (mode === 'home' && destination && destination.source !== 'map') {
-      const focusPoints = [destination.coordinates, ...parkings.map((parking) => parking.coordinates)]
-        .map(({ lat, lng }) => [lat, lng] as L.LatLngTuple)
-      map.fitBounds(focusPoints, {
-        paddingTopLeft: [35, 235],
-        paddingBottomRight: [35, 385],
-        maxZoom: 16,
-        animate: false,
-      })
-    }
-
-    if (mode === 'home' && focusParkingRef.current === selected.id) {
-      const footprintPoints = selected.geometry?.flat().map(({ lat, lng }) => [lat, lng] as L.LatLngTuple) ?? []
-      if (footprintPoints.length >= 3) {
-        map.fitBounds(L.latLngBounds(footprintPoints), { padding: [78, 78], maxZoom: 18, animate: true })
-      } else {
-        map.flyTo([selected.coordinates.lat, selected.coordinates.lng], Math.max(map.getZoom(), 17), { duration: .45 })
-      }
+    const shouldFocusSelectedParking = mode === 'home' && focusParkingRef.current === selected.id
+    if (shouldFocusSelectedParking) {
       focusParkingRef.current = null
     }
 
@@ -284,24 +289,45 @@ export default function LiveParkingMap({
       L.polyline(routePoints, { color: '#ffffff', weight: 10, opacity: 1, lineCap: 'round', lineJoin: 'round' }).addTo(routeLayer)
       L.polyline(routePoints, { color: routeColor, weight: 6, opacity: 1, lineCap: 'round', lineJoin: 'round', dashArray: mode === 'walking' ? '9 8' : undefined }).addTo(routeLayer)
 
-      if (mode === 'navigation' || mode === 'walking') {
-        map.fitBounds(L.latLngBounds(routePoints), {
-          paddingTopLeft: [44, 120],
-          paddingBottomRight: [44, 205],
-          animate: false,
-        })
-      } else if (mode === 'home') {
-        map.fitBounds(L.latLngBounds(routePoints), {
-          paddingTopLeft: [35, 235],
-          paddingBottomRight: [35, 405],
+      const firstPoint = route.coordinates[0]
+      const lastPoint = route.coordinates[route.coordinates.length - 1]
+      const routeViewportKey = `route:${mode}:${selected.id}:${route.source}:${firstPoint?.lat.toFixed(5)}:${firstPoint?.lng.toFixed(5)}:${lastPoint?.lat.toFixed(5)}:${lastPoint?.lng.toFixed(5)}`
+      if (!shouldFocusSelectedParking && automaticViewportRef.current !== routeViewportKey) {
+        automaticViewportRef.current = routeViewportKey
+        if (mode === 'navigation' || mode === 'walking') {
+          map.fitBounds(L.latLngBounds(routePoints), {
+            paddingTopLeft: [44, 120],
+            paddingBottomRight: [44, 205],
+            animate: false,
+          })
+        } else if (mode === 'home' && !destination) {
+          // A direct parking selection must not move the map away from the place the user was inspecting.
+        } else if (mode === 'home') {
+          map.fitBounds(L.latLngBounds(routePoints), {
+            paddingTopLeft: [35, 185],
+            paddingBottomRight: [35, 405],
+            maxZoom: 16,
+            animate: false,
+          })
+        } else {
+          map.fitBounds(L.latLngBounds(routePoints), {
+            paddingTopLeft: [45, 65],
+            paddingBottomRight: [45, 525],
+            maxZoom: 15,
+            animate: false,
+          })
+        }
+      }
+    } else if (!shouldFocusSelectedParking && mode === 'home' && destination && destination.source !== 'map') {
+      const destinationViewportKey = `destination:${destination.id}:${walkMinutes}`
+      if (automaticViewportRef.current !== destinationViewportKey) {
+        automaticViewportRef.current = destinationViewportKey
+        const focusPoints = [destination.coordinates, ...parkings.map((parking) => parking.coordinates)]
+          .map(({ lat, lng }) => [lat, lng] as L.LatLngTuple)
+        map.fitBounds(focusPoints, {
+          paddingTopLeft: [35, 185],
+          paddingBottomRight: [35, 385],
           maxZoom: 16,
-          animate: false,
-        })
-      } else {
-        map.fitBounds(L.latLngBounds(routePoints), {
-          paddingTopLeft: [45, 65],
-          paddingBottomRight: [45, 525],
-          maxZoom: 15,
           animate: false,
         })
       }
@@ -316,16 +342,25 @@ export default function LiveParkingMap({
       L.polyline(walkingConnection, { color: '#18b981', weight: 4, opacity: .95, dashArray: '8 7' }).addTo(routeLayer)
     }
 
-    if (mode === 'navigation' && !route) {
-      map.fitBounds([[userLocation.lat, userLocation.lng], [selected.coordinates.lat, selected.coordinates.lng]], { padding: [70, 70], animate: false })
-    } else if (mode === 'details' && !route) {
-      map.setView([selected.coordinates.lat, selected.coordinates.lng], 15, { animate: false })
+    if (!shouldFocusSelectedParking && mode === 'navigation' && !route) {
+      const navigationViewportKey = `navigation:${selected.id}:${userLocation.lat.toFixed(5)}:${userLocation.lng.toFixed(5)}`
+      if (automaticViewportRef.current !== navigationViewportKey) {
+        automaticViewportRef.current = navigationViewportKey
+        map.fitBounds([[userLocation.lat, userLocation.lng], [selected.coordinates.lat, selected.coordinates.lng]], { padding: [70, 70], animate: false })
+      }
+    } else if (!shouldFocusSelectedParking && mode === 'details' && !route) {
+      const detailsViewportKey = `details:${selected.id}`
+      if (automaticViewportRef.current !== detailsViewportKey) {
+        automaticViewportRef.current = detailsViewportKey
+        map.setView([selected.coordinates.lat, selected.coordinates.lng], 15, { animate: false })
+      }
     }
   }, [parkings, selected, mode, route, destination, walkMinutes, recommendationRanks, userLocation.lat, userLocation.lng, mapZoom])
 
   return (
-    <div className={`map-canvas map-canvas--${mode} ${destination ? 'map-canvas--destination' : ''}`} aria-label="Harta reale e parkingjeve në Prishtinë">
+    <div className={`map-canvas map-canvas--${mode} ${destination ? 'map-canvas--destination' : ''} ${pickingDestination ? 'map-canvas--picking' : ''}`} aria-label="Harta reale e parkingjeve në Prishtinë">
       <div ref={containerRef} className="leaflet-map" />
+      {mode === 'home' && pickingDestination && <div className="map-pick-banner">Prek hartën për të vendosur destinacionin</div>}
       {mode === 'home' && destination && (
         <div className="price-legend" aria-label="Kategoritë e çmimeve">
           <span className="price-legend__status">{destination ? `${parkings.length} parkingje • ${walkMinutes} min ecje` : loadStatus === 'loading' ? `${parkings.length} parkingje • duke rifreskuar` : loadStatus === 'live' ? `${parkings.length} zona parkingu` : `${parkings.length} parkingje OSM`}</span>
