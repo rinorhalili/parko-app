@@ -102,4 +102,4 @@ export type Filters = {
   accessible: boolean
 }
 
-export type Screen = 'home' | 'saved' | 'filters' | 'details' | 'navigation' | 'walking' | 'parked'
+export type Screen = 'home' | 'saved' | 'login' | 'details' | 'navigation' | 'walking'

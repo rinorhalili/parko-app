@@ -31,6 +31,24 @@ export function streetViewUrl(parking: Parking, route?: DrivingRoute | null) {
   return `https://www.google.com/maps/@?${params.toString()}`
 }
 
+export function streetViewEmbedUrl(parking: Parking, route?: DrivingRoute | null) {
+  const approachPoint = route?.coordinates
+    .slice(0, -1)
+    .reverse()
+    .find((point) => distanceSquared(point, parking.coordinates) > 0.00000003)
+  const heading = approachPoint ? bearingDegrees(approachPoint, parking.coordinates).toFixed(0) : '120'
+  const params = new URLSearchParams({
+    api: '1',
+    map_action: 'pano',
+    output: 'svembed',
+    viewpoint: `${parking.coordinates.lat},${parking.coordinates.lng}`,
+    heading,
+    pitch: '0',
+    fov: '85',
+  })
+  return `https://www.google.com/maps?${params.toString()}`
+}
+
 export function walkingDirectionsUrl(parking: Parking, destination: { coordinates: Parking['coordinates'] }) {
   const origin = parking.geometry?.flat().reduce((closest, point) => (
     distanceSquared(point, destination.coordinates) < distanceSquared(closest, destination.coordinates) ? point : closest

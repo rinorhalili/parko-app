@@ -4,7 +4,7 @@ import { USER_LOCATION } from './parkingApi'
 import { accessPointIsEstimated, parkingAccessPoint } from './parkingGeometry'
 import type { Destination, DrivingRoute, Parking, ParkingLoadStatus } from './types'
 
-type MapMode = 'home' | 'filters' | 'details' | 'navigation' | 'walking'
+type MapMode = 'home' | 'details' | 'navigation' | 'walking'
 
 function priceClass(price: number | null) {
   if (price === null) return 'unknown'
@@ -56,8 +56,6 @@ export default function LiveParkingMap({
   destination,
   walkMinutes = 10,
   recommendationRanks,
-  pickingDestination = false,
-  onPickDestination,
   recenterToken = 0,
   userLocation = USER_LOCATION,
 }: {
@@ -70,8 +68,6 @@ export default function LiveParkingMap({
   destination?: Destination | null
   walkMinutes?: 5 | 10 | 15
   recommendationRanks?: Map<string, number>
-  pickingDestination?: boolean
-  onPickDestination?: (coordinates: { lat: number; lng: number }) => void
   recenterToken?: number
   userLocation?: Parking['coordinates']
 }) {
@@ -80,14 +76,10 @@ export default function LiveParkingMap({
   const parkingLayerRef = useRef<L.LayerGroup | null>(null)
   const routeLayerRef = useRef<L.LayerGroup | null>(null)
   const onSelectRef = useRef(onSelect)
-  const onPickDestinationRef = useRef(onPickDestination)
-  const pickingDestinationRef = useRef(pickingDestination)
   const modeRef = useRef(mode)
   const focusParkingRef = useRef<string | null>(null)
   const [mapZoom, setMapZoom] = useState(14)
   onSelectRef.current = onSelect
-  onPickDestinationRef.current = onPickDestination
-  pickingDestinationRef.current = pickingDestination
   modeRef.current = mode
 
   useEffect(() => {
@@ -124,11 +116,6 @@ export default function LiveParkingMap({
     if (parkingPane) parkingPane.style.zIndex = '420'
     parkingLayerRef.current = L.layerGroup().addTo(map)
     routeLayerRef.current = L.layerGroup().addTo(map)
-    map.on('click', (event) => {
-      if (modeRef.current === 'home' && pickingDestinationRef.current) {
-        onPickDestinationRef.current?.({ lat: event.latlng.lat, lng: event.latlng.lng })
-      }
-    })
     map.on('zoomend', () => setMapZoom(map.getZoom()))
     mapRef.current = map
     window.setTimeout(() => map.invalidateSize(), 0)
@@ -290,7 +277,7 @@ export default function LiveParkingMap({
       focusParkingRef.current = null
     }
 
-    if (route && (mode === 'navigation' || mode === 'details' || mode === 'walking')) {
+    if (route && (mode === 'home' || mode === 'navigation' || mode === 'details' || mode === 'walking')) {
       const routePoints: L.LatLngExpression[] = route.coordinates.map(({ lat, lng }) => [lat, lng])
       const routeColor = mode === 'walking' ? '#18b981' : '#2f6bff'
       L.polyline(routePoints, { color: '#16325c', weight: 13, opacity: 0.16, lineCap: 'round', lineJoin: 'round' }).addTo(routeLayer)
@@ -301,6 +288,13 @@ export default function LiveParkingMap({
         map.fitBounds(L.latLngBounds(routePoints), {
           paddingTopLeft: [44, 120],
           paddingBottomRight: [44, 205],
+          animate: false,
+        })
+      } else if (mode === 'home') {
+        map.fitBounds(L.latLngBounds(routePoints), {
+          paddingTopLeft: [35, 235],
+          paddingBottomRight: [35, 405],
+          maxZoom: 16,
           animate: false,
         })
       } else {
@@ -330,10 +324,9 @@ export default function LiveParkingMap({
   }, [parkings, selected, mode, route, destination, walkMinutes, recommendationRanks, userLocation.lat, userLocation.lng, mapZoom])
 
   return (
-    <div className={`map-canvas map-canvas--${mode} ${destination ? 'map-canvas--destination' : ''} ${pickingDestination ? 'map-canvas--picking' : ''}`} aria-label="Harta reale e parkingjeve në Prishtinë">
+    <div className={`map-canvas map-canvas--${mode} ${destination ? 'map-canvas--destination' : ''}`} aria-label="Harta reale e parkingjeve në Prishtinë">
       <div ref={containerRef} className="leaflet-map" />
-      {pickingDestination && <div className="map-pick-banner">Prek hartën për të vendosur destinacionin</div>}
-      {mode === 'home' && (
+      {mode === 'home' && destination && (
         <div className="price-legend" aria-label="Kategoritë e çmimeve">
           <span className="price-legend__status">{destination ? `${parkings.length} parkingje • ${walkMinutes} min ecje` : loadStatus === 'loading' ? `${parkings.length} parkingje • duke rifreskuar` : loadStatus === 'live' ? `${parkings.length} zona parkingu` : `${parkings.length} parkingje OSM`}</span>
           <span><i className="price-dot price-dot--free" />Falas</span>
@@ -343,7 +336,7 @@ export default function LiveParkingMap({
           <span><i className="price-dot price-dot--unknown" />Pa çmim</span>
         </div>
       )}
-      {(mode === 'navigation' || mode === 'details' || mode === 'walking') && route && (
+      {(mode === 'home' || mode === 'navigation' || mode === 'details' || mode === 'walking') && route && (
         <div className={`route-engine-badge route-engine-badge--${mode}`}>
           <i /> {route.source === 'osrm' ? 'Rutë reale' : route.source === 'valhalla' ? 'Rutë reale në këmbë' : route.source === 'walking' ? 'Udhëzim në këmbë' : route.source === 'estimated-walking' ? 'Ecje e përafërt' : 'Rutë paraprake'}
         </div>
