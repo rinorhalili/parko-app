@@ -1,4 +1,5 @@
 import { PRISHTINA_DESTINATIONS } from './destinations'
+import { PRISHTINA_MAP_BOUNDS, isWithinPrishtinaMap } from './parkingApi'
 import type { Destination, DestinationCategory } from './types'
 
 type NominatimResult = {
@@ -113,13 +114,15 @@ export async function searchDestinationOnline(query: string, signal?: AbortSigna
     addressdetails: '1',
     namedetails: '1',
     limit: '8',
-    viewbox: '21.10,42.70,21.24,42.60',
+    viewbox: `${PRISHTINA_MAP_BOUNDS.west},${PRISHTINA_MAP_BOUNDS.north},${PRISHTINA_MAP_BOUNDS.east},${PRISHTINA_MAP_BOUNDS.south}`,
     bounded: '1',
     'accept-language': 'sq,en',
   })
   const response = await fetch(`/api/geocode?${params}`, { signal })
   if (!response.ok) throw new Error(`Geocoder returned ${response.status}`)
-  const destinations = (await response.json() as NominatimResult[]).map(fromNominatim)
+  const destinations = (await response.json() as NominatimResult[])
+    .map(fromNominatim)
+    .filter((destination) => isWithinPrishtinaMap(destination.coordinates))
   localStorage.setItem(cacheKey, JSON.stringify(destinations))
   return destinations
 }

@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
-import { USER_LOCATION } from './parkingApi'
+import { PRISHTINA_CENTER, PRISHTINA_MAP_BOUNDS, USER_LOCATION, isWithinPrishtinaMap } from './parkingApi'
 import { accessPointIsEstimated, parkingAccessPoint } from './parkingGeometry'
 import type { Destination, DrivingRoute, Parking, ParkingLoadStatus } from './types'
 
 type MapMode = 'home' | 'details' | 'navigation' | 'walking'
+const PRISHTINA_LEAFLET_BOUNDS: [L.LatLngTuple, L.LatLngTuple] = [
+  [PRISHTINA_MAP_BOUNDS.south, PRISHTINA_MAP_BOUNDS.west],
+  [PRISHTINA_MAP_BOUNDS.north, PRISHTINA_MAP_BOUNDS.east],
+]
 
 function priceClass(price: number | null) {
   if (price === null) return 'unknown'
@@ -60,6 +64,8 @@ export default function LiveParkingMap({
   onPickDestination,
   recenterToken = 0,
   userLocation = USER_LOCATION,
+  userLocationLive = false,
+  userLocationAccuracy = null,
 }: {
   parkings: Parking[]
   selected: Parking
@@ -74,6 +80,8 @@ export default function LiveParkingMap({
   onPickDestination?: (coordinates: { lat: number; lng: number }) => void
   recenterToken?: number
   userLocation?: Parking['coordinates']
+  userLocationLive?: boolean
+  userLocationAccuracy?: number | null
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
@@ -93,30 +101,21 @@ export default function LiveParkingMap({
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
+    const cityBounds = L.latLngBounds(PRISHTINA_LEAFLET_BOUNDS)
     const map = L.map(containerRef.current, {
-      center: [42.6608, 21.1608],
-      zoom: 14,
+      center: [PRISHTINA_CENTER.lat, PRISHTINA_CENTER.lng],
+      zoom: 13,
+      minZoom: 12,
+      maxBounds: cityBounds.pad(0.08),
+      maxBoundsViscosity: 1,
       zoomControl: false,
       attributionControl: false,
       preferCanvas: false,
     })
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
-      subdomains: 'abcd',
-      maxZoom: 20,
-      attribution: 'Harta: <a href="https://www.openstreetmap.org/copyright" target="_blank">OSM</a> · <a href="https://carto.com/attributions" target="_blank">CARTO</a>',
-    }).addTo(map)
-    map.createPane('mapLabels')
-    const labelsPane = map.getPane('mapLabels')
-    if (labelsPane) {
-      labelsPane.style.zIndex = '425'
-      labelsPane.style.pointerEvents = 'none'
-    }
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
-      pane: 'mapLabels',
-      subdomains: 'abcd',
-      minZoom: 11,
-      maxZoom: 20,
-      opacity: .88,
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      subdomains: 'abc',
+      maxZoom: 19,
+      attribution: 'Harta: <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>',
     }).addTo(map)
     L.control.zoom({ position: 'topright' }).addTo(map)
     L.control.attribution({ position: 'bottomright', prefix: false }).addTo(map)
@@ -127,10 +126,13 @@ export default function LiveParkingMap({
     routeLayerRef.current = L.layerGroup().addTo(map)
     map.on('click', (event) => {
       if (modeRef.current !== 'home' || !pickingDestinationRef.current) return
-      onPickDestinationRef.current?.({ lat: event.latlng.lat, lng: event.latlng.lng })
+      const coordinates = { lat: event.latlng.lat, lng: event.latlng.lng }
+      if (!isWithinPrishtinaMap(coordinates)) return
+      onPickDestinationRef.current?.(coordinates)
     })
     map.on('zoomend', () => setMapZoom(map.getZoom()))
     mapRef.current = map
+    map.fitBounds(cityBounds, { padding: [14, 14], animate: false })
     window.setTimeout(() => map.invalidateSize(), 0)
 
     return () => {
@@ -141,6 +143,10 @@ export default function LiveParkingMap({
 
   useEffect(() => {
     if (!recenterToken || !mapRef.current || mode !== 'home') return
+    if (!isWithinPrishtinaMap(userLocation)) {
+      mapRef.current.flyTo([PRISHTINA_CENTER.lat, PRISHTINA_CENTER.lng], 13, { duration: .45 })
+      return
+    }
     mapRef.current.flyTo([userLocation.lat, userLocation.lng], 16, { duration: .45 })
   }, [recenterToken, mode, userLocation.lat, userLocation.lng])
 
@@ -219,13 +225,27 @@ export default function LiveParkingMap({
       })
     })
 
-    const userIcon = L.divIcon({
-      className: '',
-      html: '<span class="live-user-location"><i></i></span>',
-      iconSize: [28, 28],
-      iconAnchor: [14, 14],
-    })
-    L.marker([userLocation.lat, userLocation.lng], { icon: userIcon, interactive: false }).addTo(routeLayer)
+    if (userLocationLive && isWithinPrishtinaMap(userLocation)) {
+      if (userLocationAccuracy) {
+        L.circle([userLocation.lat, userLocation.lng], {
+          radius: Math.min(220, Math.max(12, userLocationAccuracy)),
+          className: 'user-accuracy-ring',
+          color: '#2f6bff',
+          weight: 1,
+          opacity: .34,
+          fillColor: '#2f6bff',
+          fillOpacity: .09,
+          interactive: false,
+        }).addTo(routeLayer)
+      }
+      const userIcon = L.divIcon({
+        className: '',
+        html: '<span class="live-user-location"><i></i></span>',
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+      })
+      L.marker([userLocation.lat, userLocation.lng], { icon: userIcon, interactive: false }).addTo(routeLayer)
+    }
 
     if (destination) {
       if (mode === 'home') {
@@ -355,11 +375,12 @@ export default function LiveParkingMap({
         map.setView([selected.coordinates.lat, selected.coordinates.lng], 15, { animate: false })
       }
     }
-  }, [parkings, selected, mode, route, destination, walkMinutes, recommendationRanks, userLocation.lat, userLocation.lng, mapZoom])
+  }, [parkings, selected, mode, route, destination, walkMinutes, recommendationRanks, userLocation.lat, userLocation.lng, userLocationLive, userLocationAccuracy, mapZoom])
 
   return (
     <div className={`map-canvas map-canvas--${mode} ${destination ? 'map-canvas--destination' : ''} ${pickingDestination ? 'map-canvas--picking' : ''}`} aria-label="Harta reale e parkingjeve në Prishtinë">
       <div ref={containerRef} className="leaflet-map" />
+      <div className="map-city-badge"><b>Prishtinë</b><span>OSM live</span></div>
       {mode === 'home' && pickingDestination && <div className="map-pick-banner">Prek hartën për të vendosur destinacionin</div>}
       {mode === 'home' && destination && (
         <div className="price-legend" aria-label="Kategoritë e çmimeve">

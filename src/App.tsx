@@ -4,7 +4,7 @@ import { defaultParking } from './data'
 import LiveParkingMap from './LiveParkingMap'
 import { reverseGeocodeLocation, searchDestinationOnline, searchLocalDestinations } from './geocodingApi'
 import { distanceMeters, rankParkings, walkableParkingCandidates } from './parkingRanking'
-import { getPrishtinaParkingSnapshot, loadParkingGeometry, loadPrishtinaParkings, USER_LOCATION } from './parkingApi'
+import { getPrishtinaParkingSnapshot, isWithinPrishtinaMap, loadParkingGeometry, loadPrishtinaParkings, USER_LOCATION } from './parkingApi'
 import { parkingAccessPoint } from './parkingGeometry'
 import { PRISHTINA_PARKING_RULES_URL } from './prishtinaParkingRules'
 import { loadPreferences, savePreferences } from './persistence'
@@ -27,6 +27,7 @@ const initialFilters: Filters = {
 
 const RECENT_DESTINATIONS_KEY = 'parko-recent-destinations'
 const PARKING_REPORTS_KEY = 'parko-live-parking-reports'
+type LocationStatus = 'idle' | 'locating' | 'ready' | 'outside' | 'denied' | 'unavailable'
 
 type ParkingReport = {
   parkingId: string
@@ -324,6 +325,29 @@ function parkingMatchesType(parking: Parking, type: ParkingTypeFilter) {
   return parking.type === type
 }
 
+function accuracyLabel(accuracy: number | null) {
+  if (!accuracy) return ''
+  return ` · ±${Math.round(accuracy)} m`
+}
+
+function locationStatusLabel(status: LocationStatus, accuracy: number | null) {
+  if (status === 'locating') return 'Duke gjetur GPS-in…'
+  if (status === 'ready') return `GPS live${accuracyLabel(accuracy)}`
+  if (status === 'outside') return 'GPS jashtë Prishtinës'
+  if (status === 'denied') return 'Leja e GPS-it u refuzua'
+  if (status === 'unavailable') return 'GPS nuk u gjet'
+  return 'Përdor GPS-in'
+}
+
+function locationActionLabel(status: LocationStatus) {
+  if (status === 'locating') return 'Duke gjetur lokacionin'
+  if (status === 'ready') return 'Lokacioni live në Prishtinë'
+  if (status === 'outside') return 'Lokacioni yt është jashtë Prishtinës'
+  if (status === 'denied') return 'Leja e lokacionit është refuzuar'
+  if (status === 'unavailable') return 'GPS nuk është i disponueshëm'
+  return 'Përdor lokacionin tim'
+}
+
 function ParkingTypeChooser({ value, counts, onChange }: { value: ParkingTypeFilter; counts: ParkingTypeCounts; onChange: (type: ParkingTypeFilter) => void }) {
   return (
     <div className="parking-type-chooser" aria-label="Zgjedh llojin e parkingut">
@@ -436,6 +460,7 @@ function HomeView({
   recenterToken,
   onRecenter,
   locationStatus,
+  locationAccuracy,
   userLocation,
   onDetails,
   onNavigate,
@@ -484,7 +509,8 @@ function HomeView({
   onReport: (parkingId: string, patch: ParkingReportPatch) => void
   recenterToken: number
   onRecenter: () => void
-  locationStatus: 'idle' | 'locating' | 'ready' | 'denied' | 'unavailable'
+  locationStatus: LocationStatus
+  locationAccuracy: number | null
   userLocation: Parking['coordinates']
   onDetails: () => void
   onNavigate: () => void
@@ -524,6 +550,8 @@ function HomeView({
   const routeDistance = route?.distanceMeters ?? selected.distanceMeters
   const nextRoad = route?.steps.find((step) => step.roadName && step.roadName !== 'rruga pa emër')
   const activeFilterCount = [filters.type !== 'all', filters.verifiedOnly, filters.freeOnly, filters.evCharging, filters.accessible, filters.availableOnly].filter(Boolean).length
+  const locationLabel = locationStatusLabel(locationStatus, locationAccuracy)
+  const locateIcon = locationStatus === 'locating' ? '…' : locationStatus === 'ready' ? '●' : locationStatus === 'outside' ? '!' : '➤'
 
   useEffect(() => {
     if (!searchOpen && !reportOpen && !plannerOpen) return
@@ -578,6 +606,8 @@ function HomeView({
         onPickDestination={onPickDestination}
         recenterToken={recenterToken}
         userLocation={userLocation}
+        userLocationLive={locationStatus === 'ready'}
+        userLocationAccuracy={locationAccuracy}
       />
 
       <div className="home-controls" ref={controlsRef}>
@@ -711,9 +741,15 @@ function HomeView({
       <button
         className={`locate-button locate-button--${locationStatus}`}
         onClick={onRecenter}
-        aria-label={locationStatus === 'locating' ? 'Duke gjetur lokacionin' : locationStatus === 'denied' ? 'Leja e lokacionit është refuzuar' : locationStatus === 'unavailable' ? 'GPS nuk është i disponueshëm' : 'Përdor lokacionin tim'}
-        title={locationStatus === 'denied' ? 'Leja e lokacionit është refuzuar' : locationStatus === 'unavailable' ? 'GPS nuk u gjet; po përdoret pika fillestare' : 'Përdor GPS-in'}
-      >{locationStatus === 'locating' ? '…' : locationStatus === 'ready' ? '●' : '➤'}</button>
+        aria-label={locationActionLabel(locationStatus)}
+        title={locationStatus === 'denied' ? 'Leja e lokacionit është refuzuar' : locationStatus === 'unavailable' ? 'GPS nuk u gjet; po përdoret pika fillestare' : locationStatus === 'outside' ? 'GPS-i u gjet, por është jashtë Prishtinës' : 'Përdor GPS-in'}
+      >{locateIcon}</button>
+      {locationStatus !== 'idle' && (
+        <div className={`location-status-pill location-status-pill--${locationStatus}`} role="status">
+          <i />
+          <span>{locationLabel}</span>
+        </div>
+      )}
       {parkingPreviewOpen && !destination && (
         <section className="parking-preview-sheet" aria-label={`Parkingu i zgjedhur: ${selected.name}`}>
           <div className="parking-preview-sheet__handle" />
@@ -806,7 +842,7 @@ function SavedView({ parkings, onHome, onOpen }: { parkings: Parking[]; onHome: 
   )
 }
 
-function DetailsView({ parking, report, onReport, route, destination, smartMatch, saved, userLocation, onToggleSaved, onBack, onNavigate, onOpenStreetView }: { parking: Parking; report?: ParkingReport; onReport: (parkingId: string, patch: ParkingReportPatch) => void; route: DrivingRoute | null; destination: Destination | null; smartMatch?: RankedParking; saved: boolean; userLocation: Parking['coordinates']; onToggleSaved: () => void; onBack: () => void; onNavigate: () => void; onOpenStreetView: () => void }) {
+function DetailsView({ parking, report, onReport, route, destination, smartMatch, saved, userLocation, userLocationLive, userLocationAccuracy, onToggleSaved, onBack, onNavigate, onOpenStreetView }: { parking: Parking; report?: ParkingReport; onReport: (parkingId: string, patch: ParkingReportPatch) => void; route: DrivingRoute | null; destination: Destination | null; smartMatch?: RankedParking; saved: boolean; userLocation: Parking['coordinates']; userLocationLive: boolean; userLocationAccuracy: number | null; onToggleSaved: () => void; onBack: () => void; onNavigate: () => void; onOpenStreetView: () => void }) {
   const [reportOpen, setReportOpen] = useState(false)
   const routeMinutes = route ? Math.max(1, Math.ceil(route.durationSeconds / 60)) : parking.driveMinutes
   const routeDistance = route?.distanceMeters ?? parking.distanceMeters
@@ -816,7 +852,7 @@ function DetailsView({ parking, report, onReport, route, destination, smartMatch
   return (
     <div className="screen screen--map">
       <StatusBar />
-      <LiveParkingMap parkings={[parking]} selected={parking} onSelect={() => undefined} mode="details" route={route} destination={destination} userLocation={userLocation} />
+      <LiveParkingMap parkings={[parking]} selected={parking} onSelect={() => undefined} mode="details" route={route} destination={destination} userLocation={userLocation} userLocationLive={userLocationLive} userLocationAccuracy={userLocationAccuracy} />
       <button className="floating-back" onClick={onBack} aria-label="Kthehu">‹</button>
       <button className={`floating-add ${saved ? 'floating-add--saved' : ''}`} onClick={onToggleSaved} aria-label={saved ? 'Hiqe parkingun nga të ruajturat' : 'Ruaje parkingun'}>{saved ? '♥' : '♡'}</button>
 
@@ -900,7 +936,7 @@ function DetailsView({ parking, report, onReport, route, destination, smartMatch
   )
 }
 
-function NavigationView({ parking, route, userLocation, hasDestination, onStop, onArrive }: { parking: Parking; route: DrivingRoute | null; userLocation: Parking['coordinates']; hasDestination: boolean; onStop: () => void; onArrive: () => void }) {
+function NavigationView({ parking, route, userLocation, userLocationLive, userLocationAccuracy, hasDestination, onStop, onArrive }: { parking: Parking; route: DrivingRoute | null; userLocation: Parking['coordinates']; userLocationLive: boolean; userLocationAccuracy: number | null; hasDestination: boolean; onStop: () => void; onArrive: () => void }) {
   const [showSteps, setShowSteps] = useState(false)
   const directionRef = useRef<HTMLElement>(null)
   const stepsRef = useRef<HTMLElement>(null)
@@ -922,7 +958,7 @@ function NavigationView({ parking, route, userLocation, hasDestination, onStop, 
   return (
     <div className="screen screen--map">
       <StatusBar />
-      <LiveParkingMap parkings={[]} selected={parking} onSelect={() => undefined} mode="navigation" route={route} userLocation={userLocation} />
+      <LiveParkingMap parkings={[]} selected={parking} onSelect={() => undefined} mode="navigation" route={route} userLocation={userLocation} userLocationLive={userLocationLive} userLocationAccuracy={userLocationAccuracy} />
 
       <section className="direction-card" ref={directionRef}>
         <span className="turn-icon">{turnIcon}</span>
@@ -952,13 +988,13 @@ function NavigationView({ parking, route, userLocation, hasDestination, onStop, 
   )
 }
 
-function WalkingView({ parking, destination, route, match, directionsHref, userLocation, onFinish }: { parking: Parking; destination: Destination; route: DrivingRoute; match: RankedParking; directionsHref: string; userLocation: Parking['coordinates']; onFinish: () => void }) {
+function WalkingView({ parking, destination, route, match, directionsHref, userLocation, userLocationLive, userLocationAccuracy, onFinish }: { parking: Parking; destination: Destination; route: DrivingRoute; match: RankedParking; directionsHref: string; userLocation: Parking['coordinates']; userLocationLive: boolean; userLocationAccuracy: number | null; onFinish: () => void }) {
   const routeMinutes = Math.max(1, Math.ceil(route.durationSeconds / 60))
   const isRealRoute = route.source === 'valhalla'
   return (
     <div className="screen screen--map">
       <StatusBar />
-      <LiveParkingMap parkings={[parking]} selected={parking} onSelect={() => undefined} mode="walking" route={route} destination={destination} userLocation={userLocation} />
+      <LiveParkingMap parkings={[parking]} selected={parking} onSelect={() => undefined} mode="walking" route={route} destination={destination} userLocation={userLocation} userLocationLive={userLocationLive} userLocationAccuracy={userLocationAccuracy} />
 
       <section className="direction-card direction-card--walking">
         <span className="turn-icon">↑</span>
@@ -1002,16 +1038,19 @@ export default function App() {
   const [savedParkingIds, setSavedParkingIds] = useState<Set<string>>(() => new Set(persistedPreferences.savedParkingIds ?? []))
   const [parkingReports, setParkingReports] = useState<Record<string, ParkingReport>>(loadParkingReports)
   const [userLocation, setUserLocation] = useState(USER_LOCATION)
-  const [locationStatus, setLocationStatus] = useState<'idle' | 'locating' | 'ready' | 'denied' | 'unavailable'>('idle')
+  const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle')
+  const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null)
   const parkingSelectedByUserRef = useRef(false)
   const parkingDetailsAttemptedRef = useRef(new Set<string>())
   const onlineSearchRequestRef = useRef(0)
+  const userLocationInPrishtina = locationStatus === 'ready' && isWithinPrishtinaMap(userLocation)
+  const activeUserLocation = userLocationInPrishtina ? userLocation : USER_LOCATION
 
   useEffect(() => {
     const controller = new AbortController()
     setRoute(null)
-    const entrance = parkingAccessPoint(selected, userLocation)
-    loadDrivingRoute(userLocation, entrance, controller.signal)
+    const entrance = parkingAccessPoint(selected, activeUserLocation)
+    loadDrivingRoute(activeUserLocation, entrance, controller.signal)
       .then(setRoute)
       .catch((error: unknown) => {
         if (!(error instanceof DOMException && error.name === 'AbortError')) {
@@ -1020,7 +1059,7 @@ export default function App() {
         }
       })
     return () => controller.abort()
-  }, [selected, userLocation])
+  }, [selected, activeUserLocation.lat, activeUserLocation.lng])
 
   useEffect(() => {
     savePreferences({ filters, savedParkingIds: [...savedParkingIds], selectedParkingId: selected.id })
@@ -1087,21 +1126,49 @@ export default function App() {
     }
   }, [])
 
+  function updateLocationFromPosition(position: GeolocationPosition, options: { recenter: boolean; report?: boolean }) {
+    const nextLocation = { lat: position.coords.latitude, lng: position.coords.longitude }
+    const insidePrishtina = isWithinPrishtinaMap(nextLocation)
+    setUserLocation(nextLocation)
+    setLocationAccuracy(Math.round(position.coords.accuracy))
+    setLocationStatus(insidePrishtina ? 'ready' : 'outside')
+    if (options.recenter && insidePrishtina) setRecenterToken((value) => value + 1)
+    if (options.report) {
+      captureEvent('location_ready', {
+        accuracyBucket: position.coords.accuracy < 30 ? 'high' : position.coords.accuracy < 100 ? 'medium' : 'low',
+        coverage: insidePrishtina ? 'prishtina' : 'outside-prishtina',
+      })
+    }
+  }
+
   useEffect(() => {
-    if (locationStatus !== 'ready' || !navigator.geolocation) return
+    if ((locationStatus !== 'ready' && locationStatus !== 'outside') || !navigator.geolocation) return
     const watchId = navigator.geolocation.watchPosition(
-      (position) => setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude }),
-      () => undefined,
-      { enableHighAccuracy: true, maximumAge: 10_000, timeout: 20_000 },
+      (position) => updateLocationFromPosition(position, { recenter: false }),
+      (error) => {
+        if (error.code === error.PERMISSION_DENIED) setLocationStatus('denied')
+      },
+      { enableHighAccuracy: true, maximumAge: 5_000, timeout: 20_000 },
     )
     return () => navigator.geolocation.clearWatch(watchId)
   }, [locationStatus])
 
+  useEffect(() => {
+    if (!navigator.geolocation || !navigator.permissions) return
+    let disposed = false
+    navigator.permissions.query({ name: 'geolocation' as PermissionName })
+      .then((permission) => {
+        if (!disposed && permission.state === 'granted') requestUserLocation()
+      })
+      .catch(() => undefined)
+    return () => { disposed = true }
+  }, [])
+
   const reportedParkings = useMemo(() => parkings.map((parking) => applyParkingReport(parking, parkingReports[parking.id])), [parkings, parkingReports])
   const locatedParkings = useMemo(() => reportedParkings.map((parking) => ({
     ...parking,
-    distanceMeters: distanceMeters(userLocation, parking.coordinates),
-  })), [reportedParkings, userLocation])
+    distanceMeters: distanceMeters(activeUserLocation, parking.coordinates),
+  })), [reportedParkings, activeUserLocation])
   const currentSelected = locatedParkings.find((parking) => parking.id === selected.id) ?? selected
   const hasLiveAvailability = useMemo(() => locatedParkings.some((parking) => parking.spaces !== null && parking.availabilitySource), [locatedParkings])
   const effectiveFilters = useMemo(() => filtersForAvailability(filters, hasLiveAvailability), [filters, hasLiveAvailability])
@@ -1145,13 +1212,13 @@ export default function App() {
     }
     const controller = new AbortController()
     setDrivingMatrix([])
-    loadDrivingMatrix(userLocation, candidates.map(({ parking }) => parking), controller.signal)
+    loadDrivingMatrix(activeUserLocation, candidates.map(({ parking }) => parking), controller.signal)
       .then(setDrivingMatrix)
       .catch((error: unknown) => {
         if (!(error instanceof DOMException && error.name === 'AbortError')) setDrivingMatrix([])
       })
     return () => controller.abort()
-  }, [candidateKey, destination, userLocation])
+  }, [candidateKey, destination, activeUserLocation.lat, activeUserLocation.lng])
 
   const rankedParkings = useMemo(
     () => rankParkings(candidates, drivingMatrix, preference),
@@ -1332,22 +1399,18 @@ export default function App() {
   function requestUserLocation() {
     if (!navigator.geolocation) {
       setLocationStatus('unavailable')
-      setRecenterToken((value) => value + 1)
+      setLocationAccuracy(null)
       return
     }
     setLocationStatus('locating')
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude })
-        setLocationStatus('ready')
-        setRecenterToken((value) => value + 1)
-        captureEvent('location_ready', { accuracyBucket: position.coords.accuracy < 30 ? 'high' : position.coords.accuracy < 100 ? 'medium' : 'low' })
-      },
+      (position) => updateLocationFromPosition(position, { recenter: true, report: true }),
       (error) => {
         setLocationStatus(error.code === error.PERMISSION_DENIED ? 'denied' : 'unavailable')
+        setLocationAccuracy(null)
         captureEvent('location_failed', { code: error.code })
       },
-      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 30_000 },
+      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 0 },
     )
   }
 
@@ -1406,7 +1469,8 @@ export default function App() {
             recenterToken={recenterToken}
             onRecenter={requestUserLocation}
             locationStatus={locationStatus}
-            userLocation={userLocation}
+            locationAccuracy={locationAccuracy}
+            userLocation={activeUserLocation}
             onDetails={() => setScreen('details')}
             onNavigate={() => setScreen('navigation')}
             onOpenStreetView={() => setStreetViewOpen(true)}
@@ -1416,9 +1480,9 @@ export default function App() {
           />
         )}
         {screen === 'saved' && <SavedView parkings={locatedParkings.filter((parking) => savedParkingIds.has(parking.id))} onHome={() => setScreen('home')} onOpen={(parking) => { setSelected(parking); setDestination(null); setScreen('details') }} />}
-        {screen === 'details' && <DetailsView parking={currentSelected} report={parkingReports[currentSelected.id]} onReport={reportParking} route={route} destination={destination} smartMatch={selectedRankedParking} saved={savedParkingIds.has(currentSelected.id)} userLocation={userLocation} onToggleSaved={toggleSavedParking} onBack={() => setScreen('home')} onNavigate={() => setScreen('navigation')} onOpenStreetView={() => setStreetViewOpen(true)} />}
-        {screen === 'navigation' && <NavigationView parking={currentSelected} route={route} userLocation={userLocation} hasDestination={Boolean(destination)} onStop={() => setScreen('details')} onArrive={() => setScreen(destination ? 'walking' : 'home')} />}
-        {screen === 'walking' && destination && displayedWalkingRoute && selectedRankedParking && <WalkingView parking={currentSelected} destination={destination} route={displayedWalkingRoute} match={selectedRankedParking} directionsHref={selectedWalkingDirectionsHref} userLocation={userLocation} onFinish={() => setScreen('home')} />}
+        {screen === 'details' && <DetailsView parking={currentSelected} report={parkingReports[currentSelected.id]} onReport={reportParking} route={route} destination={destination} smartMatch={selectedRankedParking} saved={savedParkingIds.has(currentSelected.id)} userLocation={activeUserLocation} userLocationLive={userLocationInPrishtina} userLocationAccuracy={locationAccuracy} onToggleSaved={toggleSavedParking} onBack={() => setScreen('home')} onNavigate={() => setScreen('navigation')} onOpenStreetView={() => setStreetViewOpen(true)} />}
+        {screen === 'navigation' && <NavigationView parking={currentSelected} route={route} userLocation={activeUserLocation} userLocationLive={userLocationInPrishtina} userLocationAccuracy={locationAccuracy} hasDestination={Boolean(destination)} onStop={() => setScreen('details')} onArrive={() => setScreen(destination ? 'walking' : 'home')} />}
+        {screen === 'walking' && destination && displayedWalkingRoute && selectedRankedParking && <WalkingView parking={currentSelected} destination={destination} route={displayedWalkingRoute} match={selectedRankedParking} directionsHref={selectedWalkingDirectionsHref} userLocation={activeUserLocation} userLocationLive={userLocationInPrishtina} userLocationAccuracy={locationAccuracy} onFinish={() => setScreen('home')} />}
         {streetViewOpen && <StreetViewModal parking={currentSelected} onClose={() => setStreetViewOpen(false)} />}
       </div>
       <p className="desktop-caption">Parko • prototip interaktiv për Prishtinën</p>

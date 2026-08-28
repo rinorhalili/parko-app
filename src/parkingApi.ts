@@ -10,8 +10,29 @@ const OVERPASS_URLS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.nchc.org.tw/api/interpreter',
 ]
-const PRISHTINA_BOUNDS = '42.625,21.115,42.690,21.215'
+export const PRISHTINA_CENTER = { lat: 42.6608, lng: 21.1608 } as const
+export const PRISHTINA_MAP_BOUNDS = {
+  south: 42.620,
+  west: 21.115,
+  north: 42.700,
+  east: 21.225,
+} as const
+const PRISHTINA_PARKING_BOUNDS = '42.625,21.115,42.690,21.215'
 const USER_LOCATION = { lat: 42.6582, lng: 21.1585 }
+
+export function isWithinPrishtinaMap(coordinates: Parking['coordinates']) {
+  return coordinates.lat >= PRISHTINA_MAP_BOUNDS.south
+    && coordinates.lat <= PRISHTINA_MAP_BOUNDS.north
+    && coordinates.lng >= PRISHTINA_MAP_BOUNDS.west
+    && coordinates.lng <= PRISHTINA_MAP_BOUNDS.east
+}
+
+export function clampToPrishtinaMap(coordinates: Parking['coordinates']) {
+  return {
+    lat: Math.min(PRISHTINA_MAP_BOUNDS.north, Math.max(PRISHTINA_MAP_BOUNDS.south, coordinates.lat)),
+    lng: Math.min(PRISHTINA_MAP_BOUNDS.east, Math.max(PRISHTINA_MAP_BOUNDS.west, coordinates.lng)),
+  }
+}
 
 type OsmElement = {
   id: number
@@ -195,7 +216,7 @@ function withoutDuplicates(parkings: Parking[], existing: Parking[], thresholdMe
 }
 
 export async function loadPrishtinaParkings(signal?: AbortSignal) {
-  const query = `[out:json][timeout:30];nwr["amenity"="parking"](${PRISHTINA_BOUNDS});out body center geom;`
+  const query = `[out:json][timeout:30];nwr["amenity"="parking"](${PRISHTINA_PARKING_BOUNDS});out body center geom;`
   let payload: OverpassResponse | null = null
   let lastError: unknown = new Error('Overpass is unavailable')
 

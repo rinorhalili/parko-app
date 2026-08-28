@@ -201,6 +201,40 @@ input:focus-visible {
   pointer-events: none;
 }
 
+.map-city-badge {
+  position: absolute;
+  z-index: 500;
+  left: 12px;
+  bottom: 158px;
+  min-height: 34px;
+  padding: 5px 11px;
+  border: 1px solid rgba(210, 220, 232, .94);
+  border-radius: 17px;
+  background: rgba(255, 255, 255, .94);
+  color: #24364d;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  box-shadow: 0 5px 16px rgba(13, 27, 42, .1);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+
+.map-city-badge b {
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.map-city-badge span {
+  color: #69798e;
+  font-size: 8px;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
 .leaflet-control-attribution {
   max-width: 150px;
   padding: 1px 4px !important;
@@ -407,6 +441,10 @@ input:focus-visible {
   height: 6px;
   border-radius: 50%;
   background: #fff;
+}
+
+.user-accuracy-ring {
+  pointer-events: none;
 }
 
 .price-legend {
@@ -1018,8 +1056,74 @@ input:focus-visible {
   box-shadow: 0 4px 14px rgba(13, 27, 42, 0.08);
 }
 
+.location-status-pill {
+  position: absolute;
+  z-index: 12;
+  right: 74px;
+  bottom: 104px;
+  max-width: 190px;
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid rgba(210, 220, 232, .94);
+  border-radius: 17px;
+  background: rgba(255, 255, 255, .96);
+  color: #304056;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  box-shadow: 0 5px 16px rgba(13, 27, 42, .1);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+
+.location-status-pill i {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #8fa0b6;
+}
+
+.location-status-pill span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.location-status-pill--ready {
+  border-color: rgba(25, 195, 125, .28);
+  color: #0f7f58;
+}
+
+.location-status-pill--ready i {
+  background: #19c37d;
+  box-shadow: 0 0 0 5px rgba(25, 195, 125, .14);
+}
+
+.location-status-pill--locating i {
+  background: var(--primary);
+  box-shadow: 0 0 0 5px rgba(47, 107, 255, .14);
+}
+
+.location-status-pill--outside,
+.location-status-pill--denied,
+.location-status-pill--unavailable {
+  border-color: rgba(255, 170, 78, .38);
+  color: #965700;
+}
+
+.location-status-pill--outside i,
+.location-status-pill--denied i,
+.location-status-pill--unavailable i {
+  background: #ff9f43;
+}
+
 .screen--smart .locate-button { bottom: 365px; }
+.screen--smart .location-status-pill { bottom: 373px; }
 .screen--parking-preview .locate-button { bottom: 370px; }
+.screen--parking-preview .location-status-pill { bottom: 378px; }
 .screen--parking-preview .price-legend { bottom: 366px; }
 .screen--parking-preview .map-canvas--home .leaflet-bottom { bottom: 352px; }
 
@@ -1111,6 +1215,8 @@ input:focus-visible {
 .list-limit-note { margin: 4px 8px 12px; color: var(--muted); font-size: 10px; font-weight: 700; line-height: 1.4; text-align: center; }
 .screen--sheet-collapsed .locate-button,
 .screen--sheet-collapsed.screen--smart .locate-button { bottom: 150px; }
+.screen--sheet-collapsed .location-status-pill,
+.screen--sheet-collapsed.screen--smart .location-status-pill { bottom: 158px; }
 .screen--sheet-collapsed .price-legend,
 .screen--sheet-collapsed .map-canvas--destination .price-legend { bottom: 148px; }
 .screen--sheet-collapsed .parking-footprint-badge,
@@ -1118,11 +1224,14 @@ input:focus-visible {
 .screen--sheet-collapsed .map-canvas--home .leaflet-bottom { bottom: 136px; }
 .screen--sheet-medium .locate-button { bottom: 410px; }
 .screen--sheet-medium.screen--smart .locate-button { bottom: 438px; }
+.screen--sheet-medium .location-status-pill { bottom: 418px; }
+.screen--sheet-medium.screen--smart .location-status-pill { bottom: 446px; }
 .screen--sheet-medium .price-legend { bottom: 410px; }
 .screen--sheet-medium.screen--smart .price-legend { bottom: 438px; }
 .screen--sheet-medium .map-canvas--home .leaflet-bottom { bottom: 396px; }
 .screen--sheet-medium.screen--smart .map-canvas--home .leaflet-bottom { bottom: 424px; }
 .screen--sheet-expanded .locate-button,
+.screen--sheet-expanded .location-status-pill,
 .screen--sheet-expanded .price-legend { opacity: 0; pointer-events: none; }
 .screen--sheet-expanded .map-canvas--home .leaflet-bottom { bottom: calc(100% - 176px); }
 
@@ -1394,6 +1503,7 @@ input:focus-visible {
 
 .locate-button--ready { color: #fff; background: var(--primary); }
 .locate-button--locating { animation: locate-pulse 900ms ease-in-out infinite alternate; }
+.locate-button--outside { color: #fff; background: #ff9f43; }
 .locate-button--denied,
 .locate-button--unavailable { color: #a85a00; }
 .locate-button:active { transform: rotate(-45deg) scale(.96); }
