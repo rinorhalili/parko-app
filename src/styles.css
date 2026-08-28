@@ -511,6 +511,93 @@ input:focus-visible {
 .leaflet-popup-content-wrapper { border-radius: 14px; box-shadow: 0 10px 30px rgba(13, 27, 42, 0.2); }
 .leaflet-popup-content { margin: 12px 14px; }
 
+.crowd-departure-marker {
+  width: 42px;
+  height: 42px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: #18b981;
+  color: #fff;
+  display: grid;
+  place-content: center;
+  box-shadow: 0 4px 14px rgba(13, 27, 42, .24);
+  text-align: center;
+}
+.crowd-departure-marker b { display: block; font-size: 17px; line-height: 14px; }
+.crowd-departure-marker small { font-size: 8px; font-weight: 900; }
+.crowd-departure-tooltip { border: 0; border-radius: 9px; background: #0d1b2a; color: #fff; font-size: 9px; font-weight: 800; }
+.crowd-alert-banner {
+  position: absolute;
+  z-index: 550;
+  top: 58px;
+  left: 12px;
+  right: 12px;
+  padding: 10px 12px;
+  border: 1px solid #ffc4a8;
+  border-radius: 14px;
+  background: #fff7f1;
+  color: #8a3f19;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  box-shadow: var(--shadow-float);
+  font-size: 10px;
+}
+.crowd-alert-banner strong { font-size: 11px; }
+.crowd-alert-banner span { font-weight: 700; }
+.crowd-fab {
+  position: absolute;
+  z-index: 600;
+  right: 14px;
+  bottom: 285px;
+  width: 52px;
+  height: 52px;
+  border: 4px solid #fff;
+  border-radius: 50%;
+  background: var(--danger);
+  color: #fff;
+  box-shadow: var(--shadow-float);
+  font-size: 20px;
+  font-weight: 900;
+}
+.crowd-alert-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(13, 27, 42, .35);
+}
+.crowd-alert-dialog {
+  width: min(350px, 100%);
+  padding: 18px;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 18px 50px rgba(13, 27, 42, .28);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.crowd-alert-dialog header, .crowd-card header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.crowd-alert-dialog header span, .crowd-card header span { display: flex; flex-direction: column; gap: 3px; }
+.crowd-alert-dialog header small, .crowd-card header small { color: var(--muted); font-size: 9px; font-weight: 900; text-transform: uppercase; }
+.crowd-alert-dialog header strong, .crowd-card header strong { font-size: 14px; }
+.crowd-alert-dialog header button { width: 34px; height: 34px; border-radius: 50%; background: var(--surface-soft); color: var(--muted); font-size: 20px; }
+.crowd-alert-types, .crowd-card__actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.crowd-alert-types button, .crowd-card__actions button { min-height: 44px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-soft); color: var(--ink); font-size: 11px; font-weight: 900; }
+.crowd-alert-types button.selected, .crowd-card__actions button.selected { border-color: #8dadff; background: var(--primary-soft); color: #2458d3; }
+.crowd-alert-dialog label { display: flex; flex-direction: column; gap: 5px; color: var(--muted); font-size: 10px; font-weight: 900; }
+.crowd-alert-dialog input, .crowd-card select { min-height: 42px; padding: 0 10px; border: 1px solid var(--line); border-radius: 11px; background: #fff; color: var(--ink); font-size: 12px; }
+.crowd-card { margin: 12px 0; padding: 13px; border: 1px solid #dce6f2; border-radius: 16px; background: #f8fbff; }
+.crowd-card header > b { color: #5b6e84; font-size: 9px; white-space: nowrap; }
+.crowd-card__actions { margin-top: 11px; }
+.crowd-card__taken.selected { border-color: #ffb4b7; background: #fff1f1; color: #c43d43; }
+.crowd-card__leaving { display: flex; gap: 8px; margin-top: 11px; }
+.crowd-card__leaving select { flex: 1; }
+.crowd-card__leaving button { min-height: 42px; padding: 0 14px; border-radius: 11px; background: var(--available); color: #fff; font-size: 11px; font-weight: 900; }
+.crowd-card--leaving { background: #f1fcf7; border-color: #c7efdd; }
+
 .selected-parking-footprint {
   filter: drop-shadow(0 4px 8px rgba(47, 107, 255, .32));
   animation: footprint-pulse 1.7s ease-in-out infinite alternate;
@@ -1133,11 +1220,15 @@ input:focus-visible {
   left: 0;
   right: 0;
   bottom: 78px;
-  height: 288px;
+  height: 360px;
+  max-height: calc(100% - 132px);
   padding: 9px 20px 14px;
   border-radius: 28px 28px 0 0;
   background: #fff;
   box-shadow: var(--shadow-sheet);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
 .parking-preview-sheet__handle { width: 58px; height: 5px; margin: 0 auto 8px; border-radius: 3px; background: #d5dde7; }
 .parking-preview-sheet > header { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }

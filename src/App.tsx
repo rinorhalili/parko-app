@@ -12,6 +12,7 @@ import { loadDrivingMatrix, loadDrivingRoute, loadWalkingRoute } from './routing
 import { loadKartaViewStreetView, walkingDirectionsUrl } from './streetView'
 import type { KartaViewStreetView } from './streetView'
 import { captureEvent } from './telemetry'
+import { AlertBanner, LeavingButton, SpotVouching, StreetAlertFab } from './crowdsourcing'
 import type { DrivingMatrixEntry } from './routingApi'
 import type { Destination, DrivingRoute, Filters, Parking, ParkingLoadStatus, ParkingPreference, RankedParking, Screen } from './types'
 
@@ -595,7 +596,7 @@ function HomeView({
       <LiveParkingMap
         parkings={mapParkings}
         selected={selected}
-        onSelect={onSelect}
+        onSelect={(parking) => { setReportOpen(false); onSelect(parking) }}
         mode="home"
         loadStatus={loadStatus}
         destination={destination}
@@ -609,6 +610,8 @@ function HomeView({
         userLocationLive={locationStatus === 'ready'}
         userLocationAccuracy={locationAccuracy}
       />
+      <AlertBanner zone={selected.zone} />
+      {!parkingPreviewOpen && <StreetAlertFab defaultZone={selected.zone} />}
 
       <div className="home-controls" ref={controlsRef}>
         <div className="search-box">
@@ -697,17 +700,19 @@ function HomeView({
           >
             <span>≡</span><b>{activeFilterCount ? `Filtra (${activeFilterCount})` : 'Filtra'}</b>
           </button>
-          <button
-            className={`map-action-button map-action-button--report ${reportOpen ? 'map-action-button--active' : ''}`}
-            onClick={() => { onCloseSearch(); setPlannerOpen(false); setReportOpen((value) => !value) }}
-            aria-expanded={reportOpen}
-            aria-label={reportOpen ? 'Mbyll raportimet' : 'Hap raportimet'}
-          >
-            <span>!</span><b>Raporto</b>{communityStats.reports > 0 && <small>{communityStats.reports}</small>}
-          </button>
+          {!parkingPreviewOpen && (
+            <button
+              className={`map-action-button map-action-button--report ${reportOpen ? 'map-action-button--active' : ''}`}
+              onClick={() => { onCloseSearch(); setPlannerOpen(false); setReportOpen((value) => !value) }}
+              aria-expanded={reportOpen}
+              aria-label={reportOpen ? 'Mbyll raportimet' : 'Hap raportimet'}
+            >
+              <span>!</span><b>Raporto</b>{communityStats.reports > 0 && <small>{communityStats.reports}</small>}
+            </button>
+          )}
         </div>
 
-        {reportOpen && (
+        {!parkingPreviewOpen && reportOpen && (
           <ParkingReportPanel parking={selected} report={selectedReport} compact onReport={onReport} />
         )}
 
@@ -767,6 +772,7 @@ function HomeView({
             <button className="button button--secondary" onClick={onDetails}>Detaje</button>
             <button className="button" onClick={onNavigate}>Nisu</button>
           </div>
+          <LeavingButton parking={selected} />
         </section>
       )}
       {destination && (
@@ -789,7 +795,7 @@ function HomeView({
           {sheetState === 'medium' && destination && rankedParkings.length > 0 && (
             <div className="recommendation-tabs" aria-label="Parkingjet e rekomanduara">
               {rankedParkings.slice(0, 3).map((match) => (
-                <button key={match.parking.id} className={selected.id === match.parking.id ? 'selected' : ''} onClick={() => onSelect(match.parking)} aria-pressed={selected.id === match.parking.id}>
+                <button key={match.parking.id} className={selected.id === match.parking.id ? 'selected' : ''} onClick={() => { setReportOpen(false); onSelect(match.parking) }} aria-pressed={selected.id === match.parking.id}>
                   <b>{match.rank}</b><span>{match.walkMinutes} min ecje<small>{accessLabel(match.parking)}</small></span>
                 </button>
               ))}
@@ -861,6 +867,9 @@ function DetailsView({ parking, report, onReport, route, destination, smartMatch
         <h1>{parking.name}</h1>
         <span className={`availability-badge availability-badge--${parking.status}`}>● {availabilityLabel(parking)}</span>
         <DataTrustBadge parking={parking} detailed />
+        <AlertBanner zone={parking.zone} />
+        <SpotVouching parking={parking} />
+        <LeavingButton parking={parking} />
         <p className="muted-copy">{accessLabel(parking)} • {parking.availabilitySource ? `Disponueshmëri nga ${parking.availabilitySource}` : 'Të dhëna të hartës OpenStreetMap'}</p>
         <div className="report-control-row report-control-row--details">
           <button

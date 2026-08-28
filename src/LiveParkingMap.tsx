@@ -3,6 +3,7 @@ import L from 'leaflet'
 import { PRISHTINA_CENTER, PRISHTINA_MAP_BOUNDS, USER_LOCATION, isWithinPrishtinaMap } from './parkingApi'
 import { accessPointIsEstimated, parkingAccessPoint } from './parkingGeometry'
 import type { Destination, DrivingRoute, Parking, ParkingLoadStatus } from './types'
+import { useCrowdSourcing } from './crowdsourcing'
 
 type MapMode = 'home' | 'details' | 'navigation' | 'walking'
 const PRISHTINA_LEAFLET_BOUNDS: [L.LatLngTuple, L.LatLngTuple] = [
@@ -83,6 +84,7 @@ export default function LiveParkingMap({
   userLocationLive?: boolean
   userLocationAccuracy?: number | null
 }) {
+  const { departures } = useCrowdSourcing()
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const parkingLayerRef = useRef<L.LayerGroup | null>(null)
@@ -201,6 +203,7 @@ export default function LiveParkingMap({
           direction: 'top',
           className: 'parking-rank-tooltip',
         })
+
         layer.on('click', (event) => {
           if (event.originalEvent) L.DomEvent.stopPropagation(event.originalEvent)
           if (pickingDestinationRef.current) {
@@ -223,6 +226,19 @@ export default function LiveParkingMap({
           onSelectRef.current(parking)
         })
       })
+
+    })
+
+    departures.forEach((departure) => {
+      const departureIcon = L.divIcon({
+        className: '',
+        html: `<span class="crowd-departure-marker"><b>↗</b><small>${departure.minutes}′</small></span>`,
+        iconSize: [42, 42],
+        iconAnchor: [21, 21],
+      })
+      L.marker([departure.coordinates.lat, departure.coordinates.lng], { icon: departureIcon, title: `Po largohet për ${departure.minutes} minuta`, zIndexOffset: 900 })
+        .bindTooltip(`Po largohet për ${departure.minutes} minuta`, { direction: 'top', className: 'crowd-departure-tooltip' })
+        .addTo(routeLayer)
     })
 
     if (userLocationLive && isWithinPrishtinaMap(userLocation)) {
@@ -375,7 +391,7 @@ export default function LiveParkingMap({
         map.setView([selected.coordinates.lat, selected.coordinates.lng], 15, { animate: false })
       }
     }
-  }, [parkings, selected, mode, route, destination, walkMinutes, recommendationRanks, userLocation.lat, userLocation.lng, userLocationLive, userLocationAccuracy, mapZoom])
+  }, [parkings, selected, mode, route, destination, walkMinutes, recommendationRanks, userLocation.lat, userLocation.lng, userLocationLive, userLocationAccuracy, mapZoom, departures])
 
   return (
     <div className={`map-canvas map-canvas--${mode} ${destination ? 'map-canvas--destination' : ''} ${pickingDestination ? 'map-canvas--picking' : ''}`} aria-label="Harta reale e parkingjeve në Prishtinë">

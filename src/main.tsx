@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
+import { CrowdSourcingProvider } from './crowdsourcing'
 import 'leaflet/dist/leaflet.css'
 import 'leaflet.markercluster/dist/MarkerCluster.css'
 import './styles.css'
@@ -13,6 +14,6 @@ if ('serviceWorker' in navigator) {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <CrowdSourcingProvider><App /></CrowdSourcingProvider>
   </StrictMode>,
 )
