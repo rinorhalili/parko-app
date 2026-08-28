@@ -63,7 +63,7 @@ Records older than 30 minutes, negative availability, and unknown parking IDs ar
 - Verified OSM entrance nodes when mapped; otherwise a boundary-based access-point estimate
 - GPS positioning and continuous updates after permission is granted
 - OSRM driving routes and Valhalla pedestrian routes with honest fallbacks
-- One-tap Google Street View launch for the selected parking and its route approach
+- In-app KartaView street-level photo viewer for the selected parking, with no API key or Google Cloud billing
 - Honest separation between total capacity and unknown live availability
 - Persistent filters, saved list, parked-car location, private note, and timer
 - Service-worker reminders plus optional Web Push scheduling

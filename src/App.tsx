@@ -9,7 +9,8 @@ import { parkingAccessPoint } from './parkingGeometry'
 import { PRISHTINA_PARKING_RULES_URL } from './prishtinaParkingRules'
 import { loadPreferences, savePreferences } from './persistence'
 import { loadDrivingMatrix, loadDrivingRoute, loadWalkingRoute } from './routingApi'
-import { streetViewUrl, walkingDirectionsUrl } from './streetView'
+import { loadKartaViewStreetView, walkingDirectionsUrl } from './streetView'
+import type { KartaViewStreetView } from './streetView'
 import { captureEvent } from './telemetry'
 import type { DrivingMatrixEntry } from './routingApi'
 import type { Destination, DrivingRoute, Filters, Parking, ParkingLoadStatus, ParkingPreference, RankedParking, Screen } from './types'
@@ -225,6 +226,79 @@ function ParkingCard({ parking, smartMatch, onOpen }: { parking: Parking; smartM
   )
 }
 
+function StreetViewModal({ parking, onClose }: { parking: Parking; onClose: () => void }) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const [streetView, setStreetView] = useState<KartaViewStreetView | null>(null)
+  const [status, setStatus] = useState<'loading' | 'ready' | 'empty' | 'error'>('loading')
+  const [activePhotoIndex, setActivePhotoIndex] = useState(0)
+  const [imageFailed, setImageFailed] = useState(false)
+
+  useEffect(() => {
+    closeButtonRef.current?.focus()
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', closeOnEscape)
+    return () => document.removeEventListener('keydown', closeOnEscape)
+  }, [onClose])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    setStatus('loading')
+    setStreetView(null)
+    setActivePhotoIndex(0)
+    setImageFailed(false)
+    loadKartaViewStreetView(parking, controller.signal)
+      .then((result) => {
+        if (controller.signal.aborted) return
+        if (!result) {
+          setStatus('empty')
+          return
+        }
+        setStreetView(result)
+        setActivePhotoIndex(result.selectedPhotoIndex)
+        setStatus('ready')
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return
+        setStatus('error')
+      })
+    return () => controller.abort()
+  }, [parking])
+
+  const activePhoto = streetView?.photos[activePhotoIndex]
+  const captureDate = activePhoto?.capturedAt ? new Intl.DateTimeFormat('sq-AL', { dateStyle: 'medium' }).format(new Date(activePhoto.capturedAt.replace(' ', 'T'))) : null
+  const showPhoto = (nextIndex: number) => {
+    setImageFailed(false)
+    setActivePhotoIndex(nextIndex)
+  }
+
+  return (
+    <section className="street-view-modal" role="dialog" aria-modal="true" aria-labelledby="street-view-title">
+      <header className="street-view-modal__header">
+        <span><small>KartaView · falas</small><strong id="street-view-title">Pamje nga rruga</strong><em>{parking.name}</em></span>
+        <button ref={closeButtonRef} onClick={onClose} aria-label="Mbyll Street View">×</button>
+      </header>
+      {status === 'loading' && <div className="street-view-modal__state"><i /><strong>Duke kërkuar pamje pranë parkingut…</strong><p>Foto nga KartaView, pa Google Cloud dhe pa API key.</p></div>}
+      {status === 'ready' && activePhoto && !imageFailed && (
+        <div className="street-view-modal__viewer">
+          <img className="street-view-modal__image" src={activePhoto.imageUrl} alt={`Pamje nga rruga pranë ${parking.name}`} onError={() => setImageFailed(true)} />
+          {streetView.photos.length > 1 && (
+            <div className="street-view-modal__controls" aria-label="Lëviz nëpër fotot e rrugës">
+              <button onClick={() => showPhoto(activePhotoIndex - 1)} disabled={activePhotoIndex === 0} aria-label="Foto e mëparshme">‹</button>
+              <span>{activePhotoIndex + 1} / {streetView.photos.length}</span>
+              <button onClick={() => showPhoto(activePhotoIndex + 1)} disabled={activePhotoIndex === streetView.photos.length - 1} aria-label="Foto tjetër">›</button>
+            </div>
+          )}
+          <p className="street-view-modal__meta">Foto nga komuniteti KartaView{captureDate ? ` · ${captureDate}` : ''}. Pamje e rrugës, jo domosdoshmërisht 360°.</p>
+        </div>
+      )}
+      {status === 'empty' && <div className="street-view-modal__state"><span>⌖</span><strong>S’ka foto pranë këtij parkingu</strong><p>KartaView nuk ka gjetur pamje në një rreze prej rreth 1 km. Provo një parking tjetër ose Google Street View kur të kesh çelësin e tij.</p></div>}
+      {(status === 'error' || imageFailed) && <div className="street-view-modal__state"><span>!</span><strong>Pamja nuk u ngarkua</strong><p>KartaView është përkohësisht i paarritshëm ose fotografia nuk është më publike. Provo përsëri më vonë.</p></div>}
+    </section>
+  )
+}
+
 type CommunityStats = {
   reports: number
   freeSignals: number
@@ -365,6 +439,7 @@ function HomeView({
   userLocation,
   onDetails,
   onNavigate,
+  onOpenStreetView,
   onCloseParkingPreview,
   onSaved,
   loadStatus,
@@ -413,6 +488,7 @@ function HomeView({
   userLocation: Parking['coordinates']
   onDetails: () => void
   onNavigate: () => void
+  onOpenStreetView: () => void
   onCloseParkingPreview: () => void
   onSaved: () => void
   loadStatus: ParkingLoadStatus
@@ -686,7 +762,7 @@ function HomeView({
           {sheetState === 'medium' && mapParkings.length ? (
             <>
               <ParkingCard parking={selected} smartMatch={selectedMatch} onOpen={onDetails} />
-              <a className="street-view-inline" href={streetViewUrl(selected, visibleRoute)} target="_blank" rel="noreferrer">◎ Street View 360°</a>
+              <button className="street-view-inline" onClick={onOpenStreetView}>◎ Shiko pamje nga rruga</button>
             </>
           ) : sheetState === 'medium' ? (
             <div className="empty-state">
@@ -730,7 +806,7 @@ function SavedView({ parkings, onHome, onOpen }: { parkings: Parking[]; onHome: 
   )
 }
 
-function DetailsView({ parking, report, onReport, route, destination, smartMatch, saved, userLocation, onToggleSaved, onBack, onNavigate }: { parking: Parking; report?: ParkingReport; onReport: (parkingId: string, patch: ParkingReportPatch) => void; route: DrivingRoute | null; destination: Destination | null; smartMatch?: RankedParking; saved: boolean; userLocation: Parking['coordinates']; onToggleSaved: () => void; onBack: () => void; onNavigate: () => void }) {
+function DetailsView({ parking, report, onReport, route, destination, smartMatch, saved, userLocation, onToggleSaved, onBack, onNavigate, onOpenStreetView }: { parking: Parking; report?: ParkingReport; onReport: (parkingId: string, patch: ParkingReportPatch) => void; route: DrivingRoute | null; destination: Destination | null; smartMatch?: RankedParking; saved: boolean; userLocation: Parking['coordinates']; onToggleSaved: () => void; onBack: () => void; onNavigate: () => void; onOpenStreetView: () => void }) {
   const [reportOpen, setReportOpen] = useState(false)
   const routeMinutes = route ? Math.max(1, Math.ceil(route.durationSeconds / 60)) : parking.driveMinutes
   const routeDistance = route?.distanceMeters ?? parking.distanceMeters
@@ -786,7 +862,7 @@ function DetailsView({ parking, report, onReport, route, destination, smartMatch
             </ol>
           ) : <p>Rruga po përgatitet. Mund të nisësh navigimin sapo të shfaqet vija blu në hartë.</p>}
         </section>
-        <a className="street-view-inline street-view-inline--details" href={streetViewUrl(parking, route)} target="_blank" rel="noreferrer">◎ Hap Street View 360°</a>
+        <button className="street-view-inline street-view-inline--details" onClick={onOpenStreetView}>◎ Shiko pamje nga rruga</button>
 
         <h2>Detajet</h2>
         <div className="detail-tags">
@@ -921,6 +997,7 @@ export default function App() {
   const [drivingMatrix, setDrivingMatrix] = useState<DrivingMatrixEntry[]>([])
   const [pickingDestination, setPickingDestination] = useState(false)
   const [parkingPreviewOpen, setParkingPreviewOpen] = useState(false)
+  const [streetViewOpen, setStreetViewOpen] = useState(false)
   const [recenterToken, setRecenterToken] = useState(0)
   const [savedParkingIds, setSavedParkingIds] = useState<Set<string>>(() => new Set(persistedPreferences.savedParkingIds ?? []))
   const [parkingReports, setParkingReports] = useState<Record<string, ParkingReport>>(loadParkingReports)
@@ -1231,6 +1308,7 @@ export default function App() {
     setRoute(null)
     setSelected(nextParking)
     setParkingPreviewOpen(true)
+    setStreetViewOpen(false)
   }
 
   function reportParking(parkingId: string, patch: ParkingReportPatch) {
@@ -1331,15 +1409,17 @@ export default function App() {
             userLocation={userLocation}
             onDetails={() => setScreen('details')}
             onNavigate={() => setScreen('navigation')}
+            onOpenStreetView={() => setStreetViewOpen(true)}
             onCloseParkingPreview={() => setParkingPreviewOpen(false)}
             onSaved={() => setScreen('saved')}
             loadStatus={loadStatus}
           />
         )}
         {screen === 'saved' && <SavedView parkings={locatedParkings.filter((parking) => savedParkingIds.has(parking.id))} onHome={() => setScreen('home')} onOpen={(parking) => { setSelected(parking); setDestination(null); setScreen('details') }} />}
-        {screen === 'details' && <DetailsView parking={currentSelected} report={parkingReports[currentSelected.id]} onReport={reportParking} route={route} destination={destination} smartMatch={selectedRankedParking} saved={savedParkingIds.has(currentSelected.id)} userLocation={userLocation} onToggleSaved={toggleSavedParking} onBack={() => setScreen('home')} onNavigate={() => setScreen('navigation')} />}
+        {screen === 'details' && <DetailsView parking={currentSelected} report={parkingReports[currentSelected.id]} onReport={reportParking} route={route} destination={destination} smartMatch={selectedRankedParking} saved={savedParkingIds.has(currentSelected.id)} userLocation={userLocation} onToggleSaved={toggleSavedParking} onBack={() => setScreen('home')} onNavigate={() => setScreen('navigation')} onOpenStreetView={() => setStreetViewOpen(true)} />}
         {screen === 'navigation' && <NavigationView parking={currentSelected} route={route} userLocation={userLocation} hasDestination={Boolean(destination)} onStop={() => setScreen('details')} onArrive={() => setScreen(destination ? 'walking' : 'home')} />}
         {screen === 'walking' && destination && displayedWalkingRoute && selectedRankedParking && <WalkingView parking={currentSelected} destination={destination} route={displayedWalkingRoute} match={selectedRankedParking} directionsHref={selectedWalkingDirectionsHref} userLocation={userLocation} onFinish={() => setScreen('home')} />}
+        {streetViewOpen && <StreetViewModal parking={currentSelected} onClose={() => setStreetViewOpen(false)} />}
       </div>
       <p className="desktop-caption">Parko • prototip interaktiv për Prishtinën</p>
     </div>

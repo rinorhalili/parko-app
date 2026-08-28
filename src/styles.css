@@ -1794,6 +1794,7 @@ input:focus-visible {
   font-size: 11px;
   font-weight: 900;
   text-decoration: none;
+  width: 100%;
 }
 .street-view-inline--details {
   margin: 14px 0 2px;
@@ -1987,3 +1988,43 @@ input:focus-visible {
   place-content: center;
   font-size: 9px;
 }
+
+.street-view-modal {
+  position: absolute;
+  z-index: 80;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #0d1b2a;
+}
+
+.street-view-modal__header {
+  min-height: 76px;
+  padding: 14px 16px 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #fff;
+  background: linear-gradient(135deg, #153469, #2458d3);
+}
+
+.street-view-modal__header span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.street-view-modal__header small { color: #bfdaff; font-size: 9px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.street-view-modal__header strong { font-size: 16px; }
+.street-view-modal__header em { overflow: hidden; max-width: 270px; color: #e4efff; font-size: 10px; font-style: normal; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.street-view-modal__header button { width: 38px; height: 38px; flex: 0 0 auto; border: 1px solid rgba(255, 255, 255, .32); border-radius: 50%; background: rgba(255, 255, 255, .14); color: #fff; font-size: 27px; line-height: 1; }
+.street-view-modal__header button:hover { background: rgba(255, 255, 255, .26); }
+.street-view-modal__viewer { position: relative; height: 100%; flex: 1; display: grid; align-items: center; background: #0d1b2a; }
+.street-view-modal__image { width: 100%; max-height: 100%; object-fit: contain; }
+.street-view-modal__controls { position: absolute; z-index: 1; right: 14px; bottom: 50px; left: 14px; min-height: 46px; padding: 4px; border: 1px solid rgba(255, 255, 255, .28); border-radius: 14px; background: rgba(13, 27, 42, .78); backdrop-filter: blur(10px); display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; color: #fff; text-align: center; font-size: 11px; font-weight: 900; }
+.street-view-modal__controls button { width: 38px; height: 38px; justify-self: center; border-radius: 12px; background: rgba(255, 255, 255, .14); color: #fff; font-size: 27px; line-height: 1; }
+.street-view-modal__controls button:disabled { opacity: .3; }
+.street-view-modal__meta { position: absolute; right: 14px; bottom: 13px; left: 14px; margin: 0; color: #cbd8e9; font-size: 9px; font-weight: 700; line-height: 1.35; text-align: center; }
+.street-view-modal__state { height: 100%; flex: 1; padding: 38px 28px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; text-align: center; }
+.street-view-modal__state > span { width: 58px; height: 58px; margin-bottom: 16px; border-radius: 20px; display: grid; place-content: center; background: #2458d3; font-size: 26px; }
+.street-view-modal__state > i { width: 46px; height: 46px; margin-bottom: 18px; border: 4px solid rgba(255, 255, 255, .2); border-top-color: #8db7ff; border-radius: 50%; animation: street-view-spin .8s linear infinite; }
+.street-view-modal__state strong { font-size: 18px; line-height: 1.25; }
+.street-view-modal__state p { margin: 12px 0 0; color: #d1ddeb; font-size: 12px; font-weight: 650; line-height: 1.6; }
+@keyframes street-view-spin { to { transform: rotate(360deg); } }
