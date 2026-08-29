@@ -1,4 +1,4 @@
-import type { Filters, ParkedSession } from './types'
+import type { Filters, MapSettings, ParkedSession } from './types'
 
 const PREFERENCES_KEY = 'parko:preferences:v1'
 const SESSION_KEY = 'parko:parked-session:v1'
@@ -7,6 +7,8 @@ export type PersistedPreferences = {
   filters?: Filters
   savedParkingIds?: string[]
   selectedParkingId?: string
+  mapSettings?: MapSettings
+  walkingMinutes?: 5 | 10 | 15
 }
 
 function readJson<T>(key: string): T | null {

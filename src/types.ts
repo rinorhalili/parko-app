@@ -2,6 +2,18 @@ export type Availability = 'available' | 'limited' | 'full' | 'unknown'
 export type ParkingAccess = 'public' | 'permissive' | 'customers' | 'private' | 'permit' | 'no' | 'unknown'
 export type MunicipalParkingCategory = 'residential' | 'commercial' | 'combined' | 'barrier'
 export type MapCoordinate = { lat: number; lng: number }
+export type MapVariant = 'standard' | 'minimal'
+export type ParkingPalette = 'green' | 'price' | 'operator'
+
+export type MapSettings = {
+  variant: MapVariant
+  parkingPalette: ParkingPalette
+  emphasizeAreas: boolean
+  largePointMarkers: boolean
+  showPointParking: boolean
+  largeLabels: boolean
+  showDataSources: boolean
+}
 
 export type Parking = {
   id: string
@@ -98,8 +110,9 @@ export type Filters = {
   maxPrice: number
   type: 'all' | Parking['type'] | 'municipal'
   freeOnly: boolean
+  paidOnly: boolean
   evCharging: boolean
   accessible: boolean
 }
 
-export type Screen = 'home' | 'saved' | 'details' | 'navigation' | 'walking'
+export type Screen = 'home' | 'saved' | 'settings' | 'details' | 'navigation' | 'walking'

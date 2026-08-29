@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import { PRISHTINA_CENTER, PRISHTINA_MAP_BOUNDS, USER_LOCATION, isWithinPrishtinaMap } from './parkingApi'
 import { accessPointIsEstimated, parkingAccessPoint } from './parkingGeometry'
-import type { Destination, DrivingRoute, Parking, ParkingLoadStatus } from './types'
+import type { Destination, DrivingRoute, MapSettings, MapVariant, Parking, ParkingLoadStatus, ParkingPalette } from './types'
 import { useCrowdSourcing } from './crowdsourcing'
 
 type MapMode = 'home' | 'details' | 'navigation' | 'walking'
@@ -10,6 +10,38 @@ const PRISHTINA_LEAFLET_BOUNDS: [L.LatLngTuple, L.LatLngTuple] = [
   [PRISHTINA_MAP_BOUNDS.south, PRISHTINA_MAP_BOUNDS.west],
   [PRISHTINA_MAP_BOUNDS.north, PRISHTINA_MAP_BOUNDS.east],
 ]
+
+export const DEFAULT_MAP_SETTINGS: MapSettings = {
+  variant: 'standard',
+  parkingPalette: 'green',
+  emphasizeAreas: true,
+  largePointMarkers: true,
+  showPointParking: true,
+  largeLabels: false,
+  showDataSources: true,
+}
+
+const MAP_TILES: Record<MapVariant, {
+  url: string
+  labelsUrl?: string
+  subdomains: string
+  maxZoom: number
+  attribution: string
+}> = {
+  standard: {
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    subdomains: 'abc',
+    maxZoom: 19,
+    attribution: 'Harta: <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>',
+  },
+  minimal: {
+    url: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png',
+    labelsUrl: 'https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png',
+    subdomains: 'abcd',
+    maxZoom: 20,
+    attribution: 'Harta: <a href="https://www.openstreetmap.org/copyright" target="_blank">OSM</a> · <a href="https://carto.com/attributions" target="_blank">CARTO</a>',
+  },
+}
 
 function priceClass(price: number | null) {
   if (price === null) return 'unknown'
@@ -25,12 +57,24 @@ function priceLabel(price: number | null) {
   return `${price.toFixed(2)} €/orë`
 }
 
-function areaColor(price: number | null) {
+function priceAreaColor(price: number | null) {
   if (price === null) return '#738195'
   if (price === 0) return '#17b978'
   if (price <= 0.5) return '#2f6bff'
   if (price <= 1) return '#f59e0b'
   return '#ef5350'
+}
+
+function areaColor(parking: Parking, palette: ParkingPalette) {
+  if (palette === 'price') return priceAreaColor(parking.pricePerHour)
+  if (palette === 'operator') {
+    if (parking.municipalManaged) return '#2563eb'
+    if (parking.type === 'private') return '#f08c28'
+    if (parking.type === 'street') return '#12a56f'
+    return '#18b978'
+  }
+  if (parking.municipalManaged) return '#2563eb'
+  return ['customers', 'private', 'permit', 'no'].includes(parking.access) ? '#e59a2f' : '#10a968'
 }
 
 function createPopup(parking: Parking) {
@@ -67,6 +111,7 @@ export default function LiveParkingMap({
   userLocation = USER_LOCATION,
   userLocationLive = false,
   userLocationAccuracy = null,
+  mapSettings = DEFAULT_MAP_SETTINGS,
 }: {
   parkings: Parking[]
   selected: Parking
@@ -83,10 +128,13 @@ export default function LiveParkingMap({
   userLocation?: Parking['coordinates']
   userLocationLive?: boolean
   userLocationAccuracy?: number | null
+  mapSettings?: MapSettings
 }) {
   const { departures } = useCrowdSourcing()
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
+  const baseTileLayerRef = useRef<L.TileLayer | null>(null)
+  const labelTileLayerRef = useRef<L.TileLayer | null>(null)
   const parkingLayerRef = useRef<L.LayerGroup | null>(null)
   const routeLayerRef = useRef<L.LayerGroup | null>(null)
   const onSelectRef = useRef(onSelect)
@@ -96,6 +144,7 @@ export default function LiveParkingMap({
   const focusParkingRef = useRef<string | null>(null)
   const automaticViewportRef = useRef<string | null>(null)
   const [mapZoom, setMapZoom] = useState(14)
+  const [mapReadyToken, setMapReadyToken] = useState(0)
   onSelectRef.current = onSelect
   onPickDestinationRef.current = onPickDestination
   pickingDestinationRef.current = pickingDestination
@@ -114,13 +163,14 @@ export default function LiveParkingMap({
       attributionControl: false,
       preferCanvas: false,
     })
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      subdomains: 'abc',
-      maxZoom: 19,
-      attribution: 'Harta: <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>',
-    }).addTo(map)
     L.control.zoom({ position: 'topright' }).addTo(map)
     L.control.attribution({ position: 'bottomright', prefix: false }).addTo(map)
+    map.createPane('mapLabels')
+    const labelsPane = map.getPane('mapLabels')
+    if (labelsPane) {
+      labelsPane.style.zIndex = '350'
+      labelsPane.style.pointerEvents = 'none'
+    }
     map.createPane('parkingAreas')
     const parkingPane = map.getPane('parkingAreas')
     if (parkingPane) parkingPane.style.zIndex = '420'
@@ -135,21 +185,50 @@ export default function LiveParkingMap({
     map.on('zoomend', () => setMapZoom(map.getZoom()))
     mapRef.current = map
     map.fitBounds(cityBounds, { padding: [14, 14], animate: false })
-    window.setTimeout(() => map.invalidateSize(), 0)
+    window.setTimeout(() => {
+      map.invalidateSize()
+      automaticViewportRef.current = null
+      setMapReadyToken((value) => value + 1)
+    }, 0)
 
     return () => {
       map.remove()
       mapRef.current = null
+      baseTileLayerRef.current = null
+      labelTileLayerRef.current = null
     }
   }, [])
 
   useEffect(() => {
-    if (!recenterToken || !mapRef.current || mode !== 'home') return
+    const map = mapRef.current
+    if (!map) return
+    if (baseTileLayerRef.current) map.removeLayer(baseTileLayerRef.current)
+    if (labelTileLayerRef.current) map.removeLayer(labelTileLayerRef.current)
+    const tiles = MAP_TILES[mapSettings.variant]
+    baseTileLayerRef.current = L.tileLayer(tiles.url, {
+      subdomains: tiles.subdomains,
+      maxZoom: tiles.maxZoom,
+      attribution: tiles.attribution,
+    }).addTo(map)
+    labelTileLayerRef.current = tiles.labelsUrl
+      ? L.tileLayer(tiles.labelsUrl, {
+        pane: 'mapLabels',
+        subdomains: tiles.subdomains,
+        minZoom: 11,
+        maxZoom: tiles.maxZoom,
+        opacity: .9,
+        attribution: tiles.attribution,
+      }).addTo(map)
+      : null
+  }, [mapSettings.variant])
+
+  useEffect(() => {
+    if (!recenterToken || !mapRef.current) return
     if (!isWithinPrishtinaMap(userLocation)) {
       mapRef.current.flyTo([PRISHTINA_CENTER.lat, PRISHTINA_CENTER.lng], 13, { duration: .45 })
       return
     }
-    mapRef.current.flyTo([userLocation.lat, userLocation.lng], 16, { duration: .45 })
+    mapRef.current.flyTo([userLocation.lat, userLocation.lng], mode === 'navigation' ? 17 : 16, { duration: .45 })
   }, [recenterToken, mode, userLocation.lat, userLocation.lng])
 
   useEffect(() => {
@@ -164,40 +243,47 @@ export default function LiveParkingMap({
     const visibleParkings = mode === 'navigation' || mode === 'walking' ? [selected] : parkings
 
     visibleParkings.forEach((parking) => {
+      if (!parking.geometry?.length && !mapSettings.showPointParking && mode === 'home') return
       const usefulOverviewPoint = parking.pricePerHour !== null || parking.free || Boolean(parking.availabilitySource)
-      if (!parking.geometry?.length && mapZoom < (destination ? 13.5 : 15) && !usefulOverviewPoint) return
+      const detailedPointZoom = mapSettings.largePointMarkers ? (destination ? 13.5 : 14) : (destination ? 13.5 : 15)
+      if (!parking.geometry?.length && mapZoom < detailedPointZoom && !usefulOverviewPoint) return
       const category = priceClass(parking.pricePerHour)
       const isSelected = selected.id === parking.id
       const rank = recommendationRanks?.get(parking.id)
       const restricted = ['customers', 'private', 'permit', 'no'].includes(parking.access)
-      const color = areaColor(parking.pricePerHour)
+      const color = areaColor(parking, mapSettings.parkingPalette)
+      const areaFillOpacity = isSelected
+        ? .72
+        : mapSettings.emphasizeAreas
+          ? mapZoom < 14 ? .42 : .56
+          : mapZoom < 14 ? .2 : .34
       const interactiveLayers: L.Path[] = parking.geometry?.length
         ? parking.geometry.map((ring) => L.polygon(
           ring.map(({ lat, lng }) => [lat, lng] as L.LatLngTuple),
           {
             pane: 'parkingAreas',
             className: `parking-area parking-area--${category}${isSelected ? ' parking-area--selected' : ''}${restricted ? ' parking-area--restricted' : ''}`,
-            color: isSelected ? '#143b9b' : color,
-            weight: isSelected ? 4 : mapZoom < 14 ? 1.25 : 2,
+            color: isSelected ? '#0b3fd1' : color,
+            weight: isSelected ? 4.5 : mapZoom < 14 ? 1.5 : 2.25,
             opacity: .95,
             fillColor: color,
-            fillOpacity: isSelected ? .52 : mapZoom < 14 ? .2 : .34,
+            fillOpacity: areaFillOpacity,
             lineJoin: 'round',
           },
         ))
         : [L.circleMarker([parking.coordinates.lat, parking.coordinates.lng], {
           pane: 'parkingAreas',
           className: `parking-point parking-point--${category}${isSelected ? ' parking-point--selected' : ''}${restricted ? ' parking-point--restricted' : ''}`,
-          radius: isSelected ? 7 : 4.5,
-          color: isSelected ? '#143b9b' : '#fff',
-          weight: isSelected ? 3 : 1.5,
+          radius: isSelected ? (mapSettings.largePointMarkers ? 11 : 8) : (mapSettings.largePointMarkers ? 8 : 5.5),
+          color: isSelected ? '#0b3fd1' : '#fff',
+          weight: isSelected ? 3.5 : mapSettings.largePointMarkers ? 2.25 : 1.5,
           fillColor: color,
           fillOpacity: restricted ? .45 : .9,
         })]
 
       interactiveLayers.forEach((layer) => {
         layer.bindPopup(createPopup(parking), { closeButton: false })
-        const showParkingLabel = mapZoom >= 17 && (isSelected || Boolean(rank && rank <= 3))
+        const showParkingLabel = mode !== 'navigation' && mode !== 'walking' && mapZoom >= 17 && (isSelected || Boolean(rank && rank <= 3))
         layer.bindTooltip(rank ? `#${rank} · ${parking.name} · ${priceLabel(parking.pricePerHour)}` : `${parking.name} · ${priceLabel(parking.pricePerHour)}`, {
           permanent: showParkingLabel,
           direction: 'top',
@@ -229,7 +315,7 @@ export default function LiveParkingMap({
 
     })
 
-    departures.forEach((departure) => {
+    if (mode === 'home' || mode === 'details') departures.forEach((departure) => {
       const departureIcon = L.divIcon({
         className: '',
         html: `<span class="crowd-departure-marker"><b>↗</b><small>${departure.minutes}′</small></span>`,
@@ -321,9 +407,10 @@ export default function LiveParkingMap({
     if (route && (mode === 'home' || mode === 'navigation' || mode === 'details' || mode === 'walking')) {
       const routePoints: L.LatLngExpression[] = route.coordinates.map(({ lat, lng }) => [lat, lng])
       const routeColor = mode === 'walking' ? '#18b981' : '#2f6bff'
-      L.polyline(routePoints, { color: '#16325c', weight: 13, opacity: 0.16, lineCap: 'round', lineJoin: 'round' }).addTo(routeLayer)
-      L.polyline(routePoints, { color: '#ffffff', weight: 10, opacity: 1, lineCap: 'round', lineJoin: 'round' }).addTo(routeLayer)
-      L.polyline(routePoints, { color: routeColor, weight: 6, opacity: 1, lineCap: 'round', lineJoin: 'round', dashArray: mode === 'walking' ? '9 8' : undefined }).addTo(routeLayer)
+      const navigationWeight = mode === 'navigation' ? 7.5 : mode === 'walking' ? 6.5 : 6
+      L.polyline(routePoints, { color: '#102a54', weight: navigationWeight + 7, opacity: 0.2, lineCap: 'round', lineJoin: 'round' }).addTo(routeLayer)
+      L.polyline(routePoints, { color: '#ffffff', weight: navigationWeight + 3.5, opacity: 1, lineCap: 'round', lineJoin: 'round' }).addTo(routeLayer)
+      L.polyline(routePoints, { color: routeColor, weight: navigationWeight, opacity: 1, lineCap: 'round', lineJoin: 'round', dashArray: mode === 'walking' ? '9 8' : undefined }).addTo(routeLayer)
 
       const firstPoint = route.coordinates[0]
       const lastPoint = route.coordinates[route.coordinates.length - 1]
@@ -336,8 +423,8 @@ export default function LiveParkingMap({
             paddingBottomRight: [44, 205],
             animate: false,
           })
-        } else if (mode === 'home' && !destination) {
-          // A direct parking selection must not move the map away from the place the user was inspecting.
+        } else if (mode === 'home' && (!destination || destination.source === 'map')) {
+          // Direct map and parking selections keep the exact viewport the user was inspecting.
         } else if (mode === 'home') {
           map.fitBounds(L.latLngBounds(routePoints), {
             paddingTopLeft: [35, 185],
@@ -391,26 +478,35 @@ export default function LiveParkingMap({
         map.setView([selected.coordinates.lat, selected.coordinates.lng], 15, { animate: false })
       }
     }
-  }, [parkings, selected, mode, route, destination, walkMinutes, recommendationRanks, userLocation.lat, userLocation.lng, userLocationLive, userLocationAccuracy, mapZoom, departures])
+  }, [parkings, selected, mode, route, destination, walkMinutes, recommendationRanks, userLocation.lat, userLocation.lng, userLocationLive, userLocationAccuracy, mapZoom, mapReadyToken, departures, mapSettings.parkingPalette, mapSettings.emphasizeAreas, mapSettings.largePointMarkers, mapSettings.showPointParking])
 
   return (
-    <div className={`map-canvas map-canvas--${mode} ${destination ? 'map-canvas--destination' : ''} ${pickingDestination ? 'map-canvas--picking' : ''}`} aria-label="Harta reale e parkingjeve në Prishtinë">
+    <div className={`map-canvas map-canvas--${mode} map-canvas--theme-${mapSettings.variant} map-canvas--palette-${mapSettings.parkingPalette} ${mapSettings.largeLabels ? 'map-canvas--large-labels' : ''} ${destination ? 'map-canvas--destination' : ''} ${pickingDestination ? 'map-canvas--picking' : ''}`} aria-label="Harta reale e parkingjeve në Prishtinë">
       <div ref={containerRef} className="leaflet-map" />
-      <div className="map-city-badge"><b>Prishtinë</b><span>OSM live</span></div>
       {mode === 'home' && pickingDestination && <div className="map-pick-banner">Prek hartën për të vendosur destinacionin</div>}
-      {mode === 'home' && destination && (
+      {mode === 'home' && destination && mapSettings.parkingPalette !== 'green' && (
         <div className="price-legend" aria-label="Kategoritë e çmimeve">
           <span className="price-legend__status">{destination ? `${parkings.length} parkingje • ${walkMinutes} min ecje` : loadStatus === 'loading' ? `${parkings.length} parkingje • duke rifreskuar` : loadStatus === 'live' ? `${parkings.length} zona parkingu` : `${parkings.length} parkingje OSM`}</span>
-          <span><i className="price-dot price-dot--free" />Falas</span>
-          <span><i className="price-dot price-dot--low" />≤0.50€</span>
-          <span><i className="price-dot price-dot--medium" />≤1€</span>
-          <span><i className="price-dot price-dot--high" />&gt;1€</span>
-          <span><i className="price-dot price-dot--unknown" />Pa çmim</span>
-        </div>
-      )}
-      {(mode === 'home' || mode === 'navigation' || mode === 'details' || mode === 'walking') && route && (
-        <div className={`route-engine-badge route-engine-badge--${mode}`}>
-          <i /> {route.source === 'osrm' ? 'Rutë reale' : route.source === 'valhalla' ? 'Rutë reale në këmbë' : route.source === 'walking' ? 'Udhëzim në këmbë' : route.source === 'estimated-walking' ? 'Ecje e përafërt' : 'Rutë paraprake'}
+          {mapSettings.parkingPalette === 'price' ? (
+            <>
+              <span><i className="price-dot price-dot--free" />Falas</span>
+              <span><i className="price-dot price-dot--low" />≤0.50€</span>
+              <span><i className="price-dot price-dot--medium" />≤1€</span>
+              <span><i className="price-dot price-dot--high" />&gt;1€</span>
+              <span><i className="price-dot price-dot--unknown" />Pa çmim</span>
+            </>
+          ) : mapSettings.parkingPalette === 'operator' ? (
+            <>
+              <span><i className="price-dot price-dot--municipal" />Prishtina Parking</span>
+              <span><i className="price-dot price-dot--parking" />OSM publik / rrugë</span>
+              <span><i className="price-dot price-dot--private" />Privat</span>
+            </>
+          ) : (
+            <>
+              <span><i className="price-dot price-dot--parking" />Zonë parkingu</span>
+              <span><i className="price-dot price-dot--restricted" />Qasje e kufizuar</span>
+            </>
+          )}
         </div>
       )}
     </div>
