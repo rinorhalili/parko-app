@@ -10,7 +10,7 @@ import { initTelemetry } from './telemetry'
 
 initTelemetry()
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => undefined))
+  window.addEventListener('load', () => navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => undefined))
 }
 
 type AppMode = 'app' | 'dashboard'

@@ -1,9 +1,15 @@
 {
   "name": "Parko Prishtina",
   "short_name": "Parko",
-  "start_url": "/",
+  "id": "/parko-app/",
+  "start_url": "/parko-app/",
+  "scope": "/parko-app/",
   "display": "standalone",
   "background_color": "#eef3f8",
   "theme_color": "#2f6bff",
-  "lang": "sq"
+  "lang": "sq",
+  "icons": [
+    { "src": "icons/apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any" },
+    { "src": "icons/parko.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
 }

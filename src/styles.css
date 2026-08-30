@@ -136,6 +136,13 @@ input:focus-visible {
   color: #fff;
 }
 
+.ios-install-prompt { position: absolute; z-index: 1002; left: 14px; right: 14px; bottom: 72px; min-height: 62px; display: flex; align-items: center; gap: 9px; padding: 9px 10px; border: 1px solid rgba(47,107,255,.18); border-radius: 16px; background: rgba(255,255,255,.97); box-shadow: 0 12px 32px rgba(13,27,42,.2); color: #18304f; }
+.ios-install-prompt__icon { width: 29px; height: 29px; flex: 0 0 29px; display: grid; place-items: center; border-radius: 9px; background: #e8efff; color: #2f6bff; font-size: 18px; font-weight: 900; }
+.ios-install-prompt p { min-width: 0; margin: 0; display: grid; gap: 2px; }
+.ios-install-prompt b { font-size: 10px; }
+.ios-install-prompt small { font-size: 8px; line-height: 1.35; color: #607188; }
+.ios-install-prompt button { width: 26px; height: 26px; flex: 0 0 26px; border: 0; border-radius: 50%; background: #eef3f8; color: #607188; font-size: 18px; line-height: 1; }
+
 .status-icons {
   font-size: 11px;
   letter-spacing: -1px;

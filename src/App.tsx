@@ -117,6 +117,20 @@ function StatusBar({ light = false }: { light?: boolean }) {
   )
 }
 
+function IosInstallPrompt() {
+  const [visible, setVisible] = useState(() => {
+    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone)
+    return isIos && !standalone && localStorage.getItem('parko-ios-install-dismissed') !== '1'
+  })
+  if (!visible) return null
+  return <aside className="ios-install-prompt" role="status">
+    <span className="ios-install-prompt__icon">↑</span>
+    <p><b>Instalo Parko në iPhone</b><small>Në Safari prek Share, pastaj “Add to Home Screen”.</small></p>
+    <button onClick={() => { localStorage.setItem('parko-ios-install-dismissed', '1'); setVisible(false) }} aria-label="Mbyll udhëzimin e instalimit">×</button>
+  </aside>
+}
+
 function priceLabel(parking: Parking) {
   if (parking.pricePerHour === null) return 'Pa çmim'
   return parking.pricePerHour === 0 ? 'Falas' : `${parking.pricePerHour.toFixed(2)} €/orë`
@@ -1454,6 +1468,7 @@ export default function App() {
     <div className="app-shell">
       {!online && <div className="offline-banner" role="status">Je offline — po shfaqim të dhënat e fundit të ruajtura.</div>}
       <div className="phone-frame">
+        <IosInstallPrompt />
         {screen === 'home' && (
           <HomeView
             mapParkings={mapParkings}

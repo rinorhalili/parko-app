@@ -88,3 +88,7 @@ Records older than 30 minutes, negative availability, and unknown parking IDs ar
 ## Data responsibility
 
 OpenStreetMap is used for location, access, capacity, and geometry where mapped. It is not treated as a live availability source. A verified operator feed is required before free-space counts are displayed as live.
+
+## Install on iPhone without the App Store
+
+Deploy Parko over HTTPS, open its URL in Safari on the iPhone, then tap **Share → Add to Home Screen → Add**. Open it from the new Parko icon and approve **Precise Location** when prompted. The installed PWA works like an app while it is open; iOS does not permit continuous GPS tracking after a web app is closed.
