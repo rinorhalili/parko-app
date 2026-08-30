@@ -1,7 +1,6 @@
-import { StrictMode, useEffect, useState } from 'react'
-import { createRoot } from 'react-dom/client'
+import { lazy, StrictMode, Suspense, useEffect, useState } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
 import App from './App'
-import AdminDashboard from './AdminDashboard'
 import { CrowdSourcingProvider } from './crowdsourcing'
 import 'leaflet/dist/leaflet.css'
 import 'leaflet.markercluster/dist/MarkerCluster.css'
@@ -14,6 +13,13 @@ if ('serviceWorker' in navigator) {
 }
 
 type AppMode = 'app' | 'dashboard'
+const AdminDashboard = lazy(() => import('./AdminDashboard'))
+
+declare global {
+  interface Window {
+    __parkoReactRoot?: Root
+  }
+}
 
 function resolveInitialMode(): AppMode {
   const params = new URLSearchParams(window.location.search)
@@ -74,6 +80,10 @@ function AppModeSwitcher() {
           background: rgba(96, 165, 250, 0.22);
           color: white;
         }
+
+        @media (max-width: 520px) {
+          .parko-app-mode-switcher { display: none; }
+        }
       `}</style>
 
       <div className="parko-app-mode-switcher" aria-label="Application view switcher">
@@ -85,12 +95,15 @@ function AppModeSwitcher() {
         </button>
       </div>
 
-      {mode === 'dashboard' ? <AdminDashboard /> : <App />}
+      {mode === 'dashboard' ? <Suspense fallback={<div className="app-loading" role="status">Duke hapur panelin…</div>}><AdminDashboard /></Suspense> : <App />}
     </>
   )
 }
 
-createRoot(document.getElementById('root')!).render(
+const rootElement = document.getElementById('root')!
+const root = window.__parkoReactRoot ?? createRoot(rootElement)
+window.__parkoReactRoot = root
+root.render(
   <StrictMode>
     <CrowdSourcingProvider>
       <AppModeSwitcher />

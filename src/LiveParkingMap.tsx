@@ -107,6 +107,8 @@ export default function LiveParkingMap({
   recommendationRanks,
   pickingDestination = false,
   onPickDestination,
+  onLongPress,
+  onManualMove,
   recenterToken = 0,
   userLocation = USER_LOCATION,
   userLocationLive = false,
@@ -124,6 +126,8 @@ export default function LiveParkingMap({
   recommendationRanks?: Map<string, number>
   pickingDestination?: boolean
   onPickDestination?: (coordinates: { lat: number; lng: number }) => void
+  onLongPress?: (coordinates: { lat: number; lng: number }) => void
+  onManualMove?: () => void
   recenterToken?: number
   userLocation?: Parking['coordinates']
   userLocationLive?: boolean
@@ -139,14 +143,19 @@ export default function LiveParkingMap({
   const routeLayerRef = useRef<L.LayerGroup | null>(null)
   const onSelectRef = useRef(onSelect)
   const onPickDestinationRef = useRef(onPickDestination)
+  const onLongPressRef = useRef(onLongPress)
+  const onManualMoveRef = useRef(onManualMove)
   const pickingDestinationRef = useRef(pickingDestination)
   const modeRef = useRef(mode)
   const focusParkingRef = useRef<string | null>(null)
   const automaticViewportRef = useRef<string | null>(null)
+  const manualViewportRef = useRef(false)
   const [mapZoom, setMapZoom] = useState(14)
   const [mapReadyToken, setMapReadyToken] = useState(0)
   onSelectRef.current = onSelect
   onPickDestinationRef.current = onPickDestination
+  onLongPressRef.current = onLongPress
+  onManualMoveRef.current = onManualMove
   pickingDestinationRef.current = pickingDestination
   modeRef.current = mode
 
@@ -162,6 +171,8 @@ export default function LiveParkingMap({
       zoomControl: false,
       attributionControl: false,
       preferCanvas: false,
+      touchZoom: true,
+      doubleClickZoom: true,
     })
     L.control.zoom({ position: 'topright' }).addTo(map)
     L.control.attribution({ position: 'bottomright', prefix: false }).addTo(map)
@@ -182,6 +193,30 @@ export default function LiveParkingMap({
       if (!isWithinPrishtinaMap(coordinates)) return
       onPickDestinationRef.current?.(coordinates)
     })
+    map.on('contextmenu', (event) => {
+      if (modeRef.current !== 'home') return
+      const coordinates = { lat: event.latlng.lat, lng: event.latlng.lng }
+      if (!isWithinPrishtinaMap(coordinates)) return
+      onLongPressRef.current?.(coordinates)
+    })
+    const markManualViewport = () => {
+      manualViewportRef.current = true
+      onManualMoveRef.current?.()
+    }
+    map.on('dragstart', markManualViewport)
+    const mapContainer = map.getContainer()
+    const activePointers = new Set<number>()
+    const trackPointerDown = (event: PointerEvent) => {
+      if (event.pointerType !== 'touch') return
+      activePointers.add(event.pointerId)
+      if (activePointers.size > 1) markManualViewport()
+    }
+    const trackPointerEnd = (event: PointerEvent) => activePointers.delete(event.pointerId)
+    mapContainer.addEventListener('pointerdown', trackPointerDown, { passive: true })
+    mapContainer.addEventListener('pointerup', trackPointerEnd, { passive: true })
+    mapContainer.addEventListener('pointercancel', trackPointerEnd, { passive: true })
+    mapContainer.addEventListener('wheel', markManualViewport, { passive: true })
+    mapContainer.addEventListener('dblclick', markManualViewport, { passive: true })
     map.on('zoomend', () => setMapZoom(map.getZoom()))
     mapRef.current = map
     map.fitBounds(cityBounds, { padding: [14, 14], animate: false })
@@ -192,6 +227,11 @@ export default function LiveParkingMap({
     }, 0)
 
     return () => {
+      mapContainer.removeEventListener('pointerdown', trackPointerDown)
+      mapContainer.removeEventListener('pointerup', trackPointerEnd)
+      mapContainer.removeEventListener('pointercancel', trackPointerEnd)
+      mapContainer.removeEventListener('wheel', markManualViewport)
+      mapContainer.removeEventListener('dblclick', markManualViewport)
       map.remove()
       mapRef.current = null
       baseTileLayerRef.current = null
@@ -224,6 +264,7 @@ export default function LiveParkingMap({
 
   useEffect(() => {
     if (!recenterToken || !mapRef.current) return
+    manualViewportRef.current = false
     if (!isWithinPrishtinaMap(userLocation)) {
       mapRef.current.flyTo([PRISHTINA_CENTER.lat, PRISHTINA_CENTER.lng], 13, { duration: .45 })
       return
@@ -415,7 +456,7 @@ export default function LiveParkingMap({
       const firstPoint = route.coordinates[0]
       const lastPoint = route.coordinates[route.coordinates.length - 1]
       const routeViewportKey = `route:${mode}:${selected.id}:${route.source}:${firstPoint?.lat.toFixed(5)}:${firstPoint?.lng.toFixed(5)}:${lastPoint?.lat.toFixed(5)}:${lastPoint?.lng.toFixed(5)}`
-      if (!shouldFocusSelectedParking && automaticViewportRef.current !== routeViewportKey) {
+      if (!shouldFocusSelectedParking && !manualViewportRef.current && automaticViewportRef.current !== routeViewportKey) {
         automaticViewportRef.current = routeViewportKey
         if (mode === 'navigation' || mode === 'walking') {
           map.fitBounds(L.latLngBounds(routePoints), {
@@ -443,7 +484,7 @@ export default function LiveParkingMap({
       }
     } else if (!shouldFocusSelectedParking && mode === 'home' && destination && destination.source !== 'map') {
       const destinationViewportKey = `destination:${destination.id}:${walkMinutes}`
-      if (automaticViewportRef.current !== destinationViewportKey) {
+      if (!manualViewportRef.current && automaticViewportRef.current !== destinationViewportKey) {
         automaticViewportRef.current = destinationViewportKey
         const focusPoints = [destination.coordinates, ...parkings.map((parking) => parking.coordinates)]
           .map(({ lat, lng }) => [lat, lng] as L.LatLngTuple)

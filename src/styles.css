@@ -2405,3 +2405,152 @@ input:focus-visible {
   .sheet-primary-actions .button { font-size: 9px; }
   .home-sheet--smart { padding-right: 12px; padding-left: 12px; }
 }
+
+.app-loading,
+.modal-loading { min-height: 100dvh; display: grid; place-content: center; background: #eef3f8; color: #34506f; font-size: 13px; font-weight: 800; }
+.modal-loading { position: fixed; z-index: 3000; inset: 0; background: rgba(238,243,248,.88); }
+
+/* Native-web mobile interactions */
+html,
+body,
+#root { min-height: 100%; overflow-x: hidden; overscroll-behavior-x: none; }
+
+.home-sheet {
+  --sheet-drag-y: 0px;
+  transform: translate3d(0, var(--sheet-drag-y), 0);
+  transition: height 190ms ease, padding 190ms ease, top 190ms ease, transform 190ms ease;
+  will-change: transform;
+}
+.home-sheet:has(.sheet-toggle:active) { transition: height 190ms ease, padding 190ms ease, top 190ms ease; }
+.sheet-toggle { touch-action: none; user-select: none; -webkit-user-select: none; }
+.drag-handle { width: 46px; height: 5px; border-radius: 999px; background: #cdd6e2; }
+.recommendation-tabs { touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.parking-list { -webkit-overflow-scrolling: touch; }
+
+.search-sheet-header { display: none; }
+
+.map-context-menu {
+  position: absolute;
+  z-index: 38;
+  left: 14px;
+  right: 14px;
+  bottom: 92px;
+  padding: 12px;
+  border: 1px solid #dce5ef;
+  border-radius: 20px;
+  background: rgba(255,255,255,.98);
+  box-shadow: 0 14px 36px rgba(13,27,42,.2);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 8px;
+}
+.map-context-menu > span { grid-column: 1 / -1; display: grid; gap: 2px; padding: 2px 3px 5px; }
+.map-context-menu > span strong { font-size: 14px; }
+.map-context-menu > span small { color: var(--muted); font-size: 10px; font-weight: 700; }
+.map-context-menu > button { min-height: 48px; padding: 0 10px; border-radius: 14px; background: var(--primary-soft); color: #214cad; font-size: 10px; font-weight: 900; }
+.map-context-menu .map-context-menu__cancel { grid-column: 1 / -1; background: #f1f4f8; color: #637187; }
+
+.navigation-map-actions { position: absolute; z-index: 20; right: 18px; bottom: 198px; display: grid; gap: 8px; }
+.navigation-map-actions .navigation-recenter,
+.navigation-mute { position: static; width: 48px; height: 48px; border: 1px solid #dce4ee; border-radius: 50%; background: #fff; color: var(--primary); box-shadow: 0 6px 18px rgba(13,27,42,.13); font-size: 20px; font-weight: 900; }
+.navigation-mute--active { background: #eef3f8; color: #66758a; }
+
+.stop-confirmation {
+  position: absolute;
+  z-index: 45;
+  left: 16px;
+  right: 16px;
+  bottom: 18px;
+  padding: 18px;
+  border: 1px solid #dce4ee;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 18px 48px rgba(13,27,42,.28);
+  display: grid;
+  gap: 8px;
+}
+.stop-confirmation strong { font-size: 17px; }
+.stop-confirmation > span { color: var(--muted); font-size: 11px; font-weight: 700; line-height: 1.4; }
+.stop-confirmation > div { margin-top: 4px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.stop-confirmation button { min-height: 46px; border-radius: 14px; background: #edf2f7; color: #536276; font-size: 10px; font-weight: 900; }
+.stop-confirmation button.danger { background: #ffebec; color: #bd3137; }
+
+.settings-section--account { padding-bottom: 12px; }
+.settings-login-button { width: 100%; min-height: 58px; padding: 8px 12px; border-radius: 14px; background: #eef4ff; color: #214cad; display: flex; align-items: center; justify-content: space-between; text-align: left; }
+.settings-login-button > span { display: grid; gap: 3px; }
+.settings-login-button strong { font-size: 11px; }
+.settings-login-button small { color: #607492; font-size: 8px; font-weight: 700; }
+.settings-login-button > b { font-size: 19px; }
+
+@media (max-width: 520px) {
+  body { min-height: 100dvh; overflow: hidden; }
+  .app-shell,
+  .phone-frame { min-height: 100dvh; height: 100dvh; }
+  .phone-frame { min-height: 0; }
+  .status-bar {
+    height: calc(48px + env(safe-area-inset-top));
+    padding-top: calc(17px + env(safe-area-inset-top));
+    padding-left: max(18px, env(safe-area-inset-left));
+    padding-right: max(18px, env(safe-area-inset-right));
+  }
+  .map-canvas { top: calc(48px + env(safe-area-inset-top)); }
+  .home-controls {
+    top: calc(54px + env(safe-area-inset-top));
+    left: max(10px, env(safe-area-inset-left));
+    right: max(10px, env(safe-area-inset-right));
+  }
+  .bottom-nav {
+    height: calc(78px + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .home-sheet,
+  .parking-preview-sheet { bottom: calc(78px + env(safe-area-inset-bottom)); }
+  .saved-screen,
+  .settings-screen { padding-bottom: calc(78px + env(safe-area-inset-bottom)); }
+  .details-actions { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+  .walking-arrival-card,
+  .arrival-card,
+  .stop-confirmation { bottom: calc(16px + env(safe-area-inset-bottom)); }
+  .map-context-menu { bottom: calc(92px + env(safe-area-inset-bottom)); }
+  .search-suggestions {
+    position: fixed;
+    z-index: 44;
+    top: calc(112px + env(safe-area-inset-top));
+    left: 0;
+    right: 0;
+    bottom: calc(78px + env(safe-area-inset-bottom));
+    max-height: none;
+    border-radius: 22px 22px 0 0;
+    padding-top: 6px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .search-sheet-header {
+    position: sticky;
+    z-index: 2;
+    top: 0;
+    min-height: 48px;
+    padding: 0 12px;
+    border-bottom: 1px solid #edf1f5;
+    background: rgba(255,255,255,.98);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .search-sheet-header strong { font-size: 12px; }
+  .search-sheet-header button { width: 44px; height: 44px; border-radius: 50%; background: #eef2f7; color: #607086; font-size: 20px; }
+  .screen--top-panel-open .map-action-row { visibility: hidden; }
+  .smart-planner { max-height: calc(100dvh - 190px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow-y: auto; overscroll-behavior: contain; }
+}
+
+@media (max-width: 340px) {
+  .search-box__copy input { font-size: 12px; }
+  .map-action-button b { font-size: 8px; }
+  .sheet-primary-actions { grid-template-columns: 1.1fr .8fr .9fr; }
+  .parking-card__content strong { font-size: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-sheet { transition: none; }
+}

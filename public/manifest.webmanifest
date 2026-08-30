@@ -1,9 +1,9 @@
 {
   "name": "Parko Prishtina",
   "short_name": "Parko",
-  "id": "/parko-app/",
-  "start_url": "/parko-app/",
-  "scope": "/parko-app/",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#eef3f8",
   "theme_color": "#2f6bff",

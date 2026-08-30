@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { loadVerifiedAvailability, mergeVerifiedAvailability } from './availabilityApi'
 import { defaultParking } from './data'
 import LiveParkingMap, { DEFAULT_MAP_SETTINGS } from './LiveParkingMap'
@@ -14,9 +14,10 @@ import { handleOpenExternal } from './externalLinks'
 import { captureEvent } from './telemetry'
 import { AlertBanner, LeavingButton, SpotVouching } from './crowdsourcing'
 import { SaveMyParkedLocationCard, SmsTariffHelper } from './DriverTools'
-import Login from './Login'
 import type { DrivingMatrixEntry } from './routingApi'
 import type { Destination, DrivingRoute, Filters, MapSettings, MapVariant, Parking, ParkingLoadStatus, ParkingPalette, ParkingPreference, RankedParking, Screen } from './types'
+
+const Login = lazy(() => import('./Login'))
 
 const initialFilters: Filters = {
   availableOnly: false,
@@ -38,6 +39,11 @@ function normalizedMapSettings(value?: Partial<MapSettings>): MapSettings {
 const RECENT_DESTINATIONS_KEY = 'parko-recent-destinations'
 const PARKING_REPORTS_KEY = 'parko-live-parking-reports'
 type LocationStatus = 'idle' | 'locating' | 'ready' | 'outside' | 'denied' | 'unavailable'
+type SheetState = 'collapsed' | 'medium' | 'expanded'
+
+function subtleHaptic(duration = 8) {
+  if ('vibrate' in navigator) navigator.vibrate(duration)
+}
 
 type ParkingReport = {
   parkingId: string
@@ -484,9 +490,16 @@ function HomeView({
   mapSettings: MapSettings
   loadStatus: ParkingLoadStatus
 }) {
-  const [sheetState, setSheetState] = useState<'collapsed' | 'medium' | 'expanded'>('medium')
+  const [sheetState, setSheetState] = useState<SheetState>('medium')
   const [plannerOpen, setPlannerOpen] = useState(false)
+  const [longPressLocation, setLongPressLocation] = useState<{ lat: number; lng: number } | null>(null)
   const controlsRef = useRef<HTMLDivElement>(null)
+  const sheetRef = useRef<HTMLElement>(null)
+  const destinationSheetStateRef = useRef<SheetState | null>(null)
+  const sheetGestureRef = useRef({ pointerId: -1, startY: 0, startedAt: 0, dragging: false })
+  const sheetGestureCleanupRef = useRef<(() => void) | null>(null)
+  const suppressSheetClickRef = useRef(false)
+  const previewSwipeRef = useRef({ pointerId: -1, startX: 0, startY: 0 })
   const selectedMatch = rankedParkings.find((match) => match.parking.id === selected.id)
   const categoryIcon = { building: '▦', street: '↔', area: '⌂', place: '●' }
   const categoryLabel = { building: 'Ndërtesë', street: 'Rrugë', area: 'Zonë', place: 'Vend' }
@@ -518,6 +531,91 @@ function HomeView({
   const locationLabel = locationStatusLabel(locationStatus, locationAccuracy)
   const locateIcon = locationStatus === 'locating' ? '…' : locationStatus === 'ready' ? '●' : locationStatus === 'outside' ? '!' : '➤'
 
+  const moveSheet = (direction: 'up' | 'down') => {
+    if (direction === 'up') {
+      if (sheetState === 'collapsed') setSheetState('medium')
+      else if (sheetState === 'medium') setSheetState('expanded')
+      else return
+    } else if (sheetState === 'expanded') setSheetState('medium')
+    else if (sheetState === 'medium') setSheetState('collapsed')
+    else {
+      onClearDestination()
+      return
+    }
+    subtleHaptic()
+  }
+
+  const handleSheetPointerDown = (event: React.PointerEvent<HTMLElement>) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    const target = event.target as Element
+    const toggle = target.closest('.sheet-toggle')
+    const list = target.closest('.parking-list') as HTMLElement | null
+    if (!toggle && target.closest('button, a, input, select')) return
+    if (!toggle && !(sheetState === 'expanded' && list && list.scrollTop <= 0)) return
+    sheetGestureCleanupRef.current?.()
+    sheetGestureRef.current = { pointerId: event.pointerId, startY: event.clientY, startedAt: performance.now(), dragging: false }
+    const move = (pointerEvent: PointerEvent) => {
+      const gesture = sheetGestureRef.current
+      if (gesture.pointerId !== pointerEvent.pointerId) return
+      const deltaY = pointerEvent.clientY - gesture.startY
+      if (!gesture.dragging && Math.abs(deltaY) < 7) return
+      gesture.dragging = true
+      suppressSheetClickRef.current = true
+      const limitedDelta = sheetState === 'collapsed'
+        ? Math.max(-170, Math.min(90, deltaY))
+        : sheetState === 'expanded'
+          ? Math.max(-18, Math.min(210, deltaY))
+          : Math.max(-180, Math.min(180, deltaY))
+      sheetRef.current?.style.setProperty('--sheet-drag-y', `${limitedDelta}px`)
+      if (pointerEvent.cancelable) pointerEvent.preventDefault()
+    }
+    const cleanup = () => {
+      document.removeEventListener('pointermove', move)
+      document.removeEventListener('pointerup', finish)
+      document.removeEventListener('pointercancel', finish)
+      sheetGestureCleanupRef.current = null
+    }
+    const finish = (pointerEvent: PointerEvent) => {
+      const gesture = sheetGestureRef.current
+      if (gesture.pointerId !== pointerEvent.pointerId) return
+      const deltaY = pointerEvent.clientY - gesture.startY
+      const elapsed = Math.max(1, performance.now() - gesture.startedAt)
+      const velocity = Math.abs(deltaY) / elapsed
+      sheetRef.current?.style.removeProperty('--sheet-drag-y')
+      sheetGestureRef.current.pointerId = -1
+      cleanup()
+      if (gesture.dragging && (Math.abs(deltaY) >= 44 || velocity >= .45)) moveSheet(deltaY < 0 ? 'up' : 'down')
+      window.setTimeout(() => { suppressSheetClickRef.current = false }, 0)
+    }
+    document.addEventListener('pointermove', move, { passive: false })
+    document.addEventListener('pointerup', finish)
+    document.addEventListener('pointercancel', finish)
+    sheetGestureCleanupRef.current = cleanup
+  }
+
+  const startPreviewSwipe = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    previewSwipeRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY }
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+
+  const finishPreviewSwipe = (event: React.PointerEvent<HTMLDivElement>) => {
+    const swipe = previewSwipeRef.current
+    if (swipe.pointerId !== event.pointerId) return
+    const deltaX = event.clientX - swipe.startX
+    const deltaY = event.clientY - swipe.startY
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+    previewSwipeRef.current.pointerId = -1
+    if (Math.abs(deltaX) < 46 || Math.abs(deltaX) <= Math.abs(deltaY)) return
+    const candidates = rankedParkings.slice(0, 3)
+    const currentIndex = Math.max(0, candidates.findIndex((match) => match.parking.id === selected.id))
+    const nextIndex = deltaX < 0 ? Math.min(candidates.length - 1, currentIndex + 1) : Math.max(0, currentIndex - 1)
+    if (nextIndex !== currentIndex) {
+      subtleHaptic()
+      onSelect(candidates[nextIndex].parking)
+    }
+  }
+
   useEffect(() => {
     if (!searchOpen && !plannerOpen) return
     const closeOnOutside = (event: PointerEvent) => {
@@ -539,14 +637,28 @@ function HomeView({
   }, [searchOpen, plannerOpen, onCloseSearch])
 
   useEffect(() => {
-    if (destination) setSheetState('medium')
+    if (destination) {
+      setSheetState(destinationSheetStateRef.current ?? 'medium')
+      destinationSheetStateRef.current = null
+    }
     setPlannerOpen(false)
   }, [destination?.id])
 
   useEffect(() => {
     if (pickingDestination) setSheetState('collapsed')
-    else if (destination) setSheetState('medium')
-  }, [pickingDestination, destination?.id])
+  }, [pickingDestination])
+
+  useEffect(() => {
+    if (!longPressLocation) return
+    const closeMenu = (event: PointerEvent) => {
+      if ((event.target as Element).closest?.('.map-context-menu')) return
+      setLongPressLocation(null)
+    }
+    document.addEventListener('pointerdown', closeMenu)
+    return () => document.removeEventListener('pointerdown', closeMenu)
+  }, [longPressLocation])
+
+  useEffect(() => () => sheetGestureCleanupRef.current?.(), [])
 
   return (
     <div className={`screen screen--map ${destination ? `screen--smart screen--sheet-${sheetState}` : ''} ${parkingPreviewOpen && !destination ? 'screen--parking-preview' : ''} ${plannerOpen || searchOpen ? 'screen--top-panel-open' : ''}`}>
@@ -563,6 +675,12 @@ function HomeView({
         route={visibleRoute}
         pickingDestination={pickingDestination}
         onPickDestination={onPickDestination}
+        onLongPress={(coordinates) => {
+          setLongPressLocation(coordinates)
+          setPlannerOpen(false)
+          onCloseSearch()
+          subtleHaptic(10)
+        }}
         recenterToken={recenterToken}
         userLocation={userLocation}
         userLocationLive={locationStatus === 'ready'}
@@ -599,6 +717,7 @@ function HomeView({
 
         {searchOpen && (
           <div className="search-suggestions" role="dialog" aria-label="Rezultatet e destinacionit">
+            <div className="search-sheet-header"><strong>Kërko destinacion</strong><button onClick={onCloseSearch} aria-label="Mbyll kërkimin">×</button></div>
             {recentResults.length > 0 && <div className="search-section-label"><span>Të fundit</span><button onClick={onClearRecent}>Pastro</button></div>}
             {recentResults.map((result) => (
               <button key={`recent-${result.id}`} onClick={() => onSelectDestination(result)}>
@@ -715,11 +834,35 @@ function HomeView({
           </div>
         </section>
       )}
+      {longPressLocation && (
+        <section className="map-context-menu" role="dialog" aria-label="Veprimet për pikën në hartë">
+          <span><strong>Pika në hartë</strong><small>Zgjidh çfarë dëshiron të bësh këtu.</small></span>
+          <button onClick={() => {
+            destinationSheetStateRef.current = 'medium'
+            onPickDestination(longPressLocation)
+            setLongPressLocation(null)
+          }}>⌖ Destinacion këtu</button>
+          <button onClick={() => {
+            destinationSheetStateRef.current = 'expanded'
+            onPickDestination(longPressLocation)
+            setLongPressLocation(null)
+          }}>P Gjej parking afër</button>
+          <button className="map-context-menu__cancel" onClick={() => setLongPressLocation(null)}>Anulo</button>
+        </section>
+      )}
       {destination && (
-      <section className={`home-sheet home-sheet--smart home-sheet--${sheetState}`}>
+      <section
+        ref={sheetRef}
+        className={`home-sheet home-sheet--smart home-sheet--${sheetState}`}
+        onPointerDown={handleSheetPointerDown}
+      >
         <button
           className="sheet-toggle"
-          onClick={() => setSheetState(nextSheetState)}
+          onClick={() => {
+            if (suppressSheetClickRef.current) return
+            setSheetState(nextSheetState)
+            subtleHaptic()
+          }}
           aria-expanded={sheetState !== 'collapsed'}
           aria-label={sheetState === 'collapsed' ? 'Hap parkingjet' : sheetState === 'medium' ? 'Zgjero listën e parkingjeve' : 'Mbyll listën e parkingjeve'}
         >
@@ -733,7 +876,7 @@ function HomeView({
             <button onClick={onToggleShowAll}>{showAllResults ? 'Top 3' : `Të gjitha (${rankedParkings.length})`}</button>
           </div>
           {sheetState === 'medium' && destination && rankedParkings.length > 0 && (
-            <div className="recommendation-tabs" aria-label="Parkingjet e rekomanduara">
+            <div className="recommendation-tabs" aria-label="Parkingjet e rekomanduara" onPointerDown={startPreviewSwipe} onPointerUp={finishPreviewSwipe} onPointerCancel={finishPreviewSwipe}>
               {rankedParkings.slice(0, 3).map((match) => (
                 <button key={match.parking.id} className={selected.id === match.parking.id ? 'selected' : ''} onClick={() => onSelect(match.parking)} aria-pressed={selected.id === match.parking.id}>
                   <b>{match.rank}</b><span>{match.walkMinutes} min ecje<small>{accessLabel(match.parking)}</small></span>
@@ -813,7 +956,7 @@ const parkingPaletteOptions: Array<{ value: ParkingPalette; label: string; descr
   { value: 'operator', label: 'Sipas operatorit', description: 'Prishtina Parking / OSM / privat' },
 ]
 
-function SettingsView({ settings, preferredType, walkingMinutes, typeCounts, onChange, onPreferredType, onWalkingMinutes, onReset, onHome, onSaved }: { settings: MapSettings; preferredType: ParkingTypeFilter; walkingMinutes: 5 | 10 | 15; typeCounts: ParkingTypeCounts; onChange: (settings: MapSettings) => void; onPreferredType: (type: ParkingTypeFilter) => void; onWalkingMinutes: (minutes: 5 | 10 | 15) => void; onReset: () => void; onHome: () => void; onSaved: () => void }) {
+function SettingsView({ settings, preferredType, walkingMinutes, typeCounts, onChange, onPreferredType, onWalkingMinutes, onReset, onLogin, onHome, onSaved }: { settings: MapSettings; preferredType: ParkingTypeFilter; walkingMinutes: 5 | 10 | 15; typeCounts: ParkingTypeCounts; onChange: (settings: MapSettings) => void; onPreferredType: (type: ParkingTypeFilter) => void; onWalkingMinutes: (minutes: 5 | 10 | 15) => void; onReset: () => void; onLogin: () => void; onHome: () => void; onSaved: () => void }) {
   const toggle = (key: 'emphasizeAreas' | 'largePointMarkers' | 'showPointParking' | 'largeLabels' | 'showDataSources') => onChange({ ...settings, [key]: !settings[key] })
   return (
     <div className="screen settings-screen">
@@ -862,6 +1005,11 @@ function SettingsView({ settings, preferredType, walkingMinutes, typeCounts, onC
           <div className="settings-section__heading"><span><small>Preferencat</small><h2>Kërkimi i parkingut</h2></span></div>
           <label><span><strong>Lloji i preferuar</strong><small>Përdoret si filtër fillestar.</small></span><select value={preferredType} onChange={(event) => onPreferredType(event.target.value as ParkingTypeFilter)}>{parkingTypeOptions.map(([value, label]) => <option key={value} value={value} disabled={value !== 'all' && typeCounts[value] === 0}>{label}</option>)}</select></label>
           <label><span><strong>Ecja maksimale</strong><small>Rrezja kur kërkon pranë destinacionit.</small></span><select value={walkingMinutes} onChange={(event) => onWalkingMinutes(Number(event.target.value) as 5 | 10 | 15)}><option value="5">5 min</option><option value="10">10 min</option><option value="15">15 min</option></select></label>
+        </section>
+
+        <section className="settings-section settings-section--account">
+          <div className="settings-section__heading"><span><small>Llogaria</small><h2>Profili yt</h2></span></div>
+          <button className="settings-login-button" onClick={onLogin}><span><strong>Hyr ose regjistrohu</strong><small>Ruaj preferencat dhe parkingjet e tua.</small></span><b>›</b></button>
         </section>
 
         <p className="settings-data-note"><b>Pa zona të rreme.</b> Mbushja e plotë përdoret vetëm kur OpenStreetMap ka kufij realë. Parkingjet me vetëm një koordinatë mbeten pika, por mund të shfaqen më të mëdha.</p>
@@ -974,6 +1122,9 @@ function DetailsView({ parking, report, onReport, route, destination, smartMatch
 
 function NavigationView({ parking, route, userLocation, userLocationLive, userLocationAccuracy, mapSettings, recenterToken, hasDestination, onRecenter, onStop, onArrive }: { parking: Parking; route: DrivingRoute | null; userLocation: Parking['coordinates']; userLocationLive: boolean; userLocationAccuracy: number | null; mapSettings: MapSettings; recenterToken: number; hasDestination: boolean; onRecenter: () => void; onStop: () => void; onArrive: () => void }) {
   const [showSteps, setShowSteps] = useState(false)
+  const [mapMoved, setMapMoved] = useState(false)
+  const [muted, setMuted] = useState(false)
+  const [confirmStop, setConfirmStop] = useState(false)
   const directionRef = useRef<HTMLElement>(null)
   const stepsRef = useRef<HTMLElement>(null)
   const nextStep = route?.steps.find((step) => !['depart', 'arrive'].includes(step.maneuverType)) ?? route?.steps[0]
@@ -994,7 +1145,7 @@ function NavigationView({ parking, route, userLocation, userLocationLive, userLo
   return (
     <div className="screen screen--map">
       <StatusBar />
-      <LiveParkingMap parkings={[]} selected={parking} onSelect={() => undefined} mode="navigation" route={route} recenterToken={recenterToken} userLocation={userLocation} userLocationLive={userLocationLive} userLocationAccuracy={userLocationAccuracy} mapSettings={mapSettings} />
+      <LiveParkingMap parkings={[]} selected={parking} onSelect={() => undefined} mode="navigation" route={route} recenterToken={recenterToken} userLocation={userLocation} userLocationLive={userLocationLive} userLocationAccuracy={userLocationAccuracy} mapSettings={mapSettings} onManualMove={() => setMapMoved(true)} />
 
       <section className="direction-card" ref={directionRef}>
         <span className="turn-icon">{turnIcon}</span>
@@ -1012,16 +1163,26 @@ function NavigationView({ parking, route, userLocation, userLocationLive, userLo
         </section>
       )}
 
-      <button className="navigation-recenter" onClick={onRecenter} aria-label="Rikthe hartën te lokacioni im">⌖</button>
+      <div className="navigation-map-actions">
+        <button className={`navigation-mute ${muted ? 'navigation-mute--active' : ''}`} onClick={() => { setMuted((value) => !value); subtleHaptic() }} aria-pressed={muted} aria-label={muted ? 'Aktivizo zërin' : 'Hesht udhëzimet'}>{muted ? '⌁' : '◖'}</button>
+        {mapMoved && <button className="navigation-recenter" onClick={() => { setMapMoved(false); onRecenter() }} aria-label="Rikthe hartën te lokacioni im">⌖</button>}
+      </div>
 
       <span className="preview-badge">PARAPAMJE</span>
       <section className="arrival-card">
         <div><small>Drejt {parking.name}</small><strong>{arrivalTime}</strong></div>
         <b>{routeMinutes} min • {routeDistance >= 1000 ? `${(routeDistance / 1000).toFixed(1)} km` : `${routeDistance} m`}</b>
         <span className="confidence-badge">● {parking.spaces !== null ? `${parking.spaces} vende të lira` : accessLabel(parking)}</span>
-        <button className="stop-button" onClick={(event) => { event.stopPropagation(); onStop() }}><i />Ndalo</button>
+        <button className="stop-button" onClick={(event) => { event.stopPropagation(); setConfirmStop(true) }}><i />Ndalo</button>
         <button className="arrival-hint" onClick={(event) => { event.stopPropagation(); onArrive() }}>{hasDestination ? 'Parkova • vazhdo në këmbë' : 'Parkova • përfundo navigimin'}</button>
       </section>
+      {confirmStop && (
+        <section className="stop-confirmation" role="dialog" aria-modal="true" aria-label="Konfirmo ndalimin e navigimit">
+          <strong>Ta ndalim navigimin?</strong>
+          <span>Rruga mbetet e disponueshme te detajet e parkingut.</span>
+          <div><button onClick={() => setConfirmStop(false)}>Vazhdo rutën</button><button className="danger" onClick={onStop}>Po, ndalo</button></div>
+        </section>
+      )}
     </div>
   )
 }
@@ -1350,6 +1511,7 @@ export default function App() {
   }
 
   function selectDestination(nextDestination: Destination) {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
     onlineSearchRequestRef.current += 1
     setSearchingOnline(false)
     parkingSelectedByUserRef.current = false
@@ -1492,11 +1654,15 @@ export default function App() {
         .login-auth-button:active {
           transform: translateY(0);
         }
+
+        @media (max-width: 520px) {
+          .login-auth-button { display: none; }
+        }
       `}</style>
       <button className="login-auth-button" onClick={() => setShowLoginModal(true)}>
         Log In / Register
       </button>
-      {showLoginModal && <Login onClose={() => setShowLoginModal(false)} />}
+      {showLoginModal && <Suspense fallback={<div className="modal-loading" role="status">Duke hapur hyrjen…</div>}><Login onClose={() => setShowLoginModal(false)} /></Suspense>}
       {!online && <div className="offline-banner" role="status">Je offline — po shfaqim të dhënat e fundit të ruajtura.</div>}
       <div className="phone-frame">
         <IosInstallPrompt />
@@ -1554,7 +1720,7 @@ export default function App() {
           />
         )}
         {screen === 'saved' && <SavedView parkings={locatedParkings.filter((parking) => savedParkingIds.has(parking.id))} showDataSources={mapSettings.showDataSources} userLocation={userLocationInPrishtina ? activeUserLocation : undefined} onHome={() => setScreen('home')} onSettings={() => setScreen('settings')} onOpen={(parking) => { setSelected(parking); setDestination(null); setScreen('details') }} />}
-        {screen === 'settings' && <SettingsView settings={mapSettings} preferredType={filters.type as ParkingTypeFilter} walkingMinutes={walkingMinutes} typeCounts={globalTypeCounts} onChange={(value) => setMapSettings(normalizedMapSettings(value))} onPreferredType={(type) => setFilters((current) => ({ ...current, type }))} onWalkingMinutes={setWalkingMinutes} onReset={() => { setMapSettings(DEFAULT_MAP_SETTINGS); setFilters(initialFilters); setWalkingMinutes(10) }} onHome={() => setScreen('home')} onSaved={() => setScreen('saved')} />}
+        {screen === 'settings' && <SettingsView settings={mapSettings} preferredType={filters.type as ParkingTypeFilter} walkingMinutes={walkingMinutes} typeCounts={globalTypeCounts} onChange={(value) => setMapSettings(normalizedMapSettings(value))} onPreferredType={(type) => setFilters((current) => ({ ...current, type }))} onWalkingMinutes={setWalkingMinutes} onReset={() => { setMapSettings(DEFAULT_MAP_SETTINGS); setFilters(initialFilters); setWalkingMinutes(10) }} onLogin={() => setShowLoginModal(true)} onHome={() => setScreen('home')} onSaved={() => setScreen('saved')} />}
         {screen === 'details' && <DetailsView parking={currentSelected} report={parkingReports[currentSelected.id]} onReport={reportParking} route={route} destination={destination} smartMatch={selectedRankedParking} saved={savedParkingIds.has(currentSelected.id)} userLocation={activeUserLocation} userLocationLive={userLocationInPrishtina} userLocationAccuracy={locationAccuracy} mapSettings={mapSettings} onToggleSaved={toggleSavedParking} onBack={() => setScreen('home')} onNavigate={() => setScreen('navigation')} />}
         {screen === 'navigation' && <NavigationView parking={currentSelected} route={route} userLocation={activeUserLocation} userLocationLive={userLocationInPrishtina} userLocationAccuracy={locationAccuracy} mapSettings={mapSettings} recenterToken={recenterToken} hasDestination={Boolean(destination)} onRecenter={requestUserLocation} onStop={() => setScreen('details')} onArrive={() => setScreen(destination ? 'walking' : 'home')} />}
         {screen === 'walking' && destination && displayedWalkingRoute && selectedRankedParking && <WalkingView parking={currentSelected} destination={destination} route={displayedWalkingRoute} match={selectedRankedParking} directionsHref={selectedWalkingDirectionsHref} userLocation={activeUserLocation} userLocationLive={userLocationInPrishtina} userLocationAccuracy={locationAccuracy} mapSettings={mapSettings} onFinish={() => setScreen('home')} />}
