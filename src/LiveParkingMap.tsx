@@ -282,6 +282,7 @@ export default function LiveParkingMap({
     if (mode === 'home' && !destination && !route) automaticViewportRef.current = null
 
     const visibleParkings = mode === 'navigation' || mode === 'walking' ? [selected] : parkings
+    const selectionFocused = mode === 'home' && Boolean(route || destination)
 
     visibleParkings.forEach((parking) => {
       if (!parking.geometry?.length && !mapSettings.showPointParking && mode === 'home') return
@@ -295,6 +296,8 @@ export default function LiveParkingMap({
       const color = areaColor(parking, mapSettings.parkingPalette)
       const areaFillOpacity = isSelected
         ? .72
+        : selectionFocused
+          ? mapZoom < 14 ? .2 : .3
         : mapSettings.emphasizeAreas
           ? mapZoom < 14 ? .42 : .56
           : mapZoom < 14 ? .2 : .34
@@ -306,7 +309,7 @@ export default function LiveParkingMap({
             className: `parking-area parking-area--${category}${isSelected ? ' parking-area--selected' : ''}${restricted ? ' parking-area--restricted' : ''}`,
             color: isSelected ? '#0b3fd1' : color,
             weight: isSelected ? 4.5 : mapZoom < 14 ? 1.5 : 2.25,
-            opacity: .95,
+            opacity: selectionFocused && !isSelected ? .68 : .95,
             fillColor: color,
             fillOpacity: areaFillOpacity,
             lineJoin: 'round',
@@ -420,7 +423,10 @@ export default function LiveParkingMap({
       }).addTo(routeLayer)
 
       if (selected.geometry?.length) {
-        const accessPoint = parkingAccessPoint(selected, destination.coordinates)
+        const routeEnd = mode !== 'walking' && route?.coordinates.length
+          ? route.coordinates[route.coordinates.length - 1]
+          : null
+        const accessPoint = routeEnd ?? parkingAccessPoint(selected, destination.coordinates)
         const accessIcon = L.divIcon({
           className: '',
           html: `<span class="parking-access-point" title="${accessPointIsEstimated(selected) ? 'Hyrje e përafërt nga konturi' : 'Hyrje e hartuar'}"></span>`,
@@ -455,10 +461,17 @@ export default function LiveParkingMap({
 
       const firstPoint = route.coordinates[0]
       const lastPoint = route.coordinates[route.coordinates.length - 1]
-      const routeViewportKey = `route:${mode}:${selected.id}:${route.source}:${firstPoint?.lat.toFixed(5)}:${firstPoint?.lng.toFixed(5)}:${lastPoint?.lat.toFixed(5)}:${lastPoint?.lng.toFixed(5)}`
+      const followsLiveLocation = mode === 'navigation' && userLocationLive && isWithinPrishtinaMap(userLocation)
+      const routeViewportKey = followsLiveLocation
+        ? `follow:${userLocation.lat.toFixed(5)}:${userLocation.lng.toFixed(5)}`
+        : mode === 'home' || mode === 'details'
+          ? `route:${mode}:${selected.id}:${destination?.id ?? 'parking'}:${route.source}:${lastPoint?.lat.toFixed(5)}:${lastPoint?.lng.toFixed(5)}`
+          : `route:${mode}:${selected.id}:${route.source}:${firstPoint?.lat.toFixed(5)}:${firstPoint?.lng.toFixed(5)}:${lastPoint?.lat.toFixed(5)}:${lastPoint?.lng.toFixed(5)}`
       if (!shouldFocusSelectedParking && !manualViewportRef.current && automaticViewportRef.current !== routeViewportKey) {
         automaticViewportRef.current = routeViewportKey
-        if (mode === 'navigation' || mode === 'walking') {
+        if (followsLiveLocation) {
+          map.setView([userLocation.lat, userLocation.lng], Math.max(17, Math.min(18, map.getZoom())), { animate: false })
+        } else if (mode === 'navigation' || mode === 'walking') {
           map.fitBounds(L.latLngBounds(routePoints), {
             paddingTopLeft: [44, 120],
             paddingBottomRight: [44, 205],
@@ -498,25 +511,32 @@ export default function LiveParkingMap({
     }
 
     if (mode === 'details' && destination) {
+      const walkingStart = parkingAccessPoint(selected, destination.coordinates)
       const walkingConnection: L.LatLngExpression[] = [
-        [selected.coordinates.lat, selected.coordinates.lng],
+        [walkingStart.lat, walkingStart.lng],
         [destination.coordinates.lat, destination.coordinates.lng],
       ]
       L.polyline(walkingConnection, { color: '#fff', weight: 7, opacity: .95 }).addTo(routeLayer)
       L.polyline(walkingConnection, { color: '#18b981', weight: 4, opacity: .95, dashArray: '8 7' }).addTo(routeLayer)
     }
 
-    if (!shouldFocusSelectedParking && mode === 'navigation' && !route) {
+    if (!shouldFocusSelectedParking && !manualViewportRef.current && mode === 'navigation' && !route) {
       const navigationViewportKey = `navigation:${selected.id}:${userLocation.lat.toFixed(5)}:${userLocation.lng.toFixed(5)}`
       if (automaticViewportRef.current !== navigationViewportKey) {
         automaticViewportRef.current = navigationViewportKey
-        map.fitBounds([[userLocation.lat, userLocation.lng], [selected.coordinates.lat, selected.coordinates.lng]], { padding: [70, 70], animate: false })
+        if (userLocationLive && isWithinPrishtinaMap(userLocation)) {
+          map.setView([userLocation.lat, userLocation.lng], 17, { animate: false })
+        } else {
+          const entrance = parkingAccessPoint(selected, userLocation)
+          map.fitBounds([[userLocation.lat, userLocation.lng], [entrance.lat, entrance.lng]], { padding: [70, 70], animate: false })
+        }
       }
     } else if (!shouldFocusSelectedParking && mode === 'details' && !route) {
       const detailsViewportKey = `details:${selected.id}`
       if (automaticViewportRef.current !== detailsViewportKey) {
         automaticViewportRef.current = detailsViewportKey
-        map.setView([selected.coordinates.lat, selected.coordinates.lng], 15, { animate: false })
+        const entrance = parkingAccessPoint(selected, userLocation)
+        map.setView([entrance.lat, entrance.lng], 15, { animate: false })
       }
     }
   }, [parkings, selected, mode, route, destination, walkMinutes, recommendationRanks, userLocation.lat, userLocation.lng, userLocationLive, userLocationAccuracy, mapZoom, mapReadyToken, departures, mapSettings.parkingPalette, mapSettings.emphasizeAreas, mapSettings.largePointMarkers, mapSettings.showPointParking])

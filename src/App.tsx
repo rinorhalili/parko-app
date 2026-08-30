@@ -45,6 +45,30 @@ function subtleHaptic(duration = 8) {
   if ('vibrate' in navigator) navigator.vibrate(duration)
 }
 
+type AppIconName = 'search' | 'filter' | 'pin' | 'location' | 'map' | 'heart' | 'settings' | 'route' | 'info' | 'street' | 'chevron' | 'more' | 'mute' | 'recenter'
+
+function AppIcon({ name, size = 20 }: { name: AppIconName; size?: number }) {
+  const common = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
+  return (
+    <svg className="app-icon" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      {name === 'search' && <><circle cx="11" cy="11" r="6.5" {...common} /><path d="m16 16 4 4" {...common} /></>}
+      {name === 'filter' && <><path d="M4 7h16M7 12h10M10 17h4" {...common} /><circle cx="8" cy="7" r="1" fill="currentColor" /><circle cx="15" cy="12" r="1" fill="currentColor" /><circle cx="12" cy="17" r="1" fill="currentColor" /></>}
+      {name === 'pin' && <><path d="M12 21s6-5.1 6-11a6 6 0 1 0-12 0c0 5.9 6 11 6 11Z" {...common} /><circle cx="12" cy="10" r="2" {...common} /></>}
+      {name === 'location' && <><path d="m20 4-7.5 16-2.1-6.4L4 11.5 20 4Z" {...common} /></>}
+      {name === 'map' && <><path d="m3 6 5-2 8 3 5-2v13l-5 2-8-3-5 2V6Z" {...common} /><path d="M8 4v13M16 7v13" {...common} /></>}
+      {name === 'heart' && <path d="M20.5 9.5c0 5-8.5 10-8.5 10s-8.5-5-8.5-10A4.5 4.5 0 0 1 12 7a4.5 4.5 0 0 1 8.5 2.5Z" {...common} />}
+      {name === 'settings' && <><circle cx="12" cy="12" r="3" {...common} /><path d="M19 13.5v-3l-2-.7-.7-1.7.9-1.9-2.1-2.1-1.9.9-1.7-.7-.7-2h-3l-.7 2-1.7.7-1.9-.9-2.1 2.1.9 1.9-.7 1.7-2 .7v3l2 .7.7 1.7-.9 1.9 2.1 2.1 1.9-.9 1.7.7.7 2h3l.7-2 1.7-.7 1.9.9 2.1-2.1-.9-1.9.7-1.7 2-.7Z" {...common} /></>}
+      {name === 'route' && <><path d="M5 19c0-4 3-4 6-4s6 0 6-4V5" {...common} /><path d="m14 8 3-3 3 3" {...common} /><circle cx="5" cy="19" r="2" {...common} /></>}
+      {name === 'info' && <><circle cx="12" cy="12" r="9" {...common} /><path d="M12 11v5M12 8h.01" {...common} /></>}
+      {name === 'street' && <><path d="M4 19 8 5h8l4 14" {...common} /><path d="M12 5v3M12 12v3M12 19v1" {...common} /></>}
+      {name === 'chevron' && <path d="m9 5 7 7-7 7" {...common} />}
+      {name === 'more' && <><circle cx="5" cy="12" r="1.2" fill="currentColor" /><circle cx="12" cy="12" r="1.2" fill="currentColor" /><circle cx="19" cy="12" r="1.2" fill="currentColor" /></>}
+      {name === 'mute' && <><path d="M4 10v4h4l5 4V6L8 10H4Z" {...common} /><path d="m17 9 4 4M21 9l-4 4" {...common} /></>}
+      {name === 'recenter' && <><circle cx="12" cy="12" r="6" {...common} /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" {...common} /><circle cx="12" cy="12" r="1.5" fill="currentColor" /></>}
+    </svg>
+  )
+}
+
 type ParkingReport = {
   parkingId: string
   availability?: 'free-spots' | 'full'
@@ -221,9 +245,9 @@ function parkingTypeLabel(parking: Parking) {
 function BottomNav({ active = 'home', onHome, onSaved, onSettings }: { active?: 'home' | 'saved' | 'settings'; onHome?: () => void; onSaved: () => void; onSettings: () => void }) {
   return (
     <nav className="bottom-nav" aria-label="Navigimi kryesor">
-      <button className={`bottom-nav__item ${active === 'home' ? 'bottom-nav__item--active' : ''}`} onClick={onHome} aria-current={active === 'home' ? 'page' : undefined}><span>➤</span>Harta</button>
-      <button className={`bottom-nav__item ${active === 'saved' ? 'bottom-nav__item--active' : ''}`} onClick={onSaved} aria-current={active === 'saved' ? 'page' : undefined}><span>♡</span>Ruajtur</button>
-      <button className={`bottom-nav__item ${active === 'settings' ? 'bottom-nav__item--active' : ''}`} onClick={onSettings} aria-current={active === 'settings' ? 'page' : undefined}><span>⚙</span>Cilësimet</button>
+      <button className={`bottom-nav__item ${active === 'home' ? 'bottom-nav__item--active' : ''}`} onClick={onHome} aria-current={active === 'home' ? 'page' : undefined}><span><AppIcon name="map" /></span>Harta</button>
+      <button className={`bottom-nav__item ${active === 'saved' ? 'bottom-nav__item--active' : ''}`} onClick={onSaved} aria-current={active === 'saved' ? 'page' : undefined}><span><AppIcon name="heart" /></span>Ruajtur</button>
+      <button className={`bottom-nav__item ${active === 'settings' ? 'bottom-nav__item--active' : ''}`} onClick={onSettings} aria-current={active === 'settings' ? 'page' : undefined}><span><AppIcon name="settings" /></span>Cilësimet</button>
     </nav>
   )
 }
@@ -241,6 +265,8 @@ function parkingSourceLabel(parking: Parking) {
 function ParkingCard({ parking, smartMatch, showSource = true, onOpen }: { parking: Parking; smartMatch?: RankedParking; showSource?: boolean; onOpen: () => void }) {
   const verifiedPrice = verifiedPriceLabel(parking)
   const liveAvailability = parking.spaces !== null && parking.availabilitySource ? availabilityLabel(parking) : null
+  const sourceLabel = parkingSourceLabel(parking)
+  const showInlineSource = showSource && sourceLabel !== parkingTypeLabel(parking)
   const journey = smartMatch
     ? [`${smartMatch.walkMinutes} min ecje`, `${smartMatch.driveMinutes} min vozitje`]
     : [`${parking.driveMinutes} min vozitje`]
@@ -253,17 +279,17 @@ function ParkingCard({ parking, smartMatch, showSource = true, onOpen }: { parki
       tabIndex={0}
       aria-label={`Hap detajet për ${parking.name}`}
     >
-      <div className="parking-card__icon">{smartMatch?.rank ?? (parking.municipalManaged ? 'PP' : '•')}</div>
+      <div className={`parking-card__icon parking-card__icon--${parking.municipalManaged ? 'municipal' : parking.type}`}>{smartMatch?.rank ?? 'P'}</div>
       <div className="parking-card__content">
         <strong>{parking.name}</strong>
         {liveAvailability && <span className={`availability-text availability-text--${parking.status}`}>{liveAvailability}</span>}
         <small>{[...journey, verifiedPrice].filter(Boolean).join(' • ')}</small>
-        <span className="parking-card__badges">
+        <span className="parking-card__meta">
           <span className={`parking-kind parking-kind--${parking.municipalManaged ? 'municipal' : parking.type}`}>{parkingTypeLabel(parking)}</span>
-          {showSource && <DataTrustBadge parking={parking} />}
+          {showInlineSource && <small className="parking-card__source">{sourceLabel}</small>}
         </span>
       </div>
-      <span className="parking-card__chevron" aria-hidden="true">›</span>
+      <span className="parking-card__chevron" aria-hidden="true"><AppIcon name="chevron" size={18} /></span>
     </article>
   )
 }
@@ -526,10 +552,8 @@ function HomeView({
   const visibleRoute = (destination && selectedMatch) || parkingPreviewOpen ? route : null
   const routeMinutes = route ? Math.max(1, Math.ceil(route.durationSeconds / 60)) : selected.driveMinutes
   const routeDistance = route?.distanceMeters ?? selected.distanceMeters
-  const nextRoad = route?.steps.find((step) => step.roadName && step.roadName !== 'rruga pa emër')
   const activeFilterCount = [filters.type !== 'all', filters.verifiedOnly, filters.freeOnly, filters.paidOnly, filters.evCharging, filters.accessible, filters.availableOnly].filter(Boolean).length
   const locationLabel = locationStatusLabel(locationStatus, locationAccuracy)
-  const locateIcon = locationStatus === 'locating' ? '…' : locationStatus === 'ready' ? '●' : locationStatus === 'outside' ? '!' : '➤'
 
   const moveSheet = (direction: 'up' | 'down') => {
     if (direction === 'up') {
@@ -689,7 +713,7 @@ function HomeView({
       />
       <div className="home-controls" ref={controlsRef}>
         <div className="search-box">
-          <span className="search-box__pin">⌕</span>
+          <span className="search-box__pin"><AppIcon name="search" size={18} /></span>
           <span className="search-box__copy">
             <input
               value={query}
@@ -711,7 +735,7 @@ function HomeView({
           ) : query ? (
             <button type="button" className="round-button" onClick={onClearDestination} aria-label="Pastro kërkimin">×</button>
           ) : (
-            <button type="button" className="round-button" onClick={onSearchOnline} aria-label="Kërko destinacionin online">⌕</button>
+            <button type="button" className="round-button" onClick={onSearchOnline} aria-label="Kërko destinacionin online"><AppIcon name="search" size={18} /></button>
           )}
         </div>
 
@@ -750,7 +774,7 @@ function HomeView({
             )}
             {searchError && <p className="search-message search-message--error" role="status">{searchError}</p>}
             <button className="map-pick-search-row" onClick={() => { setPlannerOpen(false); onStartMapPick() }}>
-              <i>⌖</i>
+              <i><AppIcon name="pin" size={18} /></i>
               <span><strong>Zgjidh në hartë</strong><small>Vendose pin-in në lokacionin e saktë</small></span>
               <b>›</b>
             </button>
@@ -765,14 +789,15 @@ function HomeView({
             aria-expanded={plannerOpen}
             aria-label={plannerOpen ? 'Mbyll filtrat' : 'Hap filtrat'}
           >
-            <span>≡</span><b>Filtra</b>{activeFilterCount > 0 && <small>{activeFilterCount}</small>}
+            <span><AppIcon name="filter" /></span><b>Filtra</b>{activeFilterCount > 0 && <small>{activeFilterCount}</small>}
           </button>
           <button
             className={`map-action-button map-action-button--pick ${pickingDestination ? 'map-action-button--active' : ''}`}
             onClick={() => { setPlannerOpen(false); onCloseSearch(); onStartMapPick() }}
             aria-pressed={pickingDestination}
+            aria-label={pickingDestination ? 'Anulo zgjedhjen e destinacionit në hartë' : 'Zgjidh destinacionin në hartë'}
           >
-            <span>⌖</span><b>{pickingDestination ? 'Anulo' : 'Zgjidh pikë'}</b>
+            <span><AppIcon name="pin" /></span><b>{pickingDestination ? 'Anulo' : 'Zgjidh pikë'}</b>
           </button>
           <button
             className={`map-action-button map-action-button--location map-action-button--${locationStatus}`}
@@ -780,7 +805,7 @@ function HomeView({
             disabled={locationStatus === 'locating'}
             aria-label={locationActionLabel(locationStatus)}
           >
-            <span>{locateIcon}</span><b>{locationStatus === 'locating' ? 'Duke gjetur' : locationStatus === 'ready' ? 'Lokacioni' : 'Ku jam'}</b>
+            <span><AppIcon name="location" /></span><b>{locationStatus === 'locating' ? 'Duke gjetur' : locationStatus === 'ready' ? 'Lokacioni' : 'Ku jam'}</b>
           </button>
         </div>
         {locationStatus !== 'idle' && locationStatus !== 'ready' && <p className={`location-inline-status location-inline-status--${locationStatus}`} role="status">{locationLabel}</p>}
@@ -801,12 +826,12 @@ function HomeView({
             <ParkingTypeChooser value={selectedParkingType} counts={typeCounts} onChange={onParkingType} />
             <p className="filter-section-label">Veçori</p>
             <div className="filter-chip-grid">
-              <button disabled={featureCounts.verified === 0} className={filters.verifiedOnly ? 'selected' : ''} aria-pressed={filters.verifiedOnly} onClick={() => onFiltersChange({ ...filters, verifiedOnly: !filters.verifiedOnly })}>✓ Të verifikuara <small>{featureCounts.verified}</small></button>
-              <button disabled={featureCounts.free === 0} className={filters.freeOnly ? 'selected' : ''} aria-pressed={filters.freeOnly} onClick={() => onFiltersChange({ ...filters, freeOnly: !filters.freeOnly, paidOnly: false })}>€0 Falas <small>{featureCounts.free}</small></button>
-              <button disabled={featureCounts.paid === 0} className={filters.paidOnly ? 'selected' : ''} aria-pressed={filters.paidOnly} onClick={() => onFiltersChange({ ...filters, paidOnly: !filters.paidOnly, freeOnly: false })}>€ Me pagesë <small>{featureCounts.paid}</small></button>
-              <button disabled={featureCounts.ev === 0} className={filters.evCharging ? 'selected' : ''} aria-pressed={filters.evCharging} onClick={() => onFiltersChange({ ...filters, evCharging: !filters.evCharging })}>⚡ Karikim EV <small>{featureCounts.ev}</small></button>
-              <button disabled={featureCounts.accessible === 0} className={filters.accessible ? 'selected' : ''} aria-pressed={filters.accessible} onClick={() => onFiltersChange({ ...filters, accessible: !filters.accessible })}>♿ Qasje e lehtë <small>{featureCounts.accessible}</small></button>
-              <button disabled={!hasLiveAvailability} className={filters.availableOnly ? 'selected' : ''} aria-pressed={filters.availableOnly} onClick={() => onFiltersChange({ ...filters, availableOnly: !filters.availableOnly })}>● Ka vende live <small>{featureCounts.live}</small></button>
+              <button disabled={featureCounts.verified === 0} className={filters.verifiedOnly ? 'selected' : ''} aria-pressed={filters.verifiedOnly} onClick={() => onFiltersChange({ ...filters, verifiedOnly: !filters.verifiedOnly })}>Të verifikuara <small>{featureCounts.verified}</small></button>
+              <button disabled={featureCounts.free === 0} className={filters.freeOnly ? 'selected' : ''} aria-pressed={filters.freeOnly} onClick={() => onFiltersChange({ ...filters, freeOnly: !filters.freeOnly, paidOnly: false })}>Falas <small>{featureCounts.free}</small></button>
+              <button disabled={featureCounts.paid === 0} className={filters.paidOnly ? 'selected' : ''} aria-pressed={filters.paidOnly} onClick={() => onFiltersChange({ ...filters, paidOnly: !filters.paidOnly, freeOnly: false })}>Me pagesë <small>{featureCounts.paid}</small></button>
+              <button disabled={featureCounts.ev === 0} className={filters.evCharging ? 'selected' : ''} aria-pressed={filters.evCharging} onClick={() => onFiltersChange({ ...filters, evCharging: !filters.evCharging })}>Karikim EV <small>{featureCounts.ev}</small></button>
+              <button disabled={featureCounts.accessible === 0} className={filters.accessible ? 'selected' : ''} aria-pressed={filters.accessible} onClick={() => onFiltersChange({ ...filters, accessible: !filters.accessible })}>Qasje e lehtë <small>{featureCounts.accessible}</small></button>
+              <button disabled={!hasLiveAvailability} className={filters.availableOnly ? 'selected' : ''} aria-pressed={filters.availableOnly} onClick={() => onFiltersChange({ ...filters, availableOnly: !filters.availableOnly })}>Ka vende live <small>{featureCounts.live}</small></button>
             </div>
             {activeFilterCount > 0 && <button className="clear-filters-button" onClick={() => onFiltersChange(initialFilters)}>Pastro të gjithë filtrat</button>}
           </section>
@@ -826,11 +851,11 @@ function HomeView({
             <span><small>Largësia</small><strong>{routeDistance >= 1000 ? `${(routeDistance / 1000).toFixed(1)} km` : `${routeDistance} m`}</strong></span>
             {verifiedPriceLabel(selected) && <span><small>Çmimi</small><strong>{verifiedPriceLabel(selected)}</strong></span>}
           </div>
-          <p className="parking-route-road"><b>↗</b><span><small>Rruga e ardhshme</small><strong>{nextRoad?.roadName ?? selected.address}</strong></span></p>
+          <p className="parking-route-road"><b>⌖</b><span><small>Adresa e parkingut</small><strong>{selected.address || 'Adresa nuk është konfirmuar'}</strong></span></p>
           <div className="parking-preview-actions">
-            <button className="button button--secondary" onClick={onDetails}>Detaje</button>
-            <a className="button button--secondary" href={streetViewHref} target="_blank" rel="noreferrer" onClick={(event) => { event.preventDefault(); void handleOpenExternal(streetViewHref) }}>Street View</a>
-            <button className="button" onClick={onNavigate}>Shko këtu</button>
+            <button className="button button--secondary" onClick={onDetails}><AppIcon name="info" size={17} />Detaje</button>
+            <a className="button button--secondary" href={streetViewHref} target="_blank" rel="noreferrer" onClick={(event) => { event.preventDefault(); void handleOpenExternal(streetViewHref) }}><AppIcon name="street" size={17} />Street View</a>
+            <button className="button" onClick={onNavigate}><AppIcon name="route" size={17} />Shko këtu</button>
           </div>
         </section>
       )}
@@ -888,9 +913,9 @@ function HomeView({
             <>
               <ParkingCard parking={selected} smartMatch={selectedMatch} showSource={mapSettings.showDataSources} onOpen={onDetails} />
               <div className="sheet-primary-actions">
-                <button className="button" onClick={onNavigate}>Shko këtu</button>
-                <button className="button button--secondary" onClick={onDetails}>Detaje</button>
-                <a className="button button--secondary" href={streetViewHref} target="_blank" rel="noreferrer" onClick={(event) => { event.preventDefault(); void handleOpenExternal(streetViewHref) }} aria-label={`Hap Street View 360° për ${selected.name}`}>Street View</a>
+                <button className="button" onClick={onNavigate}><AppIcon name="route" size={17} />Shko këtu</button>
+                <button className="button button--secondary" onClick={onDetails}><AppIcon name="info" size={17} />Detaje</button>
+                <a className="button button--secondary" href={streetViewHref} target="_blank" rel="noreferrer" onClick={(event) => { event.preventDefault(); void handleOpenExternal(streetViewHref) }} aria-label={`Hap Street View 360° për ${selected.name}`}><AppIcon name="street" size={17} />Street View</a>
               </div>
             </>
           ) : sheetState === 'medium' ? (
@@ -1150,7 +1175,7 @@ function NavigationView({ parking, route, userLocation, userLocationLive, userLo
       <section className="direction-card" ref={directionRef}>
         <span className="turn-icon">{turnIcon}</span>
         <div><small>{nextStep ? `Pas ${Math.max(20, nextStep.distanceMeters)} metrash` : 'Duke llogaritur rutën'}</small><strong>{nextStep?.instruction ?? 'Gjetja e rrugës më të mirë…'}</strong><span>{nextStep ? `në ${nextStep.roadName}` : 'OSRM routing'}</span></div>
-        <button onClick={() => setShowSteps((value) => !value)} aria-label={showSteps ? 'Mbyll udhëzimet' : 'Më shumë udhëzime'}>{showSteps ? '×' : '＋'}</button>
+        <button onClick={() => setShowSteps((value) => !value)} aria-label={showSteps ? 'Mbyll udhëzimet' : 'Më shumë udhëzime'}>{showSteps ? '×' : <AppIcon name="more" />}</button>
       </section>
 
       {showSteps && (
@@ -1164,11 +1189,10 @@ function NavigationView({ parking, route, userLocation, userLocationLive, userLo
       )}
 
       <div className="navigation-map-actions">
-        <button className={`navigation-mute ${muted ? 'navigation-mute--active' : ''}`} onClick={() => { setMuted((value) => !value); subtleHaptic() }} aria-pressed={muted} aria-label={muted ? 'Aktivizo zërin' : 'Hesht udhëzimet'}>{muted ? '⌁' : '◖'}</button>
-        {mapMoved && <button className="navigation-recenter" onClick={() => { setMapMoved(false); onRecenter() }} aria-label="Rikthe hartën te lokacioni im">⌖</button>}
+        <button className={`navigation-mute ${muted ? 'navigation-mute--active' : ''}`} onClick={() => { setMuted((value) => !value); subtleHaptic() }} aria-pressed={muted} aria-label={muted ? 'Aktivizo zërin' : 'Hesht udhëzimet'}><AppIcon name="mute" /></button>
+        {mapMoved && <button className="navigation-recenter" onClick={() => { setMapMoved(false); onRecenter() }} aria-label="Rikthe hartën te lokacioni im"><AppIcon name="recenter" /></button>}
       </div>
 
-      <span className="preview-badge">PARAPAMJE</span>
       <section className="arrival-card">
         <div><small>Drejt {parking.name}</small><strong>{arrivalTime}</strong></div>
         <b>{routeMinutes} min • {routeDistance >= 1000 ? `${(routeDistance / 1000).toFixed(1)} km` : `${routeDistance} m`}</b>
@@ -1355,9 +1379,10 @@ export default function App() {
 
   useEffect(() => {
     if (!navigator.geolocation) return
-    // Request location on app startup
+    // Get the initial GPS fix without moving the map. Automatic camera following
+    // starts only after the user enters navigation; "Ku jam" remains explicit.
     const timer = setTimeout(() => {
-      requestUserLocation()
+      requestUserLocation({ recenter: false })
     }, 500)
     return () => clearTimeout(timer)
   }, [])
@@ -1600,15 +1625,24 @@ export default function App() {
     })
   }
 
-  function requestUserLocation() {
+  function requestUserLocation(options: { recenter?: boolean } = {}) {
     if (!navigator.geolocation) {
       setLocationStatus('unavailable')
       setLocationAccuracy(null)
       return
     }
-    setLocationStatus('locating')
+    const shouldRecenter = options.recenter !== false
+    const hasLiveLocation = locationStatus === 'ready' && isWithinPrishtinaMap(userLocation)
+    // Keep the last valid GPS fix active while refreshing it. Falling back to the
+    // demo city-center coordinate here would temporarily rebuild the route from
+    // the wrong road and make the blue dot disappear.
+    if (hasLiveLocation) {
+      if (shouldRecenter) setRecenterToken((value) => value + 1)
+    } else {
+      setLocationStatus('locating')
+    }
     navigator.geolocation.getCurrentPosition(
-      (position) => updateLocationFromPosition(position, { recenter: true, report: true }),
+      (position) => updateLocationFromPosition(position, { recenter: shouldRecenter, report: true }),
       (error) => {
         setLocationStatus(error.code === error.PERMISSION_DENIED ? 'denied' : 'unavailable')
         setLocationAccuracy(null)
@@ -1635,20 +1669,20 @@ export default function App() {
           right: 24px;
           z-index: 100;
           padding: 12px 24px;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: #246bfd;
           color: white;
           border: none;
-          border-radius: 8px;
+          border-radius: 14px;
           font-size: 14px;
           font-weight: 600;
           cursor: pointer;
-          box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+          box-shadow: 0 8px 20px rgba(36, 107, 253, 0.22);
           transition: all 0.3s ease;
         }
 
         .login-auth-button:hover {
           transform: translateY(-2px);
-          box-shadow: 0 15px 30px rgba(102, 126, 234, 0.4);
+          box-shadow: 0 10px 24px rgba(36, 107, 253, 0.28);
         }
 
         .login-auth-button:active {
