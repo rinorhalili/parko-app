@@ -11,6 +11,22 @@ npm run dev
 
 Open `http://127.0.0.1:5173/`.
 
+## Desktop app
+
+```bash
+npm run dev:desktop
+```
+
+This launches the app in Electron with the Vite dev server and keeps the same `/api/*` proxy behavior.
+
+For the packaged production build:
+
+```bash
+npm run desktop
+```
+
+This builds the app if needed, starts the local production server, and opens it in a desktop window.
+
 ## Production
 
 ```bash

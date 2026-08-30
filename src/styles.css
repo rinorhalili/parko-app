@@ -33,6 +33,7 @@
 }
 
 * {
+  scroll-behavior: smooth;
   box-sizing: border-box;
 }
 
@@ -1543,7 +1544,7 @@ input:focus-visible {
 .saved-header small { color: var(--primary); font-size: 11px; font-weight: 900; text-transform: uppercase; }
 .saved-header h1 { margin: 4px 0 0; font-size: 23px; }
 .saved-header > span { min-width: 34px; height: 34px; padding: 0 9px; border-radius: 17px; background: var(--primary-soft); color: var(--primary); display: grid; place-content: center; font-size: 12px; font-weight: 900; }
-.saved-list { height: calc(100% - 186px); padding: 16px; overflow-y: auto; }
+.saved-list { height: 70vh; padding: 16px; overflow-y: auto; scrollbar-width: none; }
 .saved-list .parking-card { position: static; margin-bottom: 12px; }
 
 .settings-screen { padding-bottom: 78px; background: #f3f6fa; }
@@ -1629,6 +1630,35 @@ input:focus-visible {
 }
 
 .empty-state span { color: var(--muted); font-size: 12px; }
+
+.driver-tool-card {
+  margin-bottom: 12px;
+  padding: 15px;
+  border: 1px solid #dce5f0;
+  border-radius: 19px;
+  background: #fff;
+  box-shadow: 0 5px 16px rgba(13, 27, 42, .05);
+}
+.driver-tool-card__heading { display: flex; align-items: center; gap: 10px; }
+.driver-tool-card__heading small { display: block; color: var(--primary); font-size: 8px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; }
+.driver-tool-card__heading h2 { margin: 2px 0 0; font-size: 16px; }
+.driver-tool-icon { width: 36px; height: 36px; border-radius: 12px; display: grid; place-content: center; background: var(--primary-soft); color: var(--primary); font-size: 20px; font-weight: 900; }
+.driver-tool-copy { margin: 11px 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.driver-tool-primary { width: 100%; min-height: 42px; padding: 0 12px; border-radius: 12px; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; text-decoration: none; font-size: 11px; font-weight: 900; }
+.driver-tool-grid { display: grid; grid-template-columns: minmax(0, .7fr) minmax(0, 1.3fr); gap: 8px; margin: 10px 0; }
+.driver-tool-grid label { display: grid; gap: 5px; color: var(--muted); font-size: 9px; font-weight: 900; }
+.driver-tool-grid input, .driver-tool-grid select { width: 100%; min-height: 38px; padding: 0 9px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft); color: var(--ink); font-size: 11px; }
+.driver-tool-photo { min-height: 40px; margin: 8px 0; padding: 0 11px; border: 1px dashed #afc1db; border-radius: 11px; color: var(--primary); display: flex; align-items: center; gap: 7px; font-size: 10px; font-weight: 900; cursor: pointer; }
+.driver-tool-photo input { display: none; }
+.parked-location-photo { width: 100%; max-height: 130px; object-fit: cover; border-radius: 11px; margin-bottom: 9px; }
+.driver-tool-coordinate, .driver-tool-status { margin: 7px 0; color: var(--muted); font-size: 9px; font-weight: 700; }
+.parked-location-result { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); display: grid; gap: 7px; }
+.parked-location-result strong { color: #0b7d55; font-size: 12px; }
+.parked-location-result span { color: var(--muted); font-size: 11px; }
+.driver-tool-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.driver-tool-nav button { min-height: 36px; border-radius: 10px; background: var(--primary-soft); color: #2458d3; font-size: 10px; font-weight: 900; }
+.sms-preview { display: block; margin: 8px 0 10px; padding: 11px; overflow: hidden; border-radius: 10px; background: #f1f5fa; color: var(--ink); font: 700 12px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.driver-tool-footnote { display: block; margin-top: 8px; color: var(--muted); font-size: 9px; line-height: 1.35; }
 
 .close-button { color: #334155; font-size: 26px; }
 

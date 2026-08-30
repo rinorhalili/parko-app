@@ -10,8 +10,10 @@ import { PRISHTINA_PARKING_RULES_URL } from './prishtinaParkingRules'
 import { loadPreferences, savePreferences } from './persistence'
 import { loadDrivingMatrix, loadDrivingRoute, loadWalkingRoute } from './routingApi'
 import { googleStreetViewUrl, walkingDirectionsUrl } from './streetView'
+import { handleOpenExternal } from './externalLinks'
 import { captureEvent } from './telemetry'
 import { AlertBanner, LeavingButton, SpotVouching } from './crowdsourcing'
+import { SaveMyParkedLocationCard, SmsTariffHelper } from './DriverTools'
 import type { DrivingMatrixEntry } from './routingApi'
 import type { Destination, DrivingRoute, Filters, MapSettings, MapVariant, Parking, ParkingLoadStatus, ParkingPalette, ParkingPreference, RankedParking, Screen } from './types'
 
@@ -693,7 +695,7 @@ function HomeView({
           <p className="parking-route-road"><b>↗</b><span><small>Rruga e ardhshme</small><strong>{nextRoad?.roadName ?? selected.address}</strong></span></p>
           <div className="parking-preview-actions">
             <button className="button button--secondary" onClick={onDetails}>Detaje</button>
-            <a className="button button--secondary" href={streetViewHref} target="_blank" rel="noreferrer">Street View</a>
+            <a className="button button--secondary" href={streetViewHref} target="_blank" rel="noreferrer" onClick={(event) => { event.preventDefault(); void handleOpenExternal(streetViewHref) }}>Street View</a>
             <button className="button" onClick={onNavigate}>Shko këtu</button>
           </div>
         </section>
@@ -730,7 +732,7 @@ function HomeView({
               <div className="sheet-primary-actions">
                 <button className="button" onClick={onNavigate}>Shko këtu</button>
                 <button className="button button--secondary" onClick={onDetails}>Detaje</button>
-                <a className="button button--secondary" href={streetViewHref} target="_blank" rel="noreferrer" aria-label={`Hap Street View 360° për ${selected.name}`}>Street View</a>
+                <a className="button button--secondary" href={streetViewHref} target="_blank" rel="noreferrer" onClick={(event) => { event.preventDefault(); void handleOpenExternal(streetViewHref) }} aria-label={`Hap Street View 360° për ${selected.name}`}>Street View</a>
               </div>
             </>
           ) : sheetState === 'medium' ? (
@@ -768,12 +770,14 @@ function HomeView({
   )
 }
 
-function SavedView({ parkings, showDataSources, onHome, onOpen, onSettings }: { parkings: Parking[]; showDataSources: boolean; onHome: () => void; onOpen: (parking: Parking) => void; onSettings: () => void }) {
+function SavedView({ parkings, showDataSources, userLocation, onHome, onOpen, onSettings }: { parkings: Parking[]; showDataSources: boolean; userLocation?: Parking['coordinates']; onHome: () => void; onOpen: (parking: Parking) => void; onSettings: () => void }) {
   return (
     <div className="screen saved-screen">
       <StatusBar />
       <header className="saved-header"><div><small>Parko</small><h1>Parkingjet e ruajtura</h1></div><span>{parkings.length}</span></header>
       <main className="saved-list">
+        <SaveMyParkedLocationCard initialLocation={userLocation} />
+        <SmsTariffHelper />
         {parkings.length ? parkings.map((parking) => (
           <ParkingCard key={parking.id} parking={parking} showSource={showDataSources} onOpen={() => onOpen(parking)} />
         )) : <div className="empty-state"><strong>Nuk ke parkingje të ruajtura</strong><span>Prek ＋ te detajet e një parkingu për ta ruajtur.</span></div>}
@@ -916,7 +920,7 @@ function DetailsView({ parking, report, onReport, route, destination, smartMatch
             </div>
             <p>{parking.usageHours ?? 'Orari specifik nuk është publikuar në të dhënat e këtij parkingu; kontrollo tabelën në hyrje.'}</p>
             <small>{parking.pricingSource === 'official-zone' ? 'Tarifa e vizitorit nga rregullorja zyrtare e zonës.' : parking.pricingSource === 'osm-sign' ? 'Tarifa vjen nga etiketa e publikuar në OpenStreetMap; kontrollo tabelën lokale.' : 'Tarifa nuk supozohet pa të dhëna të verifikueshme.'}</small>
-            <a href={PRISHTINA_PARKING_RULES_URL} target="_blank" rel="noreferrer">Shiko rregullat zyrtare</a>
+            <a href={PRISHTINA_PARKING_RULES_URL} target="_blank" rel="noreferrer" onClick={(event) => { event.preventDefault(); void handleOpenExternal(PRISHTINA_PARKING_RULES_URL) }}>Shiko rregullat zyrtare</a>
           </section>
         ) : (
           <p className="unverified-parking-note"><strong>Jo e konfirmuar si Prishtina Parking.</strong> {parking.pricingSource === 'osm-sign' ? 'Tarifa e shfaqur vjen nga OpenStreetMap; zona zyrtare dhe orari nuk dihen.' : 'Çmimi, zona zyrtare dhe orari nuk plotësohen pa burim të verifikueshëm.'}</p>
@@ -943,7 +947,7 @@ function DetailsView({ parking, report, onReport, route, destination, smartMatch
         </section>
 
         {parking.osmUrl
-          ? <a className="text-button report-link" href={parking.osmUrl} target="_blank" rel="noreferrer">Kontrollo ose korrigjo në OpenStreetMap</a>
+          ? <a className="text-button report-link" href={parking.osmUrl} target="_blank" rel="noreferrer" onClick={(event) => { event.preventDefault(); void handleOpenExternal(parking.osmUrl!) }}>Kontrollo ose korrigjo në OpenStreetMap</a>
           : <span className="text-button report-link report-link--disabled">Burimi nuk ka faqe raportimi</span>}
       </section>
       <div className="details-actions">
@@ -1018,7 +1022,7 @@ function WalkingView({ parking, destination, route, match, directionsHref, userL
       <section className="direction-card direction-card--walking">
         <span className="turn-icon">↑</span>
         <div><small>{isRealRoute ? 'Rutë këmbësorësh' : 'Distancë e përafërt'}</small><strong>Drejt {destination.name}</strong><span>{isRealRoute ? 'Rrugë e llogaritur nga Valhalla' : 'Hap alternativën në Google Maps'}</span></div>
-        <a href={directionsHref} target="_blank" rel="noreferrer" aria-label="Hap udhëzimet e ecjes">↗</a>
+        <a href={directionsHref} target="_blank" rel="noreferrer" onClick={(event) => { event.preventDefault(); void handleOpenExternal(directionsHref) }} aria-label="Hap udhëzimet e ecjes">↗</a>
       </section>
 
       <section className="walking-arrival-card">
@@ -1503,7 +1507,7 @@ export default function App() {
             loadStatus={loadStatus}
           />
         )}
-        {screen === 'saved' && <SavedView parkings={locatedParkings.filter((parking) => savedParkingIds.has(parking.id))} showDataSources={mapSettings.showDataSources} onHome={() => setScreen('home')} onSettings={() => setScreen('settings')} onOpen={(parking) => { setSelected(parking); setDestination(null); setScreen('details') }} />}
+        {screen === 'saved' && <SavedView parkings={locatedParkings.filter((parking) => savedParkingIds.has(parking.id))} showDataSources={mapSettings.showDataSources} userLocation={userLocationInPrishtina ? activeUserLocation : undefined} onHome={() => setScreen('home')} onSettings={() => setScreen('settings')} onOpen={(parking) => { setSelected(parking); setDestination(null); setScreen('details') }} />}
         {screen === 'settings' && <SettingsView settings={mapSettings} preferredType={filters.type as ParkingTypeFilter} walkingMinutes={walkingMinutes} typeCounts={globalTypeCounts} onChange={(value) => setMapSettings(normalizedMapSettings(value))} onPreferredType={(type) => setFilters((current) => ({ ...current, type }))} onWalkingMinutes={setWalkingMinutes} onReset={() => { setMapSettings(DEFAULT_MAP_SETTINGS); setFilters(initialFilters); setWalkingMinutes(10) }} onHome={() => setScreen('home')} onSaved={() => setScreen('saved')} />}
         {screen === 'details' && <DetailsView parking={currentSelected} report={parkingReports[currentSelected.id]} onReport={reportParking} route={route} destination={destination} smartMatch={selectedRankedParking} saved={savedParkingIds.has(currentSelected.id)} userLocation={activeUserLocation} userLocationLive={userLocationInPrishtina} userLocationAccuracy={locationAccuracy} mapSettings={mapSettings} onToggleSaved={toggleSavedParking} onBack={() => setScreen('home')} onNavigate={() => setScreen('navigation')} />}
         {screen === 'navigation' && <NavigationView parking={currentSelected} route={route} userLocation={activeUserLocation} userLocationLive={userLocationInPrishtina} userLocationAccuracy={locationAccuracy} mapSettings={mapSettings} recenterToken={recenterToken} hasDestination={Boolean(destination)} onRecenter={requestUserLocation} onStop={() => setScreen('details')} onArrive={() => setScreen(destination ? 'walking' : 'home')} />}
