@@ -14,6 +14,7 @@ import { handleOpenExternal } from './externalLinks'
 import { captureEvent } from './telemetry'
 import { AlertBanner, LeavingButton, SpotVouching } from './crowdsourcing'
 import { SaveMyParkedLocationCard, SmsTariffHelper } from './DriverTools'
+import Login from './Login'
 import type { DrivingMatrixEntry } from './routingApi'
 import type { Destination, DrivingRoute, Filters, MapSettings, MapVariant, Parking, ParkingLoadStatus, ParkingPalette, ParkingPreference, RankedParking, Screen } from './types'
 
@@ -1050,6 +1051,7 @@ function WalkingView({ parking, destination, route, match, directionsHref, userL
 export default function App() {
   const persistedPreferences = useRef(loadPreferences()).current
   const [screen, setScreen] = useState<Screen>('home')
+  const [showLoginModal, setShowLoginModal] = useState(false)
   const [selected, setSelected] = useState(() => getPrishtinaParkingSnapshot().find((parking) => parking.id === persistedPreferences.selectedParkingId) ?? defaultParking)
   const [filters, setFilters] = useState<Filters>(() => ({ ...initialFilters, ...persistedPreferences.filters }))
   const [mapSettings, setMapSettings] = useState<MapSettings>(() => normalizedMapSettings(persistedPreferences.mapSettings))
@@ -1191,14 +1193,12 @@ export default function App() {
   }, [locationStatus])
 
   useEffect(() => {
-    if (!navigator.geolocation || !navigator.permissions) return
-    let disposed = false
-    navigator.permissions.query({ name: 'geolocation' as PermissionName })
-      .then((permission) => {
-        if (!disposed && permission.state === 'granted') requestUserLocation()
-      })
-      .catch(() => undefined)
-    return () => { disposed = true }
+    if (!navigator.geolocation) return
+    // Request location on app startup
+    const timer = setTimeout(() => {
+      requestUserLocation()
+    }, 500)
+    return () => clearTimeout(timer)
   }, [])
 
   const reportedParkings = useMemo(() => parkings.map((parking) => applyParkingReport(parking, parkingReports[parking.id])), [parkings, parkingReports])
@@ -1466,6 +1466,37 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      <style>{`
+        .login-auth-button {
+          position: fixed;
+          bottom: 24px;
+          right: 24px;
+          z-index: 100;
+          padding: 12px 24px;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          border: none;
+          border-radius: 8px;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+          transition: all 0.3s ease;
+        }
+
+        .login-auth-button:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 15px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        .login-auth-button:active {
+          transform: translateY(0);
+        }
+      `}</style>
+      <button className="login-auth-button" onClick={() => setShowLoginModal(true)}>
+        Log In / Register
+      </button>
+      {showLoginModal && <Login onClose={() => setShowLoginModal(false)} />}
       {!online && <div className="offline-banner" role="status">Je offline — po shfaqim të dhënat e fundit të ruajtura.</div>}
       <div className="phone-frame">
         <IosInstallPrompt />
