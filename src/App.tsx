@@ -9,7 +9,7 @@ import { parkingAccessPoint } from './parkingGeometry'
 import { PRISHTINA_PARKING_RULES_URL } from './prishtinaParkingRules'
 import { loadPreferences, savePreferences } from './persistence'
 import { loadDrivingMatrix, loadDrivingRoute, loadWalkingRoute } from './routingApi'
-import { googleStreetViewUrl, walkingDirectionsUrl } from './streetView'
+import { kartaViewUrl, walkingDirectionsUrl } from './streetView'
 import { handleOpenExternal } from './externalLinks'
 import { captureEvent } from './telemetry'
 import { AlertBanner, LeavingButton, SpotVouching } from './crowdsourcing'
@@ -294,6 +294,29 @@ function ParkingCard({ parking, smartMatch, showSource = true, onOpen }: { parki
   )
 }
 
+function StreetViewPanel({ parking, onClose }: { parking: Parking; onClose: () => void }) {
+  const target = parking.accessPoint ?? parking.coordinates
+  return (
+    <section className="street-view-panel" role="dialog" aria-modal="true" aria-label={`KartaView për ${parking.name}`}>
+      <header>
+        <button type="button" onClick={onClose} aria-label="Mbyll KartaView">×</button>
+        <span>
+          <small>KartaView</small>
+          <strong>{parking.name}</strong>
+        </span>
+      </header>
+      <iframe
+        title={`KartaView ${parking.name}`}
+        src={kartaViewUrl(parking)}
+        loading="lazy"
+        referrerPolicy="strict-origin-when-cross-origin"
+        allow="fullscreen"
+      />
+      <p><b>{target.lat.toFixed(5)}, {target.lng.toFixed(5)}</b><span>{parking.address || 'Lokacioni i parkingut'}</span></p>
+    </section>
+  )
+}
+
 type ParkingTypeFilter = Extract<Filters['type'], 'all' | 'public' | 'private' | 'street' | 'municipal'>
 type ParkingTypeCounts = Record<ParkingTypeFilter, number>
 type ParkingFeatureCounts = {
@@ -459,7 +482,7 @@ function HomeView({
   userLocation,
   onDetails,
   onNavigate,
-  streetViewHref,
+  onStreetView,
   onCloseParkingPreview,
   onSaved,
   onSettings,
@@ -509,7 +532,7 @@ function HomeView({
   userLocation: Parking['coordinates']
   onDetails: () => void
   onNavigate: () => void
-  streetViewHref: string
+  onStreetView: () => void
   onCloseParkingPreview: () => void
   onSaved: () => void
   onSettings: () => void
@@ -854,7 +877,7 @@ function HomeView({
           <p className="parking-route-road"><b>⌖</b><span><small>Adresa e parkingut</small><strong>{selected.address || 'Adresa nuk është konfirmuar'}</strong></span></p>
           <div className="parking-preview-actions">
             <button className="button button--secondary" onClick={onDetails}><AppIcon name="info" size={17} />Detaje</button>
-            <a className="button button--secondary" href={streetViewHref} target="_blank" rel="noreferrer" onClick={(event) => { event.preventDefault(); void handleOpenExternal(streetViewHref) }}><AppIcon name="street" size={17} />Street View</a>
+            <button className="button button--secondary" onClick={onStreetView}><AppIcon name="street" size={17} />Street View</button>
             <button className="button" onClick={onNavigate}><AppIcon name="route" size={17} />Shko këtu</button>
           </div>
         </section>
@@ -915,7 +938,7 @@ function HomeView({
               <div className="sheet-primary-actions">
                 <button className="button" onClick={onNavigate}><AppIcon name="route" size={17} />Shko këtu</button>
                 <button className="button button--secondary" onClick={onDetails}><AppIcon name="info" size={17} />Detaje</button>
-                <a className="button button--secondary" href={streetViewHref} target="_blank" rel="noreferrer" onClick={(event) => { event.preventDefault(); void handleOpenExternal(streetViewHref) }} aria-label={`Hap Street View 360° për ${selected.name}`}><AppIcon name="street" size={17} />Street View</a>
+                <button className="button button--secondary" onClick={onStreetView} aria-label={`Hap KartaView për ${selected.name}`}><AppIcon name="street" size={17} />Street View</button>
               </div>
             </>
           ) : sheetState === 'medium' ? (
@@ -1044,7 +1067,7 @@ function SettingsView({ settings, preferredType, walkingMinutes, typeCounts, onC
   )
 }
 
-function DetailsView({ parking, report, onReport, route, destination, smartMatch, saved, userLocation, userLocationLive, userLocationAccuracy, mapSettings, onToggleSaved, onBack, onNavigate }: { parking: Parking; report?: ParkingReport; onReport: (parkingId: string, patch: ParkingReportPatch) => void; route: DrivingRoute | null; destination: Destination | null; smartMatch?: RankedParking; saved: boolean; userLocation: Parking['coordinates']; userLocationLive: boolean; userLocationAccuracy: number | null; mapSettings: MapSettings; onToggleSaved: () => void; onBack: () => void; onNavigate: () => void }) {
+function DetailsView({ parking, report, onReport, route, destination, smartMatch, saved, userLocation, userLocationLive, userLocationAccuracy, mapSettings, onToggleSaved, onBack, onNavigate, onStreetView }: { parking: Parking; report?: ParkingReport; onReport: (parkingId: string, patch: ParkingReportPatch) => void; route: DrivingRoute | null; destination: Destination | null; smartMatch?: RankedParking; saved: boolean; userLocation: Parking['coordinates']; userLocationLive: boolean; userLocationAccuracy: number | null; mapSettings: MapSettings; onToggleSaved: () => void; onBack: () => void; onNavigate: () => void; onStreetView: () => void }) {
   const [reportOpen, setReportOpen] = useState(false)
   const routeMinutes = route ? Math.max(1, Math.ceil(route.durationSeconds / 60)) : parking.driveMinutes
   const routeDistance = route?.distanceMeters ?? parking.distanceMeters
@@ -1088,7 +1111,7 @@ function DetailsView({ parking, report, onReport, route, destination, smartMatch
             </ol>
           ) : <p>Rruga po përgatitet. Mund të nisësh navigimin sapo të shfaqet vija blu në hartë.</p>}
         </section>
-        <a className="street-view-inline street-view-inline--details" href={googleStreetViewUrl(parking)} target="_blank" rel="noreferrer" aria-label={`Hap Street View 360° për ${parking.name}`}>◎ Hap Street View 360°</a>
+        <button className="street-view-inline street-view-inline--details" onClick={onStreetView} aria-label={`Hap KartaView për ${parking.name}`}>◎ Hap Street View 360°</button>
 
         <h2>Detajet</h2>
         <div className="detail-tags">
@@ -1264,6 +1287,7 @@ export default function App() {
   const [userLocation, setUserLocation] = useState(USER_LOCATION)
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle')
   const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null)
+  const [streetViewParking, setStreetViewParking] = useState<Parking | null>(null)
   const parkingSelectedByUserRef = useRef(false)
   const parkingDetailsAttemptedRef = useRef(new Set<string>())
   const onlineSearchRequestRef = useRef(0)
@@ -1745,7 +1769,7 @@ export default function App() {
             userLocation={activeUserLocation}
             onDetails={() => setScreen('details')}
             onNavigate={() => setScreen('navigation')}
-            streetViewHref={googleStreetViewUrl(currentSelected)}
+            onStreetView={() => setStreetViewParking(currentSelected)}
             onCloseParkingPreview={() => setParkingPreviewOpen(false)}
             onSaved={() => setScreen('saved')}
             onSettings={() => setScreen('settings')}
@@ -1755,9 +1779,10 @@ export default function App() {
         )}
         {screen === 'saved' && <SavedView parkings={locatedParkings.filter((parking) => savedParkingIds.has(parking.id))} showDataSources={mapSettings.showDataSources} userLocation={userLocationInPrishtina ? activeUserLocation : undefined} onHome={() => setScreen('home')} onSettings={() => setScreen('settings')} onOpen={(parking) => { setSelected(parking); setDestination(null); setScreen('details') }} />}
         {screen === 'settings' && <SettingsView settings={mapSettings} preferredType={filters.type as ParkingTypeFilter} walkingMinutes={walkingMinutes} typeCounts={globalTypeCounts} onChange={(value) => setMapSettings(normalizedMapSettings(value))} onPreferredType={(type) => setFilters((current) => ({ ...current, type }))} onWalkingMinutes={setWalkingMinutes} onReset={() => { setMapSettings(DEFAULT_MAP_SETTINGS); setFilters(initialFilters); setWalkingMinutes(10) }} onLogin={() => setShowLoginModal(true)} onHome={() => setScreen('home')} onSaved={() => setScreen('saved')} />}
-        {screen === 'details' && <DetailsView parking={currentSelected} report={parkingReports[currentSelected.id]} onReport={reportParking} route={route} destination={destination} smartMatch={selectedRankedParking} saved={savedParkingIds.has(currentSelected.id)} userLocation={activeUserLocation} userLocationLive={userLocationInPrishtina} userLocationAccuracy={locationAccuracy} mapSettings={mapSettings} onToggleSaved={toggleSavedParking} onBack={() => setScreen('home')} onNavigate={() => setScreen('navigation')} />}
+        {screen === 'details' && <DetailsView parking={currentSelected} report={parkingReports[currentSelected.id]} onReport={reportParking} route={route} destination={destination} smartMatch={selectedRankedParking} saved={savedParkingIds.has(currentSelected.id)} userLocation={activeUserLocation} userLocationLive={userLocationInPrishtina} userLocationAccuracy={locationAccuracy} mapSettings={mapSettings} onToggleSaved={toggleSavedParking} onBack={() => setScreen('home')} onNavigate={() => setScreen('navigation')} onStreetView={() => setStreetViewParking(currentSelected)} />}
         {screen === 'navigation' && <NavigationView parking={currentSelected} route={route} userLocation={activeUserLocation} userLocationLive={userLocationInPrishtina} userLocationAccuracy={locationAccuracy} mapSettings={mapSettings} recenterToken={recenterToken} hasDestination={Boolean(destination)} onRecenter={requestUserLocation} onStop={() => setScreen('details')} onArrive={() => setScreen(destination ? 'walking' : 'home')} />}
         {screen === 'walking' && destination && displayedWalkingRoute && selectedRankedParking && <WalkingView parking={currentSelected} destination={destination} route={displayedWalkingRoute} match={selectedRankedParking} directionsHref={selectedWalkingDirectionsHref} userLocation={activeUserLocation} userLocationLive={userLocationInPrishtina} userLocationAccuracy={locationAccuracy} mapSettings={mapSettings} onFinish={() => setScreen('home')} />}
+        {streetViewParking && <StreetViewPanel parking={streetViewParking} onClose={() => setStreetViewParking(null)} />}
       </div>
       <p className="desktop-caption">Parko • prototip interaktiv për Prishtinën</p>
     </div>

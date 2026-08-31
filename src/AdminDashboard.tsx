@@ -1,995 +1,887 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import L from 'leaflet'
 
-type ParkingType = 'Free' | 'Paid Public' | 'Private' | 'Risky Street'
-type NavKey = 'pending' | 'active' | 'flagged' | 'users'
+type ParkingCategory = 'public' | 'street' | 'prishtina' | 'private'
+type NavKey = 'queue' | 'map' | 'reports' | 'users'
+type RiskLevel = 'low' | 'medium' | 'high'
 
 type SpotSubmission = {
   id: string
-  userName: string
+  anonymousId: string
   submittedAt: string
   city: string
   address: string
-  parkingType: ParkingType
+  category: ParkingCategory
   proposedPrice: number
   lat: number
   lng: number
-  photos: string[]
   notes: string
-  riskLevel: 'low' | 'medium' | 'high'
+  riskLevel: RiskLevel
+  communityVotes: number
+  duplicateSignals: number
 }
 
-const sidebarItems: Array<{ key: NavKey; label: string; count?: number }> = [
-  { key: 'pending', label: 'Pending Approvals', count: 24 },
-  { key: 'active', label: 'Active Spots', count: 318 },
-  { key: 'flagged', label: 'Reported Flagged Spots', count: 12 },
-  { key: 'users', label: 'User Management', count: 1845 },
+const sidebarItems: Array<{ key: NavKey; label: string; count: number }> = [
+  { key: 'queue', label: 'Miratime', count: 24 },
+  { key: 'map', label: 'Harta live', count: 318 },
+  { key: 'reports', label: 'Raporte rreziku', count: 12 },
+  { key: 'users', label: 'Përdorues anonim', count: 1845 },
 ]
 
-const cityOptions = ['All cities', 'Prishtina', 'Prizren', 'Peja', 'Ferizaj', 'Gjakova', 'Mitrovica']
+const cityOptions = ['Të gjitha qytetet', 'Prishtina', 'Prizren', 'Peja', 'Ferizaj', 'Gjakova', 'Mitrovica']
 const rejectionReasons = [
-  'Duplicate listing',
-  'Location not verifiable',
-  'Price not realistic',
-  'Photo does not match site',
-  'Private property without authorization',
-  'Unsafe / hazardous access',
+  'Lokacion i dyfishuar',
+  'Nuk verifikohet në hartë',
+  'Çmimi nuk duket realist',
+  'Qasje private pa leje',
+  'Rrugë e rrezikshme',
 ]
+
+const categoryMeta: Record<ParkingCategory, { label: string; short: string; color: string; soft: string }> = {
+  public: { label: 'Publik', short: 'PUB', color: '#16a66c', soft: '#e8f7f0' },
+  street: { label: 'Në rrugë', short: 'RR', color: '#f59e0b', soft: '#fff5df' },
+  prishtina: { label: 'Prishtina Parking', short: 'PP', color: '#246bfd', soft: '#eef4ff' },
+  private: { label: 'Privat', short: 'PRI', color: '#7c3aed', soft: '#f2edff' },
+}
 
 const submissions: SpotSubmission[] = [
   {
     id: 'PK-2412',
-    userName: 'Ariana N.',
-    submittedAt: 'Today • 09:34',
+    anonymousId: 'Anonim 1432',
+    submittedAt: 'Sot • 09:34',
     city: 'Prishtina',
     address: 'Rr. Ibrahim Rugova 42',
-    parkingType: 'Paid Public',
+    category: 'prishtina',
     proposedPrice: 1.5,
     lat: 42.6629,
     lng: 21.1655,
-    notes: 'Two bays shared with municipal lot. Barrier at entrance is visible and can be used by residents only after 18:00.',
+    notes: 'Dy vende afër parkingut komunal. Rampa shihet te hyrja; duhet verifikuar orari pas 18:00.',
     riskLevel: 'medium',
-    photos: [
-      'https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=900&q=80',
-    ],
+    communityVotes: 17,
+    duplicateSignals: 1,
   },
   {
     id: 'PK-2413',
-    userName: 'Besim H.',
-    submittedAt: 'Today • 08:47',
+    anonymousId: 'Anonim 1488',
+    submittedAt: 'Sot • 08:47',
     city: 'Prizren',
     address: 'Bulevardi Nënë Tereza 14',
-    parkingType: 'Private',
+    category: 'private',
     proposedPrice: 0,
     lat: 42.2139,
     lng: 20.7368,
-    notes: 'Private lot behind hotel entrance with good visibility from road. Barrier gate is half-open during daytime.',
+    notes: 'Hapësirë private pas hyrjes së hotelit. Duket aktive gjatë ditës, por kërkon kontroll të lejes.',
     riskLevel: 'low',
-    photos: [
-      'https://images.unsplash.com/photo-1553440569-bcc63803a83d?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1503736334956-4c8f8e92946d?auto=format&fit=crop&w=900&q=80',
-    ],
+    communityVotes: 9,
+    duplicateSignals: 0,
   },
   {
     id: 'PK-2414',
-    userName: 'Liridona G.',
-    submittedAt: 'Yesterday • 17:11',
+    anonymousId: 'Anonim 1501',
+    submittedAt: 'Dje • 17:11',
     city: 'Peja',
-    address: 'Sheshi Qendrore, near market stairwell',
-    parkingType: 'Free',
+    address: 'Sheshi Qendror, afër tregut',
+    category: 'public',
     proposedPrice: 0,
     lat: 42.6596,
     lng: 20.2889,
-    notes: 'Public curb space near a pedestrian zone. Street is narrow, but there is a clear gray line and no no-parking sign.',
+    notes: 'Hapësirë publike buzë trotuarit. Rruga është e ngushtë, por sinjalistika nuk ndalon parkimin.',
     riskLevel: 'low',
-    photos: [
-      'https://images.unsplash.com/photo-1507146426996-ef05306b995a?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=900&q=80',
-    ],
+    communityVotes: 21,
+    duplicateSignals: 0,
   },
   {
     id: 'PK-2415',
-    userName: 'Endrit B.',
-    submittedAt: 'Yesterday • 13:52',
+    anonymousId: 'Anonim 1516',
+    submittedAt: 'Dje • 13:52',
     city: 'Ferizaj',
-    address: 'Rr. Agim Ramadani 7, behind clinic',
-    parkingType: 'Risky Street',
+    address: 'Rr. Agim Ramadani 7',
+    category: 'street',
     proposedPrice: 2,
     lat: 42.375,
     lng: 21.1504,
-    notes: 'The lane is narrow and adjacent to bus stop. Users may be ticketed; need higher visibility and restriction signage.',
+    notes: 'Korsi e ngushtë pranë stacionit të autobusit. Duhet shënuar si zonë me rrezik gjobe.',
     riskLevel: 'high',
-    photos: [
-      'https://images.unsplash.com/photo-1493238792000-8113da705763?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1525609004556-c46c7d6cf023?auto=format&fit=crop&w=900&q=80',
-    ],
+    communityVotes: 6,
+    duplicateSignals: 2,
   },
   {
     id: 'PK-2416',
-    userName: 'Mimoza K.',
-    submittedAt: 'Mon • 11:20',
+    anonymousId: 'Anonim 1579',
+    submittedAt: 'Hën • 11:20',
     city: 'Prishtina',
     address: 'Rr. Luan Haradinaj 16',
-    parkingType: 'Paid Public',
+    category: 'public',
     proposedPrice: 1.2,
     lat: 42.6556,
     lng: 21.1637,
-    notes: 'Garage access is via neon-lit side lane. Service gate is only partly visible from road and could require verification in person.',
+    notes: 'Garazh me hyrje nga rruga anësore. Çmimi është raportuar nga komuniteti, por duhet konfirmuar tabela.',
     riskLevel: 'medium',
-    photos: [
-      'https://images.unsplash.com/photo-1511919884226-fd3cad34687c?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1523217582562-09d0def993a6?auto=format&fit=crop&w=900&q=80',
-      'https://images.unsplash.com/photo-1544636331-e26879cd4d9b?auto=format&fit=crop&w=900&q=80',
-    ],
+    communityVotes: 14,
+    duplicateSignals: 1,
   },
 ]
 
 const styles = `
   .admin-dashboard {
-    --bg: #edf2f9;
+    --admin-bg: #edf1f5;
     --surface: #ffffff;
-    --surface-muted: #f4f7fb;
-    --surface-strong: #e9eef7;
-    --line: #dde6f2;
-    --primary: #285ef7;
-    --primary-soft: #eaf1ff;
-    --success: #25b574;
-    --success-soft: #e8faf1;
-    --warning: #ffb020;
-    --warning-soft: #fff4dd;
-    --danger: #ef4d60;
-    --danger-soft: #ffe8ec;
-    --text: #122033;
-    --text-muted: #5f7288;
-    --shadow: 0 16px 40px rgba(18, 32, 51, 0.12);
-  }
-
-  * { box-sizing: border-box; }
-
-  .admin-dashboard {
+    --surface-soft: #f6f8fb;
+    --line: #e1e8f0;
+    --primary: #246bfd;
+    --primary-soft: #eef4ff;
+    --success: #16a66c;
+    --warning: #f59e0b;
+    --danger: #df4a5b;
+    --ink: #102033;
+    --muted: #66758a;
     min-height: 100vh;
     width: 100%;
-    background:
-      radial-gradient(circle at top left, rgba(40, 94, 247, 0.08), transparent 24%),
-      linear-gradient(180deg, #f5f8fc 0%, var(--bg) 100%);
-    color: var(--text);
+    padding: 18px;
+    background: var(--admin-bg);
+    color: var(--ink);
     font-family: Inter, 'Segoe UI', sans-serif;
-    padding: 28px;
   }
 
-  .dashboard-shell {
-    max-width: 1600px;
+  .admin-dashboard * { box-sizing: border-box; }
+
+  .admin-shell {
+    max-width: 1320px;
     margin: 0 auto;
-    background: rgba(255, 255, 255, 0.6);
-    border: 1px solid rgba(221, 230, 242, 0.9);
-    border-radius: 28px;
-    box-shadow: var(--shadow);
-    backdrop-filter: blur(12px);
-    overflow: hidden;
+    display: grid;
+    gap: 14px;
   }
 
-  .dashboard-header {
+  .admin-topbar {
+    min-height: 72px;
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, .9);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 22px 24px 18px;
-    background: rgba(255, 255, 255, 0.78);
-    border-bottom: 1px solid var(--line);
+    gap: 12px;
+    box-shadow: 0 8px 24px rgba(16, 32, 51, .07);
   }
 
-  .header-title-wrap {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+  .admin-title {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
   }
 
-  .eyebrow {
-    font-size: 11px;
+  .admin-title small,
+  .panel-kicker,
+  .queue-header small,
+  .tool-card small,
+  .detail-item small {
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 850;
     text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: var(--text-muted);
-    font-weight: 800;
+    letter-spacing: .06em;
   }
 
-  .header-title {
-    font-size: 28px;
-    letter-spacing: -0.06em;
-    font-weight: 800;
+  .admin-title h1 {
     margin: 0;
+    font-size: 24px;
+    letter-spacing: 0;
+    line-height: 1.05;
   }
 
-  .header-actions {
+  .admin-actions {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
-  .ghost-button,
-  .primary-button,
-  .danger-button,
-  .highlight-button {
-    appearance: none;
-    border: none;
-    border-radius: 12px;
-    font-weight: 700;
-    cursor: pointer;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  .admin-button,
+  .admin-select,
+  .nav-item,
+  .queue-card {
+    font: inherit;
   }
 
-  .ghost-button:hover,
-  .primary-button:hover,
-  .danger-button:hover,
-  .highlight-button:hover { transform: translateY(-1px); }
-
-  .ghost-button {
-    background: var(--surface-muted);
-    color: var(--text);
+  .admin-button {
+    min-height: 42px;
+    padding: 0 14px;
     border: 1px solid var(--line);
-    padding: 10px 14px;
+    border-radius: 12px;
+    background: #fff;
+    color: var(--ink);
+    font-size: 12px;
+    font-weight: 850;
   }
 
-  .primary-button {
+  .admin-button--primary {
+    border-color: var(--primary);
     background: var(--primary);
     color: #fff;
-    box-shadow: 0 10px 22px rgba(40, 94, 247, 0.22);
-    padding: 10px 18px;
+    box-shadow: 0 8px 20px rgba(36, 107, 253, .18);
   }
 
-  .danger-button {
-    background: var(--danger-soft);
-    color: #a12e40;
-    padding: 10px 18px;
+  .admin-button--danger {
+    border-color: #ffd3da;
+    background: #fff0f2;
+    color: #a83243;
   }
 
-  .highlight-button {
-    background: var(--warning-soft);
-    color: #925f00;
-    padding: 10px 18px;
+  .admin-button--warning {
+    border-color: #ffe3ad;
+    background: #fff6e5;
+    color: #8b5b00;
   }
 
-  .metrics-bar {
+  .metrics-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(200px, 1fr));
-    gap: 16px;
-    padding: 18px 24px 0;
-    background: rgba(255, 255, 255, 0.56);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
   }
 
   .metric-card {
-    background: linear-gradient(180deg, #fff 0%, #f8fbff 100%);
+    min-height: 96px;
+    padding: 13px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--surface);
+    display: grid;
+    align-content: space-between;
+    gap: 10px;
+  }
+
+  .metric-card span {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 850;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+
+  .metric-card i,
+  .queue-dot,
+  .map-marker {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--metric-color, var(--primary));
+  }
+
+  .metric-card strong {
+    font-size: 27px;
+    line-height: 1;
+  }
+
+  .metric-card small {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 750;
+  }
+
+  .admin-layout {
+    display: grid;
+    grid-template-columns: 290px minmax(0, 1fr);
+    gap: 14px;
+    align-items: start;
+  }
+
+  .admin-sidebar,
+  .admin-main,
+  .map-panel,
+  .tools-panel {
     border: 1px solid var(--line);
     border-radius: 18px;
-    padding: 16px 18px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    background: rgba(255, 255, 255, .92);
+    box-shadow: 0 8px 24px rgba(16, 32, 51, .06);
   }
 
-  .metric-label {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    color: var(--text-muted);
-    font-size: 12px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-  }
-
-  .metric-value {
-    font-size: clamp(26px, 2vw, 34px);
-    font-weight: 800;
-    letter-spacing: -0.06em;
-  }
-
-  .metric-meta {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--text-muted);
-    font-size: 12px;
-    font-weight: 600;
-  }
-
-  .metric-dot {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    background: var(--primary);
-  }
-
-  .metric-dot.success { background: var(--success); }
-  .metric-dot.warning { background: var(--warning); }
-
-  .layout {
+  .admin-sidebar {
+    padding: 12px;
     display: grid;
-    grid-template-columns: 350px minmax(0, 1fr);
-    min-height: 780px;
-    padding: 18px 20px 20px;
-    gap: 20px;
-  }
-
-  .sidebar {
-    background: rgba(255, 255, 255, 0.82);
-    border: 1px solid var(--line);
-    border-radius: 24px;
-    padding: 18px 16px 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .sidebar-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 6px 8px;
-  }
-
-  .sidebar-header h3 {
-    margin: 0;
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--text-muted);
-  }
-
-  .sidebar-badge {
-    background: var(--primary-soft);
-    color: var(--primary);
-    padding: 6px 8px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 800;
+    gap: 12px;
+    position: sticky;
+    top: 12px;
   }
 
   .nav-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    display: grid;
+    gap: 6px;
   }
 
   .nav-item {
+    width: 100%;
+    min-height: 46px;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: #3a4b61;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    padding: 12px 14px;
-    border-radius: 14px;
-    border: 1px solid transparent;
-    background: transparent;
-    color: var(--text);
-    font-weight: 700;
+    gap: 10px;
     text-align: left;
-    width: 100%;
+    font-size: 12px;
+    font-weight: 850;
   }
 
   .nav-item.active {
     background: var(--primary-soft);
-    border-color: rgba(40, 94, 247, 0.12);
-    color: var(--primary);
+    color: #174ebd;
   }
 
-  .nav-item .label {
-    display: flex;
+  .nav-item span:first-child {
+    display: inline-flex;
     align-items: center;
-    gap: 10px;
-  }
-
-  .nav-swatch {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: currentColor;
-    opacity: 0.8;
+    gap: 8px;
   }
 
   .nav-count {
     min-width: 28px;
-    height: 24px;
+    height: 22px;
+    padding: 0 7px;
     border-radius: 999px;
-    background: var(--surface-strong);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    font-weight: 800;
-    color: var(--text);
-  }
-
-  .nav-item.active .nav-count {
-    background: rgba(40, 94, 247, 0.12);
-    color: var(--primary);
+    background: #f0f3f7;
+    display: grid;
+    place-content: center;
+    color: #5f6f83;
+    font-size: 10px;
   }
 
   .filter-panel {
-    margin-top: 8px;
-    background: var(--surface-muted);
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    padding: 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+    padding: 10px;
+    border-radius: 14px;
+    background: var(--surface-soft);
+    display: grid;
+    gap: 8px;
   }
 
-  .search-box {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: #fff;
+  .admin-input,
+  .admin-select {
+    width: 100%;
+    min-height: 42px;
     border: 1px solid var(--line);
     border-radius: 12px;
-    padding: 9px 12px;
-  }
-
-  .search-box input {
-    flex: 1;
-    border: none;
-    outline: none;
-    background: transparent;
-    color: var(--text);
-    font: inherit;
-  }
-
-  .select-box {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
     background: #fff;
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 9px 12px;
-    color: var(--text);
-  }
-
-  .select-box select {
-    width: 100%;
-    border: none;
-    background: transparent;
-    color: var(--text);
-    font: inherit;
-    outline: none;
+    color: var(--ink);
+    padding: 0 11px;
+    outline: 0;
+    font-size: 12px;
+    font-weight: 750;
   }
 
   .queue-panel {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
+    display: grid;
+    gap: 8px;
   }
 
   .queue-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 12px;
-    padding: 6px 2px;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 2px 2px 0;
   }
 
-  .queue-header h3 {
+  .queue-header h2,
+  .section-title {
     margin: 0;
     font-size: 15px;
-  }
-
-  .queue-header span {
-    color: var(--text-muted);
-    font-size: 12px;
-    font-weight: 700;
+    letter-spacing: 0;
   }
 
   .queue-list {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+    max-height: 460px;
     overflow: auto;
-    padding-right: 4px;
-  }
-
-  .submission-card {
-    background: #fff;
-    border: 1px solid var(--line);
-    border-radius: 18px;
-    padding: 14px 14px 12px;
     display: grid;
-    gap: 12px;
-    cursor: pointer;
-    transition: border 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+    gap: 8px;
+    padding-right: 2px;
   }
 
-  .submission-card:hover {
-    transform: translateY(-1px);
-  }
-
-  .submission-card.active {
-    border-color: rgba(40, 94, 247, 0.35);
-    box-shadow: 0 10px 24px rgba(40, 94, 247, 0.08);
-    background: linear-gradient(180deg, #ffffff 0%, #f6f9ff 100%);
-  }
-
-  .submission-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-  }
-
-  .submission-meta {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .avatar {
-    width: 38px;
-    height: 38px;
-    border-radius: 12px;
-    background: linear-gradient(135deg, #d9e5ff, #eef3ff);
-    color: var(--primary);
-    display: grid;
-    place-items: center;
-    font-size: 14px;
-    font-weight: 800;
-  }
-
-  .submission-name {
-    font-weight: 800;
-    font-size: 15px;
-  }
-
-  .submission-time {
-    color: var(--text-muted);
-    font-size: 11px;
-    font-weight: 600;
-  }
-
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 999px;
-    padding: 6px 10px;
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-
-  .chip.low { background: var(--success-soft); color: #138355; }
-  .chip.medium { background: var(--warning-soft); color: #986500; }
-  .chip.high { background: var(--danger-soft); color: #a72f41; }
-
-  .meta-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px 12px;
-    color: var(--text-muted);
-    font-size: 12px;
-    font-weight: 600;
-  }
-
-  .meta-grid strong {
-    color: var(--text);
-  }
-
-  .content-panel {
-    background: rgba(255, 255, 255, 0.82);
-    border: 1px solid var(--line);
-    border-radius: 24px;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .inspection-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 18px 20px 12px;
-    border-bottom: 1px solid var(--line);
-    background: rgba(255, 255, 255, 0.8);
-  }
-
-  .submission-id {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-weight: 800;
-  }
-
-  .submission-id .tag {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--success);
-    box-shadow: 0 0 0 5px rgba(37, 181, 116, 0.12);
-  }
-
-  .header-right {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .status-pill {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    padding: 7px 10px;
-    background: var(--warning-soft);
-    color: #986500;
-  }
-
-  .status-pill.success {
-    background: var(--success-soft);
-    color: #138355;
-  }
-
-  .inspection-body {
-    display: grid;
-    grid-template-columns: minmax(0, 1.18fr) minmax(0, 1.1fr);
-    min-height: 0;
-    gap: 0;
-    flex: 1;
-  }
-
-  .detail-column,
-  .verification-column {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-  }
-
-  .detail-column {
-    border-right: 1px solid var(--line);
-  }
-
-  .detail-panel,
-  .verification-panel {
-    padding: 18px 20px;
-    min-height: 0;
-  }
-
-  .detail-panel {
-    display: grid;
-    gap: 18px;
-    overflow: auto;
-  }
-
-  .spot-summary {
-    display: grid;
-    gap: 16px;
-  }
-
-  .summary-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .summary-title {
-    margin: 0;
-    font-size: 24px;
-    letter-spacing: -0.04em;
-  }
-
-  .price-tag {
-    background: var(--success-soft);
-    color: #0c7d4f;
-    padding: 8px 10px;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: 800;
-  }
-
-  .summary-address {
-    color: var(--text-muted);
-    font-size: 14px;
-    font-weight: 600;
-  }
-
-  .summary-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
-  }
-
-  .summary-item {
-    background: var(--surface-muted);
+  .queue-card {
+    padding: 10px;
     border: 1px solid var(--line);
     border-radius: 14px;
-    padding: 12px;
+    background: #fff;
+    color: var(--ink);
+    display: grid;
+    gap: 8px;
+    text-align: left;
+  }
+
+  .queue-card.active {
+    border-color: #a7c0ff;
+    background: #f7faff;
+    box-shadow: inset 0 0 0 1px rgba(36, 107, 253, .1);
+  }
+
+  .queue-card__top,
+  .detail-title,
+  .panel-header {
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .queue-card__identity {
+    min-width: 0;
+    display: flex;
+    align-items: center;
     gap: 8px;
   }
 
-  .summary-item .label {
-    color: var(--text-muted);
+  .queue-avatar {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    border-radius: 11px;
+    background: #eef4ff;
+    color: #174ebd;
+    display: grid;
+    place-content: center;
     font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 0.08em;
+    font-weight: 900;
+  }
+
+  .queue-card b {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+
+  .queue-card small,
+  .queue-card__meta {
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 750;
+  }
+
+  .queue-card__meta {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 8px;
+  }
+
+  .chip {
+    min-height: 24px;
+    padding: 0 8px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: 900;
     text-transform: uppercase;
+    letter-spacing: .04em;
+    white-space: nowrap;
   }
 
-  .summary-item .value {
-    font-size: 17px;
-    font-weight: 800;
-    letter-spacing: -0.04em;
+  .chip.low { background: #e8f7f0; color: #10764d; }
+  .chip.medium { background: #fff5df; color: #8b5b00; }
+  .chip.high { background: #fff0f2; color: #a83243; }
+
+  .admin-main {
+    overflow: hidden;
   }
 
-  .submission-notes {
-    background: var(--surface-muted);
-    border: 1px solid var(--line);
-    border-radius: 18px;
+  .main-grid {
+    display: grid;
+    grid-template-columns: minmax(0, .98fr) minmax(0, 1.02fr);
+    min-height: 640px;
+  }
+
+  .review-panel,
+  .verification-panel {
+    min-width: 0;
     padding: 16px;
     display: grid;
-    gap: 10px;
+    align-content: start;
+    gap: 14px;
   }
 
-  .submission-notes h4,
-  .verification-panel h4,
-  .gallery-header h4 {
-    margin: 0;
-    font-size: 13px;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
+  .review-panel {
+    border-right: 1px solid var(--line);
   }
 
-  .submission-notes p {
+  .panel-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .detail-title h2 {
+    min-width: 0;
     margin: 0;
-    color: var(--text);
-    line-height: 1.6;
+    overflow-wrap: anywhere;
+    font-size: 22px;
+    line-height: 1.12;
+    letter-spacing: 0;
+  }
+
+  .price-tag {
+    flex: 0 0 auto;
+    min-height: 30px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: #e8f7f0;
+    color: #10764d;
+    display: grid;
+    place-content: center;
+    font-size: 11px;
+    font-weight: 900;
+  }
+
+  .detail-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+
+  .category-pill {
+    --pill-color: #246bfd;
+    --pill-soft: #eef4ff;
+    min-height: 28px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: var(--pill-soft);
+    color: var(--pill-color);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 900;
+  }
+
+  .detail-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .detail-item,
+  .notes-panel,
+  .tool-card {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface-soft);
+    padding: 12px;
+  }
+
+  .detail-item {
+    display: grid;
+    gap: 6px;
+  }
+
+  .detail-item strong {
+    overflow-wrap: anywhere;
     font-size: 14px;
   }
 
-  .verification-panel {
+  .notes-panel {
     display: grid;
-    gap: 18px;
-    overflow: auto;
+    gap: 8px;
   }
 
-  .streetview-box {
-    border-radius: 18px;
+  .notes-panel h3,
+  .map-panel h3,
+  .tools-panel h3 {
+    margin: 0;
+    font-size: 13px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+
+  .notes-panel p {
+    margin: 0;
+    color: #26384e;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .map-panel {
     overflow: hidden;
-    border: 1px solid var(--line);
-    background: #eef3f8;
-    box-shadow: inset 0 0 0 1px rgba(18, 32, 51, 0.03);
   }
 
-  .streetview-box iframe {
-    display: block;
-    width: 100%;
-    height: 250px;
-    border: 0;
-    background: #dce7f3;
+  .map-panel .panel-header,
+  .tools-panel .panel-header {
+    min-height: 50px;
+    padding: 12px;
+    border-bottom: 1px solid var(--line);
   }
 
-  .gallery-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+  .community-map {
+    height: 298px;
+    background: #dfe8ef;
   }
 
-  .gallery-grid {
+  .community-map .leaflet-control-attribution {
+    max-width: 145px;
+    font-size: 8px;
+    opacity: .72;
+  }
+
+  .map-marker {
+    width: 28px;
+    height: 28px;
+    border: 3px solid #fff;
+    box-shadow: 0 5px 14px rgba(16, 32, 51, .25);
+  }
+
+  .map-marker--active {
+    width: 34px;
+    height: 34px;
+    box-shadow: 0 0 0 7px rgba(36, 107, 253, .16), 0 7px 18px rgba(16, 32, 51, .3);
+  }
+
+  .map-caption {
+    padding: 10px 12px 12px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 750;
+  }
+
+  .tools-panel {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-  }
-
-  .photo-tile {
-    position: relative;
-    aspect-ratio: 1.1 / 1;
-    border-radius: 14px;
     overflow: hidden;
-    border: 1px solid var(--line);
-    background: #edf3ff;
   }
 
-  .photo-tile img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
+  .tool-grid {
+    padding: 12px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .tool-card {
+    min-height: 86px;
+    display: grid;
+    align-content: space-between;
+    gap: 7px;
+  }
+
+  .tool-card strong {
+    font-size: 13px;
   }
 
   .action-bar {
+    padding: 14px 16px 16px;
+    border-top: 1px solid var(--line);
+    background: #f8fafc;
     display: flex;
     flex-wrap: wrap;
-    gap: 12px;
-    padding: 18px 20px 20px;
-    border-top: 1px solid var(--line);
-    background: rgba(248, 251, 255, 0.9);
-  }
-
-  .approve-button {
-    background: linear-gradient(180deg, #2d6af7 0%, #1e56e5 100%);
-    color: #fff;
-    padding: 13px 18px;
-    border-radius: 12px;
-    font-weight: 800;
-    box-shadow: 0 12px 24px rgba(40, 94, 247, 0.18);
+    gap: 8px;
   }
 
   .reject-select {
-    min-width: 220px;
-    background: #fff;
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 12px 14px;
-    color: var(--text);
-    font: inherit;
-    outline: none;
+    min-width: 210px;
+    flex: 1;
   }
 
-  .flag-button {
-    background: var(--warning-soft);
-    color: #925f00;
-    padding: 13px 18px;
-    border-radius: 12px;
-    font-weight: 800;
+  @media (max-width: 1040px) {
+    .metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .admin-layout { grid-template-columns: 1fr; }
+    .admin-sidebar { position: static; }
+    .nav-list { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .queue-list { grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: none; }
   }
 
-  @media (max-width: 1180px) {
-    .layout {
-      grid-template-columns: 300px minmax(0, 1fr);
-    }
-
-    .inspection-body {
-      grid-template-columns: 1fr;
-    }
-
-    .detail-column {
-      border-right: none;
-      border-bottom: 1px solid var(--line);
-    }
+  @media (max-width: 780px) {
+    .admin-dashboard { padding: 10px; }
+    .admin-topbar { align-items: flex-start; flex-direction: column; border-radius: 16px; }
+    .admin-actions { width: 100%; justify-content: stretch; }
+    .admin-actions .admin-button { flex: 1; }
+    .main-grid { grid-template-columns: 1fr; min-height: 0; }
+    .review-panel { border-right: 0; border-bottom: 1px solid var(--line); }
+    .nav-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .queue-list { grid-template-columns: 1fr; }
+    .detail-grid { grid-template-columns: 1fr; }
+    .tool-grid { grid-template-columns: 1fr; }
+    .community-map { height: 250px; }
   }
 
-  @media (max-width: 960px) {
-    .admin-dashboard {
-      padding: 12px;
+  @media (max-width: 440px) {
+    .admin-dashboard { padding: 0; }
+    .admin-shell { gap: 10px; }
+    .admin-topbar,
+    .admin-sidebar,
+    .admin-main {
+      border-left: 0;
+      border-right: 0;
+      border-radius: 0;
     }
-
-    .metrics-bar {
-      grid-template-columns: 1fr;
-    }
-
-    .layout {
-      grid-template-columns: 1fr;
-    }
+    .metrics-grid { grid-template-columns: 1fr 1fr; padding: 0 8px; gap: 8px; }
+    .metric-card { min-height: 84px; padding: 10px; }
+    .metric-card strong { font-size: 22px; }
+    .metric-card span { font-size: 8px; }
+    .admin-sidebar { padding: 10px; }
+    .nav-item { min-height: 42px; padding: 7px 8px; font-size: 11px; }
+    .review-panel,
+    .verification-panel { padding: 12px; }
+    .detail-title { align-items: flex-start; flex-direction: column; }
+    .detail-title h2 { font-size: 19px; }
+    .action-bar { display: grid; grid-template-columns: 1fr; }
+    .reject-select { min-width: 0; }
   }
 `
 
 function formatPrice(price: number) {
-  return price === 0 ? 'Free' : `€${price.toFixed(2)}`
+  return price === 0 ? 'Falas' : `${price.toFixed(2)} €/orë`
 }
 
-type MetricCardProps = {
-  label: string
-  value: string
-  meta: string
-  tone: 'primary' | 'success' | 'warning'
+function categoryCount(category: ParkingCategory) {
+  return submissions.filter((item) => item.category === category).length
 }
 
-function MetricCard({ label, value, meta, tone }: MetricCardProps) {
+function riskLabel(risk: RiskLevel) {
+  return {
+    low: 'Ulët',
+    medium: 'Mesëm',
+    high: 'Lartë',
+  }[risk]
+}
+
+function MetricCard({ label, value, meta, color }: { label: string; value: string; meta: string; color: string }) {
   return (
-    <div className="metric-card">
-      <div className="metric-label">
-        <span>{label}</span>
-        <span className={`metric-dot ${tone}`} />
-      </div>
-      <div className="metric-value">{value}</div>
-      <div className="metric-meta">
-        <span>{meta}</span>
-      </div>
-    </div>
+    <article className="metric-card" style={{ '--metric-color': color } as React.CSSProperties}>
+      <span>{label}<i /></span>
+      <strong>{value}</strong>
+      <small>{meta}</small>
+    </article>
   )
 }
 
-type SidebarNavItemProps = {
-  label: string
-  count: number
-  active: boolean
-  onClick: () => void
+function CategoryPill({ category }: { category: ParkingCategory }) {
+  const meta = categoryMeta[category]
+  return (
+    <span className="category-pill" style={{ '--pill-color': meta.color, '--pill-soft': meta.soft } as React.CSSProperties}>
+      <i className="queue-dot" style={{ background: meta.color }} />
+      {meta.label}
+    </span>
+  )
 }
 
-function SidebarNavItem({ label, count, active, onClick }: SidebarNavItemProps) {
+function SidebarNavItem({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
   return (
     <button type="button" className={`nav-item ${active ? 'active' : ''}`} onClick={onClick}>
-      <span className="label">
-        <span className="nav-swatch" />
-        {label}
-      </span>
+      <span><span className="queue-dot" />{label}</span>
       <span className="nav-count">{count}</span>
     </button>
   )
 }
 
-type SubmissionCardProps = {
-  submission: SpotSubmission
-  active: boolean
-  onSelect: () => void
-}
-
-function SubmissionCard({ submission, active, onSelect }: SubmissionCardProps) {
+function SubmissionCard({ submission, active, onSelect }: { submission: SpotSubmission; active: boolean; onSelect: () => void }) {
+  const meta = categoryMeta[submission.category]
   return (
-    <div
-      className={`submission-card ${active ? 'active' : ''}`}
-      onClick={onSelect}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault()
-          onSelect()
-        }
-      }}
-    >
-      <div className="submission-top">
-        <div className="submission-meta">
-          <div className="avatar">{submission.userName.charAt(0)}</div>
-          <div>
-            <div className="submission-name">{submission.userName}</div>
-            <div className="submission-time">{submission.submittedAt}</div>
-          </div>
-        </div>
-        <span className={`chip ${submission.riskLevel}`}>{submission.riskLevel}</span>
-      </div>
-
-      <div className="meta-grid">
-        <div><strong>{submission.parkingType}</strong></div>
-        <div><strong>{formatPrice(submission.proposedPrice)}</strong></div>
-        <div>{submission.city}</div>
-        <div>{submission.id}</div>
-      </div>
-    </div>
+    <button type="button" className={`queue-card ${active ? 'active' : ''}`} onClick={onSelect}>
+      <span className="queue-card__top">
+        <span className="queue-card__identity">
+          <span className="queue-avatar">{meta.short}</span>
+          <span>
+            <b>{submission.anonymousId}</b>
+            <small>{submission.submittedAt}</small>
+          </span>
+        </span>
+        <span className={`chip ${submission.riskLevel}`}>{riskLabel(submission.riskLevel)}</span>
+      </span>
+      <span className="queue-card__meta">
+        <span>{meta.label}</span>
+        <strong>{formatPrice(submission.proposedPrice)}</strong>
+        <span>{submission.city}</span>
+        <span>{submission.id}</span>
+      </span>
+    </button>
   )
 }
 
-function StreetViewEmbed({ lat, lng }: { lat: number; lng: number }) {
-  return (
-    <div className="streetview-box">
-      <iframe
-        title="Street View verification"
-        src={`https://www.google.com/maps?q=${lat},${lng}&z=18&layer=c&cbll=${lat},${lng}&cbp=11,0,0,0,0&output=embed`}
-        loading="lazy"
-        allowFullScreen
-      />
-    </div>
-  )
+function CommunityMapPreview({ items, selectedId, onSelect }: { items: SpotSubmission[]; selectedId: string; onSelect: (id: string) => void }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const mapRef = useRef<L.Map | null>(null)
+  const layerRef = useRef<L.LayerGroup | null>(null)
+  const onSelectRef = useRef(onSelect)
+  onSelectRef.current = onSelect
+
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) return
+    const map = L.map(containerRef.current, {
+      center: [42.6629, 21.1655],
+      zoom: 13,
+      minZoom: 8,
+      zoomControl: false,
+      attributionControl: false,
+    })
+    L.control.zoom({ position: 'topright' }).addTo(map)
+    L.control.attribution({ position: 'bottomright', prefix: false }).addTo(map)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: 'Harta: OpenStreetMap',
+    }).addTo(map)
+    layerRef.current = L.layerGroup().addTo(map)
+    mapRef.current = map
+    window.setTimeout(() => map.invalidateSize(), 0)
+    return () => {
+      map.remove()
+      mapRef.current = null
+      layerRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    const map = mapRef.current
+    const layer = layerRef.current
+    if (!map || !layer) return
+    layer.clearLayers()
+    const bounds: L.LatLngTuple[] = []
+    items.forEach((item) => {
+      const meta = categoryMeta[item.category]
+      const active = item.id === selectedId
+      const icon = L.divIcon({
+        className: '',
+        html: `<span class="map-marker${active ? ' map-marker--active' : ''}" style="background:${meta.color}"></span>`,
+        iconSize: active ? [34, 34] : [28, 28],
+        iconAnchor: active ? [17, 17] : [14, 14],
+      })
+      const marker = L.marker([item.lat, item.lng], { icon, title: `${item.id} · ${meta.label}` })
+      marker.on('click', () => onSelectRef.current(item.id))
+      marker.bindTooltip(`${item.id} · ${meta.label}`, { direction: 'top' })
+      marker.addTo(layer)
+      bounds.push([item.lat, item.lng])
+    })
+    if (bounds.length === 1) map.setView(bounds[0], 15, { animate: false })
+    if (bounds.length > 1) map.fitBounds(bounds, { padding: [28, 28], maxZoom: 14, animate: false })
+  }, [items, selectedId])
+
+  return <div ref={containerRef} className="community-map" aria-label="Harta e komunitetit me parkingje të raportuara" />
 }
 
 export default function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState<NavKey>('pending')
+  const [activeTab, setActiveTab] = useState<NavKey>('queue')
   const [searchTerm, setSearchTerm] = useState('')
-  const [cityFilter, setCityFilter] = useState('All cities')
+  const [cityFilter, setCityFilter] = useState(cityOptions[0])
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [rejectReason, setRejectReason] = useState(rejectionReasons[0])
 
   const filteredSubmissions = useMemo(() => {
     const term = searchTerm.trim().toLowerCase()
     return submissions.filter((item) => {
-      const cityMatches = cityFilter === 'All cities' || item.city === cityFilter
+      const cityMatches = cityFilter === cityOptions[0] || item.city === cityFilter
       const textMatches =
         term.length === 0 ||
-        item.userName.toLowerCase().includes(term) ||
         item.address.toLowerCase().includes(term) ||
         item.city.toLowerCase().includes(term) ||
-        item.id.toLowerCase().includes(term)
+        item.id.toLowerCase().includes(term) ||
+        item.anonymousId.toLowerCase().includes(term) ||
+        categoryMeta[item.category].label.toLowerCase().includes(term)
       return cityMatches && textMatches
     })
   }, [cityFilter, searchTerm])
@@ -1000,46 +892,14 @@ export default function AdminDashboard() {
     }
   }, [filteredSubmissions.length, selectedIndex])
 
-  useEffect(() => {
-    const onKeydown = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) {
-        return
-      }
-
-      if (event.key.toLowerCase() === 'a') {
-        event.preventDefault()
-        handleApprove()
-      }
-      if (event.key.toLowerCase() === 'r') {
-        event.preventDefault()
-        handleReject()
-      }
-      if (event.key.toLowerCase() === 'n') {
-        event.preventDefault()
-        setSelectedIndex((current) => {
-          if (filteredSubmissions.length === 0) return 0
-          return (current + 1) % filteredSubmissions.length
-        })
-      }
-    }
-
-    window.addEventListener('keydown', onKeydown)
-    return () => window.removeEventListener('keydown', onKeydown)
-  }, [filteredSubmissions.length])
-
   const selectedSubmission = filteredSubmissions[selectedIndex] ?? filteredSubmissions[0] ?? submissions[0]
 
-  const handleApprove = () => {
-    if (!filteredSubmissions.length) return
-    setSelectedIndex((current) => (current + 1) % filteredSubmissions.length)
+  const selectById = (id: string) => {
+    const index = filteredSubmissions.findIndex((item) => item.id === id)
+    if (index >= 0) setSelectedIndex(index)
   }
 
-  const handleReject = () => {
-    if (!filteredSubmissions.length) return
-    setSelectedIndex((current) => (current + 1) % filteredSubmissions.length)
-  }
-
-  const handleFlag = () => {
+  const advanceQueue = () => {
     if (!filteredSubmissions.length) return
     setSelectedIndex((current) => (current + 1) % filteredSubmissions.length)
   }
@@ -1048,175 +908,146 @@ export default function AdminDashboard() {
     <div className="admin-dashboard">
       <style>{styles}</style>
 
-      <div className="dashboard-shell">
-        <header className="dashboard-header">
-          <div className="header-title-wrap">
-            <span className="eyebrow">Community parking OS</span>
-            <h1 className="header-title">Admin Dashboard</h1>
+      <div className="admin-shell">
+        <header className="admin-topbar">
+          <div className="admin-title">
+            <small>Parko Community OS</small>
+            <h1>Admin Dashboard</h1>
           </div>
-
-          <div className="header-actions">
-            <button className="ghost-button" type="button">Export queue</button>
-            <button className="primary-button" type="button">Live sync</button>
+          <div className="admin-actions" aria-label="Veprime të adminit">
+            <button className="admin-button" type="button">Eksporto radhën</button>
+            <button className="admin-button admin-button--primary" type="button">Sinkronizo live</button>
           </div>
         </header>
 
-        <section className="metrics-bar" aria-label="quick metrics">
-          <MetricCard label="Total Pending" value={String(submissions.length)} meta="Queue needs review" tone="primary" />
-          <MetricCard label="Total Approved" value="4,382" meta="+127 this week" tone="success" />
-          <MetricCard label="Spider / Police Alerts" value="18" meta="Today • 5 critical" tone="warning" />
+        <section className="metrics-grid" aria-label="Statistikat kryesore">
+          <MetricCard label="Publike" value={String(categoryCount('public'))} meta="Të hapura për komunitetin" color={categoryMeta.public.color} />
+          <MetricCard label="Në rrugë" value={String(categoryCount('street'))} meta="Kërkojnë kontroll rreziku" color={categoryMeta.street.color} />
+          <MetricCard label="Prishtina Parking" value={String(categoryCount('prishtina'))} meta="Zona zyrtare ose komunal" color={categoryMeta.prishtina.color} />
+          <MetricCard label="Private" value={String(categoryCount('private'))} meta="Shfaqen me qasje të kufizuar" color={categoryMeta.private.color} />
         </section>
 
-        <div className="layout">
-          <aside className="sidebar">
-            <div className="sidebar-header">
-              <h3>Navigation</h3>
-              <span className="sidebar-badge">Ops</span>
-            </div>
-
-            <nav className="nav-list" aria-label="Sidebar navigation">
+        <div className="admin-layout">
+          <aside className="admin-sidebar">
+            <nav className="nav-list" aria-label="Navigimi i adminit">
               {sidebarItems.map((item) => (
-                <SidebarNavItem
-                  key={item.key}
-                  label={item.label}
-                  count={item.count ?? 0}
-                  active={activeTab === item.key}
-                  onClick={() => setActiveTab(item.key)}
-                />
+                <SidebarNavItem key={item.key} label={item.label} count={item.count} active={activeTab === item.key} onClick={() => setActiveTab(item.key)} />
               ))}
             </nav>
 
             <div className="filter-panel">
-              <div className="search-box">
-                <span aria-hidden="true">⌕</span>
-                <input
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Search submissions"
-                  aria-label="Search submissions"
-                />
-              </div>
-
-              <div className="select-box">
-                <label htmlFor="city-filter" style={{ display: 'none' }}>Filter by city</label>
-                <select id="city-filter" value={cityFilter} onChange={(event) => setCityFilter(event.target.value)}>
-                  {cityOptions.map((city) => (
-                    <option key={city} value={city}>{city}</option>
-                  ))}
-                </select>
-              </div>
+              <input
+                className="admin-input"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Kërko lokacion ose ID"
+                aria-label="Kërko raportimet"
+              />
+              <select className="admin-select" value={cityFilter} onChange={(event) => setCityFilter(event.target.value)} aria-label="Filtro sipas qytetit">
+                {cityOptions.map((city) => <option key={city} value={city}>{city}</option>)}
+              </select>
             </div>
 
-            <div className="queue-panel">
+            <section className="queue-panel" aria-label="Radha e raportimeve">
               <div className="queue-header">
-                <h3>Review queue</h3>
-                <span>{filteredSubmissions.length} spots</span>
+                <h2>Radha</h2>
+                <small>{filteredSubmissions.length} lokacione</small>
               </div>
-
               <div className="queue-list">
                 {filteredSubmissions.length === 0 ? (
-                  <div className="submission-card" style={{ color: 'var(--text-muted)', fontWeight: 600 }}>
-                    No submissions match the current filters.
-                  </div>
-                ) : (
-                  filteredSubmissions.map((submission, index) => (
-                    <SubmissionCard
-                      key={submission.id}
-                      submission={submission}
-                      active={index === selectedIndex}
-                      onSelect={() => setSelectedIndex(index)}
-                    />
-                  ))
-                )}
+                  <div className="queue-card"><b>Ska rezultate</b><small>Ndrysho filtrin ose kërkimin.</small></div>
+                ) : filteredSubmissions.map((submission, index) => (
+                  <SubmissionCard
+                    key={submission.id}
+                    submission={submission}
+                    active={index === selectedIndex}
+                    onSelect={() => setSelectedIndex(index)}
+                  />
+                ))}
               </div>
-            </div>
+            </section>
           </aside>
 
-          <main className="content-panel">
-            <div className="inspection-header">
-              <div className="submission-id">
-                <span className="tag" aria-hidden="true" />
-                <span>{selectedSubmission.id}</span>
-              </div>
+          <main className="admin-main">
+            <div className="main-grid">
+              <section className="review-panel" aria-label="Detajet e raportimit">
+                <span className="panel-kicker"><span className="queue-dot" />{selectedSubmission.id} · i verifikuar në mënyrë anonime</span>
+                <div className="detail-title">
+                  <h2>{selectedSubmission.address}</h2>
+                  <span className="price-tag">{formatPrice(selectedSubmission.proposedPrice)}</span>
+                </div>
+                <div className="detail-meta">
+                  <CategoryPill category={selectedSubmission.category} />
+                  <span className={`chip ${selectedSubmission.riskLevel}`}>Rrezik {riskLabel(selectedSubmission.riskLevel)}</span>
+                </div>
 
-              <div className="header-right">
-                <span className="status-pill success">Verified</span>
-                <button className="ghost-button" type="button">Open dossier</button>
-              </div>
+                <div className="detail-grid">
+                  <div className="detail-item">
+                    <small>Raportuesi</small>
+                    <strong>{selectedSubmission.anonymousId}</strong>
+                  </div>
+                  <div className="detail-item">
+                    <small>Koha</small>
+                    <strong>{selectedSubmission.submittedAt}</strong>
+                  </div>
+                  <div className="detail-item">
+                    <small>Sinjale</small>
+                    <strong>{selectedSubmission.communityVotes} vota · {selectedSubmission.duplicateSignals} dubl.</strong>
+                  </div>
+                </div>
+
+                <section className="notes-panel">
+                  <h3>Shënim moderimi</h3>
+                  <p>{selectedSubmission.notes}</p>
+                </section>
+
+                <section className="tools-panel" aria-label="Mjetet kryesore të adminit">
+                  <div className="panel-header">
+                    <h3>Tools për komunitet</h3>
+                    <span className="chip low">Live</span>
+                  </div>
+                  <div className="tool-grid">
+                    <article className="tool-card">
+                      <strong>Moderim raportesh</strong>
+                      <small>Mirato, refuzo, bashko dublimet</small>
+                    </article>
+                    <article className="tool-card">
+                      <strong>Kontroll privatësie</strong>
+                      <small>Anonimizim dhe auditim i të dhënave</small>
+                    </article>
+                    <article className="tool-card">
+                      <strong>Rreziqe në rrugë</strong>
+                      <small>Polici, merimangë, gjoba dhe bllokime</small>
+                    </article>
+                    <article className="tool-card">
+                      <strong>Health check</strong>
+                      <small>Harta, sinkronizimi, raporte offline</small>
+                    </article>
+                  </div>
+                </section>
+              </section>
+
+              <section className="verification-panel" aria-label="Verifikimi në hartë">
+                <section className="map-panel">
+                  <div className="panel-header">
+                    <h3>Harta Parko</h3>
+                    <CategoryPill category={selectedSubmission.category} />
+                  </div>
+                  <CommunityMapPreview items={filteredSubmissions} selectedId={selectedSubmission.id} onSelect={selectById} />
+                  <div className="map-caption">
+                    Pa foto dhe pa emra publikë. Admini sheh lokacionin, kategorinë, sinjalet dhe statusin e verifikimit.
+                  </div>
+                </section>
+              </section>
             </div>
 
-            <div className="inspection-body">
-              <div className="detail-column">
-                <div className="detail-panel">
-                  <div className="spot-summary">
-                    <div className="summary-head">
-                      <h2 className="summary-title">{selectedSubmission.address}</h2>
-                      <span className="price-tag">{formatPrice(selectedSubmission.proposedPrice)}</span>
-                    </div>
-
-                    <div className="summary-address">
-                      {selectedSubmission.city} • {selectedSubmission.parkingType}
-                    </div>
-
-                    <div className="summary-grid">
-                      <div className="summary-item">
-                        <span className="label">Submitted by</span>
-                        <span className="value">{selectedSubmission.userName}</span>
-                      </div>
-                      <div className="summary-item">
-                        <span className="label">Timestamp</span>
-                        <span className="value">{selectedSubmission.submittedAt}</span>
-                      </div>
-                      <div className="summary-item">
-                        <span className="label">Risk</span>
-                        <span className="value">{selectedSubmission.riskLevel.toUpperCase()}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="submission-notes">
-                    <h4>Moderator notes</h4>
-                    <p>{selectedSubmission.notes}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="verification-column">
-                <div className="verification-panel">
-                  <StreetViewEmbed lat={selectedSubmission.lat} lng={selectedSubmission.lng} />
-
-                  <div className="gallery-header">
-                    <h4>Photos</h4>
-                    <span className="status-pill">{selectedSubmission.photos.length} files</span>
-                  </div>
-
-                  <div className="gallery-grid">
-                    {selectedSubmission.photos.map((photo, index) => (
-                      <div key={`${selectedSubmission.id}-photo-${index}`} className="photo-tile">
-                        <img src={photo} alt={`${selectedSubmission.address} photo ${index + 1}`} />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="action-bar">
-                  <button className="approve-button" type="button" onClick={handleApprove}>Approve &amp; Publish</button>
-
-                  <select
-                    className="reject-select"
-                    aria-label="Reject reason"
-                    value={rejectReason}
-                    onChange={(event) => setRejectReason(event.target.value)}
-                  >
-                    {rejectionReasons.map((reason) => (
-                      <option key={reason} value={reason}>{reason}</option>
-                    ))}
-                  </select>
-
-                  <button className="danger-button" type="button" onClick={handleReject}>Reject</button>
-                  <button className="flag-button" type="button" onClick={handleFlag}>Flag for In-Person Inspection</button>
-                </div>
-              </div>
+            <div className="action-bar" aria-label="Vendimi i adminit">
+              <button className="admin-button admin-button--primary" type="button" onClick={advanceQueue}>Mirato dhe publiko</button>
+              <select className="admin-select reject-select" value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} aria-label="Arsyeja e refuzimit">
+                {rejectionReasons.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
+              </select>
+              <button className="admin-button admin-button--danger" type="button" onClick={advanceQueue}>Refuzo</button>
+              <button className="admin-button admin-button--warning" type="button" onClick={advanceQueue}>Dërgo për kontroll në terren</button>
             </div>
           </main>
         </div>

@@ -5,14 +5,9 @@ function distanceSquared(a: Parking['coordinates'], b: Parking['coordinates']) {
 }
 
 
-export function googleStreetViewUrl(parking: Parking) {
+export function kartaViewUrl(parking: Parking) {
   const target = parking.accessPoint ?? parking.coordinates
-  const params = new URLSearchParams({
-    api: '1',
-    map_action: 'pano',
-    viewpoint: `${target.lat},${target.lng}`,
-  })
-  return `https://www.google.com/maps/@?${params.toString()}`
+  return `https://kartaview.org/map/@${target.lat},${target.lng},18z`
 }
 
 export function walkingDirectionsUrl(parking: Parking, destination: { coordinates: Parking['coordinates'] }) {

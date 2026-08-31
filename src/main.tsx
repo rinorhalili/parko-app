@@ -1,4 +1,4 @@
-import { lazy, StrictMode, Suspense, useEffect, useState } from 'react'
+import { lazy, StrictMode, Suspense } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import App from './App'
 import { CrowdSourcingProvider } from './crowdsourcing'
@@ -28,73 +28,24 @@ function resolveInitialMode(): AppMode {
     return urlMode
   }
 
-  const savedMode = window.localStorage.getItem('parko-app-mode')
-  if (savedMode === 'app' || savedMode === 'dashboard') {
-    return savedMode
+  const adminFlag = params.get('admin')
+  if (adminFlag === '1' || adminFlag === 'true') {
+    return 'dashboard'
+  }
+
+  const pathname = window.location.pathname.replace(/\/+$/, '')
+  if (pathname.endsWith('/admin') || pathname.endsWith('/dashboard')) {
+    return 'dashboard'
   }
 
   return navigator.userAgent.includes('Electron') ? 'dashboard' : 'app'
 }
 
-function AppModeSwitcher() {
-  const [mode, setMode] = useState<AppMode>(resolveInitialMode)
-
-  useEffect(() => {
-    window.localStorage.setItem('parko-app-mode', mode)
-    const nextUrl = new URL(window.location.href)
-    nextUrl.searchParams.set('view', mode)
-    window.history.replaceState({}, '', nextUrl)
-  }, [mode])
+function AppRouter() {
+  const mode = resolveInitialMode()
 
   return (
     <>
-      <style>{`
-        .parko-app-mode-switcher {
-          position: fixed;
-          z-index: 2000;
-          top: 16px;
-          right: 16px;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 8px;
-          border-radius: 999px;
-          background: rgba(15, 23, 42, 0.72);
-          border: 1px solid rgba(148, 163, 184, 0.32);
-          backdrop-filter: blur(12px);
-          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
-        }
-
-        .parko-app-mode-switcher button {
-          border: none;
-          background: transparent;
-          color: #e2e8f0;
-          cursor: pointer;
-          border-radius: 999px;
-          padding: 8px 12px;
-          font-weight: 700;
-          transition: background 0.15s ease, color 0.15s ease;
-        }
-
-        .parko-app-mode-switcher button.active {
-          background: rgba(96, 165, 250, 0.22);
-          color: white;
-        }
-
-        @media (max-width: 520px) {
-          .parko-app-mode-switcher { display: none; }
-        }
-      `}</style>
-
-      <div className="parko-app-mode-switcher" aria-label="Application view switcher">
-        <button type="button" className={mode === 'app' ? 'active' : ''} onClick={() => setMode('app')}>
-          Main page
-        </button>
-        <button type="button" className={mode === 'dashboard' ? 'active' : ''} onClick={() => setMode('dashboard')}>
-          Admin dashboard
-        </button>
-      </div>
-
       {mode === 'dashboard' ? <Suspense fallback={<div className="app-loading" role="status">Duke hapur panelin…</div>}><AdminDashboard /></Suspense> : <App />}
     </>
   )
@@ -106,7 +57,7 @@ window.__parkoReactRoot = root
 root.render(
   <StrictMode>
     <CrowdSourcingProvider>
-      <AppModeSwitcher />
+      <AppRouter />
     </CrowdSourcingProvider>
   </StrictMode>,
 )

@@ -2101,6 +2101,7 @@ input:focus-visible {
 .street-view-inline {
   min-height: 44px;
   margin-top: 8px;
+  border: 0;
   border-radius: 12px;
   background: var(--primary);
   color: #fff;
@@ -2116,6 +2117,77 @@ input:focus-visible {
   border: 1px solid #c9dcff;
   background: var(--primary-soft);
   color: var(--primary);
+}
+.street-view-panel {
+  position: absolute;
+  z-index: 90;
+  inset: 0;
+  background: #0f1d2d;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+.street-view-panel header {
+  min-height: 72px;
+  padding: 18px 14px 10px;
+  background: rgba(15, 29, 45, .96);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.street-view-panel header button {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.12);
+  color: #fff;
+  font-size: 21px;
+  font-weight: 800;
+}
+.street-view-panel header span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.street-view-panel header small {
+  color: #a9b7c8;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.street-view-panel header strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+}
+.street-view-panel iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #dfe7ef;
+}
+.street-view-panel > p {
+  min-height: 58px;
+  margin: 0;
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  background: rgba(15, 29, 45, .96);
+  color: #fff;
+  display: grid;
+  gap: 2px;
+}
+.street-view-panel > p b {
+  font-size: 11px;
+}
+.street-view-panel > p span {
+  overflow: hidden;
+  color: #a9b7c8;
+  font-size: 10px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .community-strip {
   margin-top: 9px;
