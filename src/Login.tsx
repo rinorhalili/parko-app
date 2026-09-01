@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { supabase } from './lib/supabase'
 
 type AuthMode = 'login' | 'register'
 
@@ -13,6 +14,14 @@ export default function Login({ onClose }: LoginProps) {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) onClose()
+    })
+
+    return () => authListener.subscription.unsubscribe()
+  }, [onClose])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -30,15 +39,24 @@ export default function Login({ onClose }: LoginProps) {
 
     setIsLoading(true)
     try {
-      // TODO: Replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
-      localStorage.setItem('parko-auth-token', `token_${Date.now()}`)
-      localStorage.setItem('parko-user-email', email)
-      
-      onClose()
-    } catch (err) {
-      setError(`${mode === 'login' ? 'Login' : 'Registration'} failed. Please try again.`)
+      if (mode === 'login') {
+        const { error: authError } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        })
+        if (authError) throw authError
+      } else {
+        const { data, error: authError } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+        })
+        if (authError) throw authError
+        if (!data.session) {
+          setError('Registration successful. Check your email to confirm your account.')
+        }
+      }
+    } catch (authError) {
+      setError(authError instanceof Error ? authError.message : `${mode === 'login' ? 'Login' : 'Registration'} failed. Please try again.`)
     } finally {
       setIsLoading(false)
     }

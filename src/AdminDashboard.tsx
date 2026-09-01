@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
+import { supabase } from './lib/supabase'
 
 type ParkingCategory = 'public' | 'street' | 'prishtina' | 'private'
 type NavKey = 'queue' | 'map' | 'reports' | 'users'
@@ -19,6 +20,22 @@ type SpotSubmission = {
   riskLevel: RiskLevel
   communityVotes: number
   duplicateSignals: number
+}
+
+type ParkingSpotRow = {
+  id: string
+  submitted_by: string | null
+  title: string
+  description: string | null
+  city: string
+  address: string | null
+  type: 'FREE' | 'PAID_PUBLIC' | 'PRIVATE' | 'STREET_RISKY'
+  price_per_hour: number | null
+  latitude: number
+  longitude: number
+  upvotes: number
+  downvotes: number
+  created_at: string
 }
 
 const sidebarItems: Array<{ key: NavKey; label: string; count: number }> = [
@@ -43,84 +60,6 @@ const categoryMeta: Record<ParkingCategory, { label: string; short: string; colo
   prishtina: { label: 'Prishtina Parking', short: 'PP', color: '#246bfd', soft: '#eef4ff' },
   private: { label: 'Privat', short: 'PRI', color: '#7c3aed', soft: '#f2edff' },
 }
-
-const submissions: SpotSubmission[] = [
-  {
-    id: 'PK-2412',
-    anonymousId: 'Anonim 1432',
-    submittedAt: 'Sot • 09:34',
-    city: 'Prishtina',
-    address: 'Rr. Ibrahim Rugova 42',
-    category: 'prishtina',
-    proposedPrice: 1.5,
-    lat: 42.6629,
-    lng: 21.1655,
-    notes: 'Dy vende afër parkingut komunal. Rampa shihet te hyrja; duhet verifikuar orari pas 18:00.',
-    riskLevel: 'medium',
-    communityVotes: 17,
-    duplicateSignals: 1,
-  },
-  {
-    id: 'PK-2413',
-    anonymousId: 'Anonim 1488',
-    submittedAt: 'Sot • 08:47',
-    city: 'Prizren',
-    address: 'Bulevardi Nënë Tereza 14',
-    category: 'private',
-    proposedPrice: 0,
-    lat: 42.2139,
-    lng: 20.7368,
-    notes: 'Hapësirë private pas hyrjes së hotelit. Duket aktive gjatë ditës, por kërkon kontroll të lejes.',
-    riskLevel: 'low',
-    communityVotes: 9,
-    duplicateSignals: 0,
-  },
-  {
-    id: 'PK-2414',
-    anonymousId: 'Anonim 1501',
-    submittedAt: 'Dje • 17:11',
-    city: 'Peja',
-    address: 'Sheshi Qendror, afër tregut',
-    category: 'public',
-    proposedPrice: 0,
-    lat: 42.6596,
-    lng: 20.2889,
-    notes: 'Hapësirë publike buzë trotuarit. Rruga është e ngushtë, por sinjalistika nuk ndalon parkimin.',
-    riskLevel: 'low',
-    communityVotes: 21,
-    duplicateSignals: 0,
-  },
-  {
-    id: 'PK-2415',
-    anonymousId: 'Anonim 1516',
-    submittedAt: 'Dje • 13:52',
-    city: 'Ferizaj',
-    address: 'Rr. Agim Ramadani 7',
-    category: 'street',
-    proposedPrice: 2,
-    lat: 42.375,
-    lng: 21.1504,
-    notes: 'Korsi e ngushtë pranë stacionit të autobusit. Duhet shënuar si zonë me rrezik gjobe.',
-    riskLevel: 'high',
-    communityVotes: 6,
-    duplicateSignals: 2,
-  },
-  {
-    id: 'PK-2416',
-    anonymousId: 'Anonim 1579',
-    submittedAt: 'Hën • 11:20',
-    city: 'Prishtina',
-    address: 'Rr. Luan Haradinaj 16',
-    category: 'public',
-    proposedPrice: 1.2,
-    lat: 42.6556,
-    lng: 21.1637,
-    notes: 'Garazh me hyrje nga rruga anësore. Çmimi është raportuar nga komuniteti, por duhet konfirmuar tabela.',
-    riskLevel: 'medium',
-    communityVotes: 14,
-    duplicateSignals: 1,
-  },
-]
 
 const styles = `
   .admin-dashboard {
@@ -739,8 +678,26 @@ function formatPrice(price: number) {
   return price === 0 ? 'Falas' : `${price.toFixed(2)} €/orë`
 }
 
-function categoryCount(category: ParkingCategory) {
-  return submissions.filter((item) => item.category === category).length
+function submissionFromSpot(spot: ParkingSpotRow): SpotSubmission {
+  const category: ParkingCategory = spot.type === 'PAID_PUBLIC'
+    ? 'prishtina'
+    : spot.type === 'PRIVATE' ? 'private' : spot.type === 'STREET_RISKY' ? 'street' : 'public'
+  const riskLevel: RiskLevel = spot.type === 'STREET_RISKY' ? 'high' : spot.type === 'PRIVATE' ? 'medium' : 'low'
+  return {
+    id: spot.id,
+    anonymousId: spot.submitted_by ? `Përdorues ${spot.submitted_by.slice(0, 8)}` : 'Përdorues anonim',
+    submittedAt: new Intl.DateTimeFormat('sq-AL', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(spot.created_at)),
+    city: spot.city,
+    address: spot.address ?? spot.title,
+    category,
+    proposedPrice: spot.price_per_hour ?? 0,
+    lat: spot.latitude,
+    lng: spot.longitude,
+    notes: spot.description ?? 'Pa shënim nga raportuesi.',
+    riskLevel,
+    communityVotes: spot.upvotes + spot.downvotes,
+    duplicateSignals: 0,
+  }
 }
 
 function riskLabel(risk: RiskLevel) {
@@ -865,11 +822,61 @@ function CommunityMapPreview({ items, selectedId, onSelect }: { items: SpotSubmi
 }
 
 export default function AdminDashboard() {
+  const [submissions, setSubmissions] = useState<SpotSubmission[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [error, setError] = useState('')
+  const [actionInProgress, setActionInProgress] = useState(false)
   const [activeTab, setActiveTab] = useState<NavKey>('queue')
   const [searchTerm, setSearchTerm] = useState('')
   const [cityFilter, setCityFilter] = useState(cityOptions[0])
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [rejectReason, setRejectReason] = useState(rejectionReasons[0])
+
+  const loadPendingSubmissions = async () => {
+    setIsLoading(true)
+    setError('')
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError) {
+      setError(userError.message)
+      setIsLoading(false)
+      return
+    }
+    if (!user) {
+      setError('Duhet të kyçesh për të hapur panelin e adminit.')
+      setIsAdmin(false)
+      setIsLoading(false)
+      return
+    }
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+    if (profileError || profile?.role !== 'ADMIN') {
+      setError(profileError?.message ?? 'Nuk ke leje administratori.')
+      setIsAdmin(false)
+      setIsLoading(false)
+      return
+    }
+    setIsAdmin(true)
+    const { data, error: spotsError } = await supabase
+      .from('parking_spots')
+      .select('id, submitted_by, title, description, city, address, type, price_per_hour, latitude, longitude, upvotes, downvotes, created_at')
+      .eq('status', 'PENDING')
+      .order('created_at', { ascending: false })
+    if (spotsError) setError(spotsError.message)
+    else setSubmissions((data as ParkingSpotRow[]).map(submissionFromSpot))
+    setIsLoading(false)
+  }
+
+  useEffect(() => {
+    void loadPendingSubmissions()
+    const { data: authListener } = supabase.auth.onAuthStateChange(() => {
+      void loadPendingSubmissions()
+    })
+    return () => authListener.subscription.unsubscribe()
+  }, [])
 
   const filteredSubmissions = useMemo(() => {
     const term = searchTerm.trim().toLowerCase()
@@ -892,17 +899,33 @@ export default function AdminDashboard() {
     }
   }, [filteredSubmissions.length, selectedIndex])
 
-  const selectedSubmission = filteredSubmissions[selectedIndex] ?? filteredSubmissions[0] ?? submissions[0]
+  const selectedSubmission = filteredSubmissions[selectedIndex] ?? filteredSubmissions[0]
 
   const selectById = (id: string) => {
     const index = filteredSubmissions.findIndex((item) => item.id === id)
     if (index >= 0) setSelectedIndex(index)
   }
 
-  const advanceQueue = () => {
-    if (!filteredSubmissions.length) return
-    setSelectedIndex((current) => (current + 1) % filteredSubmissions.length)
+  const updateStatus = async (status: 'APPROVED' | 'REJECTED') => {
+    if (!selectedSubmission || !isAdmin || actionInProgress) return
+    setActionInProgress(true)
+    setError('')
+    const { error: updateError } = await supabase
+      .from('parking_spots')
+      .update({ status })
+      .eq('id', selectedSubmission.id)
+      .eq('status', 'PENDING')
+    if (updateError) {
+      setError(updateError.message)
+    } else {
+      setSubmissions((current) => current.filter((item) => item.id !== selectedSubmission.id))
+      setSelectedIndex((current) => Math.max(0, Math.min(current, filteredSubmissions.length - 2)))
+    }
+    setActionInProgress(false)
   }
+
+  if (isLoading) return <div className="app-loading" role="status">Duke ngarkuar panelin…</div>
+  if (!isAdmin) return <div className="app-loading" role="alert">{error || 'Nuk ke leje administratori.'}</div>
 
   return (
     <div className="admin-dashboard">
@@ -916,15 +939,16 @@ export default function AdminDashboard() {
           </div>
           <div className="admin-actions" aria-label="Veprime të adminit">
             <button className="admin-button" type="button">Eksporto radhën</button>
-            <button className="admin-button admin-button--primary" type="button">Sinkronizo live</button>
+            <button className="admin-button admin-button--primary" type="button" onClick={() => void loadPendingSubmissions()} disabled={isLoading || actionInProgress}>Sinkronizo live</button>
           </div>
         </header>
+        {error && <div className="error-message" role="alert">{error}</div>}
 
         <section className="metrics-grid" aria-label="Statistikat kryesore">
-          <MetricCard label="Publike" value={String(categoryCount('public'))} meta="Të hapura për komunitetin" color={categoryMeta.public.color} />
-          <MetricCard label="Në rrugë" value={String(categoryCount('street'))} meta="Kërkojnë kontroll rreziku" color={categoryMeta.street.color} />
-          <MetricCard label="Prishtina Parking" value={String(categoryCount('prishtina'))} meta="Zona zyrtare ose komunal" color={categoryMeta.prishtina.color} />
-          <MetricCard label="Private" value={String(categoryCount('private'))} meta="Shfaqen me qasje të kufizuar" color={categoryMeta.private.color} />
+          <MetricCard label="Publike" value={String(submissions.filter((item) => item.category === 'public').length)} meta="Në pritje për moderim" color={categoryMeta.public.color} />
+          <MetricCard label="Në rrugë" value={String(submissions.filter((item) => item.category === 'street').length)} meta="Kërkojnë kontroll rreziku" color={categoryMeta.street.color} />
+          <MetricCard label="Prishtina Parking" value={String(submissions.filter((item) => item.category === 'prishtina').length)} meta="Zona zyrtare ose komunale" color={categoryMeta.prishtina.color} />
+          <MetricCard label="Private" value={String(submissions.filter((item) => item.category === 'private').length)} meta="Shfaqen me qasje të kufizuar" color={categoryMeta.private.color} />
         </section>
 
         <div className="admin-layout">
@@ -971,7 +995,9 @@ export default function AdminDashboard() {
           <main className="admin-main">
             <div className="main-grid">
               <section className="review-panel" aria-label="Detajet e raportimit">
-                <span className="panel-kicker"><span className="queue-dot" />{selectedSubmission.id} · i verifikuar në mënyrë anonime</span>
+                {selectedSubmission && <span className="panel-kicker"><span className="queue-dot" />{selectedSubmission.id} · i verifikuar në mënyrë anonime</span>}
+                {!selectedSubmission && <span className="panel-kicker">Nuk ka raportime në pritje</span>}
+                {selectedSubmission && <>
                 <div className="detail-title">
                   <h2>{selectedSubmission.address}</h2>
                   <span className="price-tag">{formatPrice(selectedSubmission.proposedPrice)}</span>
@@ -1000,6 +1026,7 @@ export default function AdminDashboard() {
                   <h3>Shënim moderimi</h3>
                   <p>{selectedSubmission.notes}</p>
                 </section>
+                </>}
 
                 <section className="tools-panel" aria-label="Mjetet kryesore të adminit">
                   <div className="panel-header">
@@ -1031,9 +1058,9 @@ export default function AdminDashboard() {
                 <section className="map-panel">
                   <div className="panel-header">
                     <h3>Harta Parko</h3>
-                    <CategoryPill category={selectedSubmission.category} />
+                    {selectedSubmission && <CategoryPill category={selectedSubmission.category} />}
                   </div>
-                  <CommunityMapPreview items={filteredSubmissions} selectedId={selectedSubmission.id} onSelect={selectById} />
+                  {selectedSubmission && <CommunityMapPreview items={filteredSubmissions} selectedId={selectedSubmission.id} onSelect={selectById} />}
                   <div className="map-caption">
                     Pa foto dhe pa emra publikë. Admini sheh lokacionin, kategorinë, sinjalet dhe statusin e verifikimit.
                   </div>
@@ -1042,12 +1069,12 @@ export default function AdminDashboard() {
             </div>
 
             <div className="action-bar" aria-label="Vendimi i adminit">
-              <button className="admin-button admin-button--primary" type="button" onClick={advanceQueue}>Mirato dhe publiko</button>
+              <button className="admin-button admin-button--primary" type="button" onClick={() => void updateStatus('APPROVED')} disabled={!selectedSubmission || actionInProgress}>Mirato dhe publiko</button>
               <select className="admin-select reject-select" value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} aria-label="Arsyeja e refuzimit">
                 {rejectionReasons.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
               </select>
-              <button className="admin-button admin-button--danger" type="button" onClick={advanceQueue}>Refuzo</button>
-              <button className="admin-button admin-button--warning" type="button" onClick={advanceQueue}>Dërgo për kontroll në terren</button>
+              <button className="admin-button admin-button--danger" type="button" onClick={() => void updateStatus('REJECTED')} disabled={!selectedSubmission || actionInProgress}>Refuzo</button>
+              <button className="admin-button admin-button--warning" type="button" disabled> Dërgo për kontroll në terren</button>
             </div>
           </main>
         </div>
