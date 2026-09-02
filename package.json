@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "start": "node server/index.mjs",
     "desktop": "node scripts/electron-launcher.mjs",
+    "build:desktop": "npm run build && npm run desktop",
     "dev:desktop": "node scripts/electron-launcher.mjs --dev",
     "check": "tsc -b --pretty false",
     "test": "vitest run",
@@ -20,7 +21,6 @@
     "@supabase/supabase-js": "^2.112.4",
     "@vitejs/plugin-react": "latest",
     "leaflet": "^1.9.4",
-    "leaflet.markercluster": "^1.5.3",
     "react": "latest",
     "react-dom": "latest",
     "typescript": "latest",
@@ -28,7 +28,6 @@
   },
   "devDependencies": {
     "@types/leaflet": "^1.9.22",
-    "@types/leaflet.markercluster": "^1.5.6",
     "@types/node": "^26.3.0",
     "@types/react": "latest",
     "@types/react-dom": "latest",

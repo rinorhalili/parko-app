@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
-import { supabase } from './lib/supabase'
+import { supabase, supabaseConfigError, supabaseNetworkError } from './lib/supabase'
+import Login from './Login'
 
 type ParkingCategory = 'public' | 'street' | 'prishtina' | 'private'
 type NavKey = 'queue' | 'map' | 'reports' | 'users'
@@ -825,6 +826,7 @@ export default function AdminDashboard() {
   const [submissions, setSubmissions] = useState<SpotSubmission[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [needsLogin, setNeedsLogin] = useState(false)
   const [error, setError] = useState('')
   const [actionInProgress, setActionInProgress] = useState(false)
   const [activeTab, setActiveTab] = useState<NavKey>('queue')
@@ -836,25 +838,39 @@ export default function AdminDashboard() {
   const loadPendingSubmissions = async () => {
     setIsLoading(true)
     setError('')
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError) {
-      setError(userError.message)
+    if (supabaseConfigError) {
+      setError(supabaseConfigError)
       setIsLoading(false)
       return
     }
-    if (!user) {
-      setError('Duhet të kyçesh për të hapur panelin e adminit.')
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    if (sessionError) {
+      setError(supabaseNetworkError(sessionError))
+      setIsLoading(false)
+      return
+    }
+    if (!session?.user) {
+      setNeedsLogin(true)
       setIsAdmin(false)
       setIsLoading(false)
       return
     }
+    setNeedsLogin(false)
+    const user = session.user
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single()
-    if (profileError || profile?.role !== 'ADMIN') {
-      setError(profileError?.message ?? 'Nuk ke leje administratori.')
+    const metadataRole = typeof user.user_metadata?.role === 'string' ? user.user_metadata.role.toUpperCase() : ''
+    if (profileError && metadataRole !== 'ADMIN') {
+      setError(supabaseNetworkError(profileError))
+      setIsAdmin(false)
+      setIsLoading(false)
+      return
+    }
+    if (profile?.role !== 'ADMIN' && metadataRole !== 'ADMIN') {
+      setError('Nuk ke leje administratori.')
       setIsAdmin(false)
       setIsLoading(false)
       return
@@ -925,6 +941,7 @@ export default function AdminDashboard() {
   }
 
   if (isLoading) return <div className="app-loading" role="status">Duke ngarkuar panelin…</div>
+  if (needsLogin) return <Login onClose={() => undefined} />
   if (!isAdmin) return <div className="app-loading" role="alert">{error || 'Nuk ke leje administratori.'}</div>
 
   return (

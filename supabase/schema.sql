@@ -189,6 +189,33 @@ as $$
   );
 $$;
 
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, full_name, email, role)
+  values (
+    new.id,
+    nullif(new.raw_user_meta_data ->> 'full_name', ''),
+    new.email,
+    'USER'::public.user_role
+  )
+  on conflict (id) do update
+    set full_name = coalesce(excluded.full_name, public.profiles.full_name),
+        email = excluded.email;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
 grant select on public.parking_spots, public.realtime_alerts, public.spot_reviews_vouches
   to anon, authenticated;
 grant select, insert, update, delete on public.profiles, public.parking_spots,
@@ -196,6 +223,7 @@ grant select, insert, update, delete on public.profiles, public.parking_spots,
 
 revoke all on function public.is_admin() from public;
 grant execute on function public.is_admin() to anon, authenticated;
+revoke all on function public.handle_new_user() from public;
 revoke all on function public.get_spots_in_bbox(float, float, float, float) from public;
 grant execute on function public.get_spots_in_bbox(float, float, float, float) to anon, authenticated;
 
@@ -261,6 +289,53 @@ with check (user_id = (select auth.uid()) or public.is_admin());
 drop policy if exists spot_reviews_delete_own_or_admin on public.spot_reviews_vouches;
 create policy spot_reviews_delete_own_or_admin on public.spot_reviews_vouches
 for delete to authenticated using (user_id = (select auth.uid()) or public.is_admin());
+
+-- Development administrator. The trigger creates the profile for new users; this
+-- upsert also repairs an existing auth user whose profile row is missing.
+do $$
+declare
+  admin_id uuid;
+begin
+  select id
+  into admin_id
+  from auth.users
+  where email = 'bledar@email.com'
+  limit 1;
+
+  if admin_id is null then
+    insert into auth.users (
+      id, email, encrypted_password, email_confirmed_at, raw_app_meta_data,
+      raw_user_meta_data, aud, role
+    )
+    values (
+      gen_random_uuid(),
+      'bledar@email.com',
+      crypt('admin', gen_salt('bf')),
+      now(),
+      '{"provider":"email","providers":["email"]}'::jsonb,
+      '{"role":"ADMIN","full_name":"Bledar"}'::jsonb,
+      'authenticated',
+      'authenticated'
+    )
+    returning id into admin_id;
+  else
+    update auth.users
+    set encrypted_password = crypt('admin', gen_salt('bf')),
+        email_confirmed_at = coalesce(email_confirmed_at, now()),
+        raw_user_meta_data = '{"role":"ADMIN","full_name":"Bledar"}'::jsonb
+    where id = admin_id;
+  end if;
+
+  insert into public.profiles (id, full_name, email, role)
+  select id, nullif(raw_user_meta_data ->> 'full_name', ''), email, 'ADMIN'::public.user_role
+  from auth.users
+  where id = admin_id
+  on conflict (id) do update set
+    full_name = coalesce(excluded.full_name, public.profiles.full_name),
+    email = excluded.email,
+    role = 'ADMIN'::public.user_role;
+end
+$$;
 
 -- Demonstration data. submitted_by is null because auth.users is managed by Supabase.
 insert into public.parking_spots (

@@ -2,7 +2,8 @@ import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const appUrl = process.env.PARKO_APP_URL || 'http://127.0.0.1:4173'
+const isDev = process.env.PARKO_DEV === 'true'
+const appUrl = process.env.PARKO_APP_URL || (isDev ? 'http://127.0.0.1:5173' : 'http://127.0.0.1:4173')
 const rootDir = fileURLToPath(new URL('..', import.meta.url))
 
 function isExternalUrl(url) {
@@ -37,6 +38,7 @@ ipcMain.handle('window:minimize', (event) => {
 })
 
 ipcMain.handle('window:toggle-maximize', (event) => {
+  const window = BrowserWindow.fromWebContents(event.sender)
   if (!window) return false
 
   if (window.isMaximized()) {
@@ -86,7 +88,9 @@ async function createWindow() {
     void openExternalUrl(url)
     return { action: 'deny' }
   })
-  await window.loadURL(appUrl)
+  const dashboardUrl = new URL(appUrl)
+  dashboardUrl.searchParams.set('view', 'dashboard')
+  await window.loadURL(dashboardUrl.toString())
   notifyWindowState()
 }
 

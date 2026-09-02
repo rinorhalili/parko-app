@@ -2,6 +2,7 @@ import { PARKINGS } from './data'
 import { OSM_PARKING_SNAPSHOT } from './osmParkingSnapshot'
 import { OFFICIAL_PRISHTINA_PARKING_MARKERS } from './officialPrishtinaParking'
 import { deriveMunicipalParkingData } from './prishtinaParkingRules'
+import { supabase, supabaseConfigError } from './lib/supabase'
 import type { Parking, ParkingAccess } from './types'
 
 const OVERPASS_URLS = [
@@ -215,6 +216,61 @@ function withoutDuplicates(parkings: Parking[], existing: Parking[], thresholdMe
   ))
 }
 
+type ApprovedParkingSpot = {
+  id: string
+  title: string
+  city: string
+  address: string | null
+  type: 'FREE' | 'PAID_PUBLIC' | 'PRIVATE' | 'STREET_RISKY'
+  latitude: number
+  longitude: number
+  price_per_hour: number | null
+  is_covered: boolean
+}
+
+async function loadApprovedParkingSpots(signal?: AbortSignal) {
+  if (supabaseConfigError) return []
+  const { data, error } = await supabase
+    .from('parking_spots')
+    .select('id, title, city, address, type, latitude, longitude, price_per_hour, is_covered')
+    .eq('status', 'APPROVED')
+    .abortSignal(signal ?? new AbortController().signal)
+  if (error) throw error
+
+  return (data as ApprovedParkingSpot[])
+    .filter((spot) => spot.city.toLowerCase().includes('prisht'))
+    .filter((spot) => isWithinPrishtinaMap({ lat: spot.latitude, lng: spot.longitude }))
+    .map((spot): Parking => {
+      const pricePerHour = spot.price_per_hour
+      const type = spot.type === 'PRIVATE' ? 'private' : spot.type === 'STREET_RISKY' ? 'street' : 'public'
+      return {
+        id: `supabase-${spot.id}`,
+        name: spot.title,
+        zone: 'Prishtinë',
+        address: spot.address ?? 'Prishtinë, Kosovë',
+        capacity: null,
+        spaces: null,
+        status: 'unknown',
+        pricePerHour,
+        distanceMeters: distanceMeters(USER_LOCATION, { lat: spot.latitude, lng: spot.longitude }),
+        driveMinutes: 0,
+        confidence: 'high',
+        updatedMinutesAgo: 0,
+        type,
+        open24h: false,
+        covered: spot.is_covered,
+        cardPayment: false,
+        evCharging: false,
+        accessible: false,
+        free: spot.type === 'FREE' || pricePerHour === 0,
+        coordinates: { lat: spot.latitude, lng: spot.longitude },
+        access: type === 'private' ? 'private' : 'unknown',
+        source: 'municipal',
+        operator: 'Parko community',
+      }
+    })
+}
+
 export async function loadPrishtinaParkings(signal?: AbortSignal) {
   const query = `[out:json][timeout:30];nwr["amenity"="parking"](${PRISHTINA_PARKING_BOUNDS});out body center geom;`
   let payload: OverpassResponse | null = null
@@ -245,15 +301,22 @@ export async function loadPrishtinaParkings(signal?: AbortSignal) {
   if (!payload) throw lastError
   const osmParkings = (payload.elements ?? []).map(fromOsm).filter((parking): parking is Parking => parking !== null)
   if (!osmParkings.length) throw new Error('No parking data returned')
+  let approvedParkings: Parking[] = []
+  try {
+    approvedParkings = await loadApprovedParkingSpots(signal)
+  } catch (error) {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    console.warn('Approved Supabase parking spots could not be loaded; continuing with map data.', error)
+  }
   const officialParkings = OFFICIAL_PRISHTINA_PARKING_MARKERS.map(fromOfficialPrishtinaParkingMarker)
 
   const enrichedSeeds = PARKINGS.map((seed) => {
     const liveMatch = osmParkings.find((parking) => parking.id === seed.id || distanceMeters(seed.coordinates, parking.coordinates) < 45)
     return liveMatch ? { ...seed, ...liveMatch, name: seed.name } : seed
   })
-  const seedParkings = withoutDuplicates(enrichedSeeds, officialParkings, 30)
-  const osmWithoutDuplicates = withoutDuplicates(osmParkings, [...officialParkings, ...seedParkings], 30)
-  return [...officialParkings, ...seedParkings, ...osmWithoutDuplicates].sort((a, b) => a.distanceMeters - b.distanceMeters)
+  const seedParkings = withoutDuplicates(enrichedSeeds, [...officialParkings, ...approvedParkings], 30)
+  const osmWithoutDuplicates = withoutDuplicates(osmParkings, [...officialParkings, ...approvedParkings, ...seedParkings], 30)
+  return [...officialParkings, ...approvedParkings, ...seedParkings, ...osmWithoutDuplicates].sort((a, b) => a.distanceMeters - b.distanceMeters)
 }
 
 type OsmApiElement = {

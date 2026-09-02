@@ -3,13 +3,19 @@ import { createRoot, type Root } from 'react-dom/client'
 import App from './App'
 import { CrowdSourcingProvider } from './crowdsourcing'
 import 'leaflet/dist/leaflet.css'
-import 'leaflet.markercluster/dist/MarkerCluster.css'
 import './styles.css'
 import { initTelemetry } from './telemetry'
 
 initTelemetry()
+const isLocalDevelopment = ['localhost', '127.0.0.1'].includes(window.location.hostname)
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => undefined))
+  window.addEventListener('load', () => {
+    if (isLocalDevelopment) {
+      void navigator.serviceWorker.getRegistrations().then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
+      return
+    }
+    void navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => undefined)
+  })
 }
 
 type AppMode = 'app' | 'dashboard'
@@ -38,7 +44,7 @@ function resolveInitialMode(): AppMode {
     return 'dashboard'
   }
 
-  return navigator.userAgent.includes('Electron') ? 'dashboard' : 'app'
+  return window.electronAPI ? 'dashboard' : 'app'
 }
 
 function AppRouter() {

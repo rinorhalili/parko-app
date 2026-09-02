@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase } from './lib/supabase'
+import { getProfileRole, supabase, supabaseConfigError, supabaseNetworkError } from './lib/supabase'
 
 type AuthMode = 'login' | 'register'
 
@@ -39,12 +39,29 @@ export default function Login({ onClose }: LoginProps) {
 
     setIsLoading(true)
     try {
+      if (supabaseConfigError) {
+        setError(supabaseConfigError)
+        return
+      }
       if (mode === 'login') {
-        const { error: authError } = await supabase.auth.signInWithPassword({
+        const { data, error: authError } = await supabase.auth.signInWithPassword({
           email: email.trim(),
           password,
         })
         if (authError) throw authError
+        const metadataRole = typeof data.user.user_metadata?.role === 'string' ? data.user.user_metadata.role.toUpperCase() : ''
+        let profileRole: string | undefined
+        try {
+          profileRole = await getProfileRole(data.user.id)
+        } catch (profileError) {
+          console.warn('Profile lookup failed after sign-in; using auth metadata:', profileError)
+        }
+        if (profileRole === 'ADMIN' || metadataRole === 'ADMIN') {
+          const url = new URL(window.location.href)
+          url.searchParams.set('view', 'dashboard')
+          window.history.replaceState({}, '', url)
+        }
+        onClose()
       } else {
         const { data, error: authError } = await supabase.auth.signUp({
           email: email.trim(),
@@ -56,7 +73,7 @@ export default function Login({ onClose }: LoginProps) {
         }
       }
     } catch (authError) {
-      setError(authError instanceof Error ? authError.message : `${mode === 'login' ? 'Login' : 'Registration'} failed. Please try again.`)
+      setError(supabaseNetworkError(authError))
     } finally {
       setIsLoading(false)
     }
@@ -268,6 +285,7 @@ export default function Login({ onClose }: LoginProps) {
           <h2 className="login-title">Parko</h2>
         </div>
 
+        {supabaseConfigError && <div className="error-message" role="alert">{supabaseConfigError}</div>}
         <div className="login-tabs">
           <button
             className={`login-tab ${mode === 'login' ? 'active' : ''}`}

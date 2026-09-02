@@ -1,7 +1,9 @@
 const reminders = new Map()
 const APP_CACHE = 'parko-app-shell-v2'
+const isLocalDevelopment = ['localhost', '127.0.0.1'].includes(self.location.hostname)
 
 self.addEventListener('install', (event) => {
+  if (isLocalDevelopment) return
   event.waitUntil(Promise.all([
     self.skipWaiting(),
     caches.open(APP_CACHE).then((cache) => cache.add(new Request(self.registration.scope, { cache: 'reload' }))).catch(() => undefined),
@@ -17,6 +19,7 @@ self.addEventListener('fetch', (event) => {
   const request = event.request
   if (request.method !== 'GET') return
   const url = new URL(request.url)
+  if (isLocalDevelopment || ['localhost', '127.0.0.1'].includes(url.hostname)) return
   if (url.origin !== self.location.origin || url.pathname.includes('/api/')) return
   event.respondWith(
     fetch(request)

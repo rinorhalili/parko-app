@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import { PRISHTINA_CENTER, PRISHTINA_MAP_BOUNDS, USER_LOCATION, isWithinPrishtinaMap } from './parkingApi'
 import { accessPointIsEstimated, parkingAccessPoint } from './parkingGeometry'
@@ -158,6 +158,10 @@ export default function LiveParkingMap({
   onManualMoveRef.current = onManualMove
   pickingDestinationRef.current = pickingDestination
   modeRef.current = mode
+  const visibleParkings = useMemo(
+    () => mode === 'navigation' || mode === 'walking' ? [selected] : parkings,
+    [mode, parkings, selected],
+  )
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
@@ -281,7 +285,6 @@ export default function LiveParkingMap({
     routeLayer.clearLayers()
     if (mode === 'home' && !destination && !route) automaticViewportRef.current = null
 
-    const visibleParkings = mode === 'navigation' || mode === 'walking' ? [selected] : parkings
     const selectionFocused = mode === 'home' && Boolean(route || destination)
 
     visibleParkings.forEach((parking) => {
