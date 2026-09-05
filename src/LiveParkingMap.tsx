@@ -134,7 +134,9 @@ export default function LiveParkingMap({
   userLocationAccuracy?: number | null
   mapSettings?: MapSettings
 }) {
-  const { departures } = useCrowdSourcing()
+  // Availability is reflected on the parking cards; no locally fabricated
+  // "leaving" pins are drawn on the map.
+  useCrowdSourcing()
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const baseTileLayerRef = useRef<L.TileLayer | null>(null)
@@ -362,18 +364,6 @@ export default function LiveParkingMap({
 
     })
 
-    if (mode === 'home' || mode === 'details') departures.forEach((departure) => {
-      const departureIcon = L.divIcon({
-        className: '',
-        html: `<span class="crowd-departure-marker"><b>↗</b><small>${departure.minutes}′</small></span>`,
-        iconSize: [42, 42],
-        iconAnchor: [21, 21],
-      })
-      L.marker([departure.coordinates.lat, departure.coordinates.lng], { icon: departureIcon, title: `Po largohet për ${departure.minutes} minuta`, zIndexOffset: 900 })
-        .bindTooltip(`Po largohet për ${departure.minutes} minuta`, { direction: 'top', className: 'crowd-departure-tooltip' })
-        .addTo(routeLayer)
-    })
-
     if (userLocationLive && isWithinPrishtinaMap(userLocation)) {
       if (userLocationAccuracy) {
         L.circle([userLocation.lat, userLocation.lng], {
@@ -542,7 +532,7 @@ export default function LiveParkingMap({
         map.setView([entrance.lat, entrance.lng], 15, { animate: false })
       }
     }
-  }, [parkings, selected, mode, route, destination, walkMinutes, recommendationRanks, userLocation.lat, userLocation.lng, userLocationLive, userLocationAccuracy, mapZoom, mapReadyToken, departures, mapSettings.parkingPalette, mapSettings.emphasizeAreas, mapSettings.largePointMarkers, mapSettings.showPointParking])
+  }, [parkings, selected, mode, route, destination, walkMinutes, recommendationRanks, userLocation.lat, userLocation.lng, userLocationLive, userLocationAccuracy, mapZoom, mapReadyToken, mapSettings.parkingPalette, mapSettings.emphasizeAreas, mapSettings.largePointMarkers, mapSettings.showPointParking])
 
   return (
     <div className={`map-canvas map-canvas--${mode} map-canvas--theme-${mapSettings.variant} map-canvas--palette-${mapSettings.parkingPalette} ${mapSettings.largeLabels ? 'map-canvas--large-labels' : ''} ${destination ? 'map-canvas--destination' : ''} ${pickingDestination ? 'map-canvas--picking' : ''}`} aria-label="Harta reale e parkingjeve në Prishtinë">

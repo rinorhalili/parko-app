@@ -1,0 +1,305 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+enum Role {
+  USER
+  MODERATOR
+  ADMIN
+}
+
+enum ParkingStatus {
+  AVAILABLE
+  OCCUPIED
+  UNKNOWN
+  RESERVED
+  TEMPORARILY_UNAVAILABLE
+}
+
+enum ParkingType {
+  STREET
+  GARAGE
+  LOT
+  PRIVATE
+  ACCESSIBLE
+}
+
+enum ReactionType {
+  LIKE
+  HELPFUL
+  THANKS
+}
+
+enum NotificationType {
+  PARKING_UPDATE
+  REPORT_CONFIRMED
+  COMMENT
+  REACTION
+  REPLY
+  MODERATION
+  SYSTEM
+  SECURITY
+}
+
+enum ReportTargetType {
+  POST
+  COMMENT
+  PARKING_REPORT
+  USER
+}
+
+enum ModerationStatus {
+  OPEN
+  REVIEWING
+  RESOLVED
+  DISMISSED
+}
+
+model User {
+  id              String             @id @default(uuid())
+  name            String
+  username        String             @unique
+  email           String             @unique
+  passwordHash    String
+  avatar          String?
+  bio             String?
+  role            Role               @default(USER)
+  reputationScore Int                @default(0)
+  isVerified      Boolean            @default(false)
+  isActive        Boolean            @default(true)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  sessions        RefreshToken[]
+  parkingSpots    ParkingSpot[]
+  parkingReports  ParkingReport[]
+  posts           Post[]
+  comments        Comment[]
+  reactions       Reaction[]
+  reputation      Reputation[]
+  notifications   Notification[]     @relation("NotificationRecipient")
+  reportsMade     ContentReport[]    @relation("Reporter")
+  reportsReviewed ContentReport[]    @relation("Moderator")
+  moderation      ModerationAction[] @relation("ModerationActor")
+  adminActions    AdminAction[]
+  auditLogs        AuditLog[]
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  userAgent String?
+  ipAddress String?
+  revokedAt DateTime?
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model ParkingSpot {
+  id          String          @id @default(uuid())
+  ownerId     String?
+  title       String
+  description String?
+  latitude    Float
+  longitude   Float
+  geoPoint    Unsupported("geography(Point,4326)")?
+  address     String?
+  zone        String?
+  status      ParkingStatus   @default(UNKNOWN)
+  type        ParkingType     @default(STREET)
+  capacity    Int?
+  reportedAt  DateTime?
+  verifiedAt  DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  owner       User?           @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  reports     ParkingReport[]
+  posts       Post[]
+  reservations ParkingReservation[]
+
+  @@index([status])
+  @@index([zone])
+  @@index([createdAt])
+}
+
+model ParkingReport {
+  id            String        @id @default(uuid())
+  reporterId    String
+  parkingSpotId String
+  status        ParkingStatus
+  latitude      Float
+  longitude     Float
+  geoPoint      Unsupported("geography(Point,4326)")?
+  description   String?
+  confidence    Int           @default(50)
+  expiresAt     DateTime
+  createdAt     DateTime      @default(now())
+  reporter      User          @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  parkingSpot   ParkingSpot   @relation(fields: [parkingSpotId], references: [id], onDelete: Cascade)
+  reputation    Reputation[]
+
+  @@index([parkingSpotId, createdAt])
+  @@index([reporterId, createdAt])
+  @@index([expiresAt])
+}
+
+model ParkingReservation {
+  id            String      @id @default(uuid())
+  parkingSpotId String
+  userId        String
+  startsAt      DateTime
+  expiresAt     DateTime
+  cancelledAt   DateTime?
+  createdAt     DateTime    @default(now())
+  parkingSpot   ParkingSpot @relation(fields: [parkingSpotId], references: [id], onDelete: Cascade)
+
+  @@index([parkingSpotId, startsAt])
+  @@index([userId, expiresAt])
+}
+
+model Post {
+  id            String      @id @default(uuid())
+  authorId      String
+  parkingSpotId String?
+  title         String
+  content       String
+  latitude      Float?
+  longitude     Float?
+  media         Json?
+  deletedAt     DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  author        User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parkingSpot   ParkingSpot? @relation(fields: [parkingSpotId], references: [id], onDelete: SetNull)
+  comments      Comment[]
+  reactions     Reaction[]
+
+  @@index([authorId, createdAt])
+  @@index([createdAt])
+}
+
+model Comment {
+  id              String     @id @default(uuid())
+  authorId        String
+  postId          String
+  parentCommentId String?
+  content         String
+  deletedAt       DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  author          User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  post            Post       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  parent          Comment?   @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: SetNull)
+  replies         Comment[]  @relation("CommentReplies")
+  reactions       Reaction[]
+
+  @@index([postId, createdAt])
+  @@index([authorId, createdAt])
+}
+
+model Reaction {
+  id        String       @id @default(uuid())
+  userId    String
+  postId    String?
+  commentId String?
+  type      ReactionType @default(LIKE)
+  createdAt DateTime     @default(now())
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post?        @relation(fields: [postId], references: [id], onDelete: Cascade)
+  comment   Comment?     @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@unique([userId, commentId])
+}
+
+model Reputation {
+  id              String         @id @default(uuid())
+  userId          String
+  score           Int
+  reason          String
+  parkingReportId String?
+  createdAt       DateTime       @default(now())
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parkingReport   ParkingReport? @relation(fields: [parkingReportId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+}
+
+model Notification {
+  id          String           @id @default(uuid())
+  recipientId String
+  type        NotificationType
+  title       String
+  message     String
+  data        Json?
+  readAt      DateTime?
+  createdAt   DateTime         @default(now())
+  recipient   User             @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, readAt, createdAt])
+}
+
+model ContentReport {
+  id         String           @id @default(uuid())
+  reporterId String
+  targetType ReportTargetType
+  targetId   String
+  reason     String
+  status     ModerationStatus @default(OPEN)
+  moderatorId String?
+  action     String?
+  resolvedAt DateTime?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  reporter   User             @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  moderator  User?            @relation("Moderator", fields: [moderatorId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([targetType, targetId])
+}
+
+model ModerationAction {
+  id          String   @id @default(uuid())
+  moderatorId String
+  targetType  String
+  targetId    String
+  action      String
+  reason      String
+  createdAt   DateTime @default(now())
+  moderator   User     @relation("ModerationActor", fields: [moderatorId], references: [id], onDelete: Cascade)
+}
+
+model AdminAction {
+  id        String   @id @default(uuid())
+  adminId   String
+  action    String
+  targetId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  admin     User     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  actorId   String?
+  action    String
+  target    String?
+  ipAddress String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  actor     User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([action, createdAt])
+  @@index([actorId, createdAt])
+}

@@ -55,6 +55,14 @@ Copy `.env.example` to `.env`. All integrations are optional:
 - `PARKO_TELEMETRY_URL`: privacy-filtered error/event collector.
 - `VITE_PUSH_PUBLIC_KEY` and `PARKO_PUSH_SUBSCRIPTION_URL`: Web Push reminders that can fire after the PWA is closed.
 
+## Community backend (Supabase)
+
+The map works without community data, but sign-in and live community reports require a Supabase project. Create a project, enable PostGIS, then run [`supabase/schema.sql`](supabase/schema.sql) once in the Supabase SQL editor. The script creates the profile trigger, secure RLS policies, PostGIS indexes, moderated-content tables, reputation audit trail, and Realtime publications.
+
+Copy `.env.example` to `.env` and set `VITE_SUPABASE_URL` plus `VITE_SUPABASE_ANON_KEY`. Never put a Supabase service-role key in the browser. In Supabase Auth, configure the application's URLs as redirect URLs and enable the desired email-confirmation policy.
+
+Community availability reports are authenticated, rate-limited in PostgreSQL to one report per user and parking per minute, automatically expire, and award one auditable reputation point. Rows are synchronized through Supabase Realtime; RLS ensures that browsers only receive active public reports and their own private records.
+
 Expected occupancy feed:
 
 ```json

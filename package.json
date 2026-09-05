@@ -15,10 +15,16 @@
     "dev:desktop": "node scripts/electron-launcher.mjs --dev",
     "check": "tsc -b --pretty false",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "backend:install": "npm install --prefix backend",
+    "backend:dev": "npm run dev --prefix backend",
+    "backend:build": "npm run build --prefix backend",
+    "backend:test": "npm test --prefix backend",
+    "backend:prisma:validate": "npm run prisma:validate --prefix backend",
+    "backend:prisma:generate": "npm run prisma:generate --prefix backend"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.112.4",
+    "@supabase/supabase-js": "2.112.4",
     "@vitejs/plugin-react": "latest",
     "leaflet": "^1.9.4",
     "react": "latest",
