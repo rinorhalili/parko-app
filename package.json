@@ -29,6 +29,7 @@
     "leaflet": "^1.9.4",
     "react": "latest",
     "react-dom": "latest",
+    "socket.io-client": "^4.8.3",
     "typescript": "latest",
     "vite": "latest"
   },
