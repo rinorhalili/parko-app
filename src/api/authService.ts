@@ -17,8 +17,7 @@ export function me() { return apiRequest<User>('/auth/me') }
 
 export async function logout() {
   try {
-    const refreshToken = localStorage.getItem('parko:refresh-token:v1')
-    await apiRequest('/auth/logout', { method: 'POST', body: JSON.stringify({ refreshToken }) }, false)
+    await apiRequest('/auth/logout', { method: 'POST', body: JSON.stringify({}) }, false)
   } finally {
     clearAuthTokens()
   }

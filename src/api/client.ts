@@ -4,7 +4,6 @@ export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api/v1').rep
 export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || API_BASE_URL.replace(/\/api\/v1\/?$/, '') || window.location.origin
 
 const ACCESS_TOKEN_KEY = 'parko:access-token:v1'
-const REFRESH_TOKEN_KEY = 'parko:refresh-token:v1'
 let refreshPromise: Promise<string | null> | null = null
 
 export class ApiError extends Error {
@@ -34,13 +33,11 @@ export function getAccessToken() { return readToken(ACCESS_TOKEN_KEY) }
 
 export function setAuthTokens(tokens: AuthTokens) {
   writeToken(ACCESS_TOKEN_KEY, tokens.accessToken)
-  writeToken(REFRESH_TOKEN_KEY, null)
   window.dispatchEvent(new Event('parko:auth-changed'))
 }
 
 export function clearAuthTokens() {
   writeToken(ACCESS_TOKEN_KEY, null)
-  writeToken(REFRESH_TOKEN_KEY, null)
   window.dispatchEvent(new Event('parko:auth-changed'))
 }
 
@@ -49,13 +46,13 @@ function notifyAuthExpired() {
 }
 
 async function refreshAccessToken() {
-  const refreshToken = readToken(REFRESH_TOKEN_KEY)
-
   const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ refreshToken }),
+    // The refresh token lives only in the HTTP-only cookie issued by the API.
+    // This keeps it out of JavaScript-accessible storage.
+    body: JSON.stringify({}),
     signal: AbortSignal.timeout(12_000)
   })
   if (!response.ok) {
@@ -67,6 +64,12 @@ async function refreshAccessToken() {
   const payload = await response.json() as ApiResponse<AuthTokens>
   setAuthTokens(payload.data)
   return payload.data.accessToken
+}
+
+/** Restore an authenticated browser session after a reload using the secure refresh cookie. */
+export async function restoreSession() {
+  if (getAccessToken()) return getAccessToken()
+  return refreshOnce()
 }
 
 function refreshOnce() {

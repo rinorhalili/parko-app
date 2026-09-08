@@ -18,3 +18,7 @@ export function createComment(postId: string, content: string) {
     method: 'POST', body: JSON.stringify({ content })
   })
 }
+
+export function deletePost(id: string) {
+  return apiRequest<void>(`/posts/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}

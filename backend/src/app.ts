@@ -26,7 +26,7 @@ export function createApp() {
   if (env.NODE_ENV === "production") app.set("trust proxy", 1);
   app.use(requestId);
   app.use(pinoHttp({ logger, genReqId: (req) => req.id }));
-  app.use(helmet());
+  app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
   app.use(cors({ origin: corsOrigins, credentials: true }));
   app.use(compression());
   app.use(cookieParser());

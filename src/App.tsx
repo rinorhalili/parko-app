@@ -2,7 +2,6 @@ import { useRoutingOrigin } from './hooks/useRoutingOrigin'
 import { useCrowdSourcing } from './crowdsourcing'
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { loadVerifiedAvailability, mergeVerifiedAvailability } from './availabilityApi'
-import { defaultParking } from './data'
 import LiveParkingMap, { DEFAULT_MAP_SETTINGS } from './LiveParkingMap'
 import { reverseGeocodeLocation, searchDestinationOnline, searchLocalDestinations } from './geocodingApi'
 import { distanceMeters, rankParkings, walkableParkingCandidates } from './parkingRanking'
@@ -15,11 +14,13 @@ import { kartaViewUrl, walkingDirectionsUrl } from './streetView'
 import { handleOpenExternal } from './externalLinks'
 import { captureEvent } from './telemetry'
 import { AlertBanner, LeavingButton, SpotVouching } from './crowdsourcing'
+import { submitParkingAvailability } from './communityApi'
 import { SaveMyParkedLocationCard, SmsTariffHelper } from './DriverTools'
 import type { DrivingMatrixEntry } from './routingApi'
 import type { Destination, DrivingRoute, Filters, MapSettings, MapVariant, Parking, ParkingLoadStatus, ParkingPalette, ParkingPreference, RankedParking, Screen } from './types'
 
 const Login = lazy(() => import('./Login'))
+const CommunityView = lazy(() => import('./CommunityView'))
 
 const initialFilters: Filters = {
   availableOnly: false,
@@ -114,6 +115,7 @@ function policeRiskLabel(report?: ParkingReport) {
   if (!report || report.policeRisk === undefined) return 'Siguria: pa raport'
   return report.policeRisk ? 'Siguria: polici afër' : 'Siguria: duket qetë'
 }
+
 function applyParkingReport(parking: Parking, report?: ParkingReport): Parking {
   if (!report || Date.now() - report.updatedAt >= 30 * 60_000 || parking.access === 'no') return parking
   const ageMinutes = Math.max(0, Math.round((Date.now() - report.updatedAt) / 60_000))
@@ -121,9 +123,7 @@ function applyParkingReport(parking: Parking, report?: ParkingReport): Parking {
     ? { pricePerHour: 0, free: true }
     : report.payment === 'paid' && parking.pricePerHour === 0
       ? { pricePerHour: null, free: false }
-      : report.payment === 'paid'
-        ? { free: false }
-        : {}
+      : report.payment === 'paid' ? { free: false } : {}
   const availabilityUpdate = report.availability === 'free-spots'
     ? { spaces: null, status: 'available' as const, availabilitySource: 'Raport perdoruesi', updatedMinutesAgo: ageMinutes, availabilityUpdatedAt: new Date(report.updatedAt).toISOString() }
     : report.availability === 'full'
@@ -1008,7 +1008,7 @@ const parkingPaletteOptions: Array<{ value: ParkingPalette; label: string; descr
   { value: 'operator', label: 'Sipas operatorit', description: 'Prishtina Parking / OSM / privat' },
 ]
 
-function SettingsView({ settings, preferredType, walkingMinutes, typeCounts, onChange, onPreferredType, onWalkingMinutes, onReset, onLogin, onHome, onSaved }: { settings: MapSettings; preferredType: ParkingTypeFilter; walkingMinutes: 5 | 10 | 15; typeCounts: ParkingTypeCounts; onChange: (settings: MapSettings) => void; onPreferredType: (type: ParkingTypeFilter) => void; onWalkingMinutes: (minutes: 5 | 10 | 15) => void; onReset: () => void; onLogin: () => void; onHome: () => void; onSaved: () => void }) {
+function SettingsView({ settings, preferredType, walkingMinutes, typeCounts, onChange, onPreferredType, onWalkingMinutes, onReset, onLogin, onHome, onSaved, onCommunity }: { settings: MapSettings; preferredType: ParkingTypeFilter; walkingMinutes: 5 | 10 | 15; typeCounts: ParkingTypeCounts; onChange: (settings: MapSettings) => void; onPreferredType: (type: ParkingTypeFilter) => void; onWalkingMinutes: (minutes: 5 | 10 | 15) => void; onReset: () => void; onLogin: () => void; onHome: () => void; onSaved: () => void; onCommunity: () => void }) {
   const toggle = (key: 'emphasizeAreas' | 'largePointMarkers' | 'showPointParking' | 'largeLabels' | 'showDataSources') => onChange({ ...settings, [key]: !settings[key] })
   return (
     <div className="screen settings-screen">
@@ -1061,6 +1061,7 @@ function SettingsView({ settings, preferredType, walkingMinutes, typeCounts, onC
 
         <section className="settings-section settings-section--account">
           <div className="settings-section__heading"><span><small>Llogaria</small><h2>Profili yt</h2></span></div>
+          <button className="settings-login-button" onClick={onCommunity}><span><strong>Komuniteti dhe njoftimet</strong><small>Postime dhe njoftime nga llogaria jote.</small></span><b>›</b></button>
           <button className="settings-login-button" onClick={onLogin}><span><strong>Hyr ose regjistrohu</strong><small>Ruaj preferencat dhe parkingjet e tua.</small></span><b>›</b></button>
         </section>
 
@@ -1264,7 +1265,10 @@ export default function App() {
   const persistedPreferences = useRef(loadPreferences()).current
   const [screen, setScreen] = useState<Screen>('home')
   const [showLoginModal, setShowLoginModal] = useState(false)
-  const [selected, setSelected] = useState(() => getPrishtinaParkingSnapshot().find((parking) => parking.id === persistedPreferences.selectedParkingId) ?? defaultParking)
+  const [selected, setSelected] = useState(() => {
+    const snapshot = getPrishtinaParkingSnapshot()
+    return snapshot.find((parking) => parking.id === persistedPreferences.selectedParkingId) ?? snapshot[0]
+  })
   const [filters, setFilters] = useState<Filters>(() => ({ ...initialFilters, ...persistedPreferences.filters }))
   const [mapSettings, setMapSettings] = useState<MapSettings>(() => normalizedMapSettings(persistedPreferences.mapSettings))
   const [query, setQuery] = useState('')
@@ -1653,7 +1657,17 @@ export default function App() {
     setParkingPreviewOpen(true)
   }
 
-  function reportParking(parkingId: string, patch: ParkingReportPatch) {
+  async function reportParking(parkingId: string, patch: ParkingReportPatch) {
+    const parking = parkings.find((item) => item.id === parkingId)
+    if (!parking) return
+    if (patch.availability) {
+      try {
+        await submitParkingAvailability(parking, patch.availability === 'free-spots' ? 'AVAILABLE' : 'OCCUPIED')
+      } catch (error) {
+        setRouteNotice(error instanceof Error ? error.message : 'Raportimi nuk u dërgua.')
+        return
+      }
+    }
     setParkingReports((current) => {
       const nextReport = { ...(current[parkingId] ?? { parkingId }), ...patch, updatedAt: Date.now() }
       const next = { ...current, [parkingId]: nextReport }
@@ -1805,8 +1819,9 @@ export default function App() {
           />
         )}
         {screen === 'saved' && <SavedView parkings={locatedParkings.filter((parking) => savedParkingIds.has(parking.id))} showDataSources={mapSettings.showDataSources} userLocation={userLocationInPrishtina ? activeUserLocation : undefined} onHome={() => setScreen('home')} onSettings={() => setScreen('settings')} onOpen={(parking) => { setSelected(parking); setDestination(null); setScreen('details') }} />}
-        {screen === 'settings' && <SettingsView settings={mapSettings} preferredType={filters.type as ParkingTypeFilter} walkingMinutes={walkingMinutes} typeCounts={globalTypeCounts} onChange={(value) => setMapSettings(normalizedMapSettings(value))} onPreferredType={(type) => setFilters((current) => ({ ...current, type }))} onWalkingMinutes={setWalkingMinutes} onReset={() => { setMapSettings(DEFAULT_MAP_SETTINGS); setFilters(initialFilters); setWalkingMinutes(10) }} onLogin={() => setShowLoginModal(true)} onHome={() => setScreen('home')} onSaved={() => setScreen('saved')} />}
-        {screen === 'details' && <DetailsView parking={currentSelected} report={parkingReports[currentSelected.id]} onReport={reportParking} route={route} destination={destination} smartMatch={selectedRankedParking} saved={savedParkingIds.has(currentSelected.id)} userLocation={activeUserLocation} userLocationLive={userLocationInPrishtina} userLocationAccuracy={locationAccuracy} mapSettings={mapSettings} onToggleSaved={toggleSavedParking} onBack={() => setScreen('home')} onNavigate={() => { if (!userLocationInPrishtina || !route) { setRouteNotice('Aktivizo lokacionin dhe prit llogaritjen e rrugës.'); requestUserLocation({ recenter: false }); setRouteRetry((value) => value + 1); return }; setRouteNotice(''); setScreen('navigation') }} onStreetView={() => setStreetViewParking(currentSelected)} />}
+        {screen === 'settings' && <SettingsView settings={mapSettings} preferredType={filters.type as ParkingTypeFilter} walkingMinutes={walkingMinutes} typeCounts={globalTypeCounts} onChange={(value) => setMapSettings(normalizedMapSettings(value))} onPreferredType={(type) => setFilters((current) => ({ ...current, type }))} onWalkingMinutes={setWalkingMinutes} onReset={() => { setMapSettings(DEFAULT_MAP_SETTINGS); setFilters(initialFilters); setWalkingMinutes(10) }} onLogin={() => setShowLoginModal(true)} onHome={() => setScreen('home')} onSaved={() => setScreen('saved')} onCommunity={() => setScreen('community')} />}
+        {screen === 'community' && <Suspense fallback={<div className="app-loading" role="status">Duke hapur komunitetin…</div>}><CommunityView onBack={() => setScreen('settings')} onLogin={() => setShowLoginModal(true)} /></Suspense>}
+          {screen === 'details' && <DetailsView parking={currentSelected} report={parkingReports[currentSelected.id]} onReport={(id, patch) => { void reportParking(id, patch) }} route={route} destination={destination} smartMatch={selectedRankedParking} saved={savedParkingIds.has(currentSelected.id)} userLocation={activeUserLocation} userLocationLive={userLocationInPrishtina} userLocationAccuracy={locationAccuracy} mapSettings={mapSettings} onToggleSaved={toggleSavedParking} onBack={() => setScreen('home')} onNavigate={() => { if (!userLocationInPrishtina || !route) { setRouteNotice('Aktivizo lokacionin dhe prit llogaritjen e rrugës.'); requestUserLocation({ recenter: false }); setRouteRetry((value) => value + 1); return }; setRouteNotice(''); setScreen('navigation') }} onStreetView={() => setStreetViewParking(currentSelected)} />}
         {screen === 'navigation' && <NavigationView parking={currentSelected} route={route} userLocation={activeUserLocation} userLocationLive={userLocationInPrishtina} userLocationAccuracy={locationAccuracy} mapSettings={mapSettings} recenterToken={recenterToken} hasDestination={Boolean(destination)} onRecenter={requestUserLocation} onStop={() => setScreen('details')} onArrive={() => setScreen(destination ? 'walking' : 'home')} />}
         {screen === 'walking' && destination && displayedWalkingRoute && selectedRankedParking && <WalkingView parking={currentSelected} destination={destination} route={displayedWalkingRoute} match={selectedRankedParking} directionsHref={selectedWalkingDirectionsHref} userLocation={activeUserLocation} userLocationLive={userLocationInPrishtina} userLocationAccuracy={locationAccuracy} mapSettings={mapSettings} onFinish={() => setScreen('home')} />}
         {streetViewParking && <StreetViewPanel parking={streetViewParking} onClose={() => setStreetViewParking(null)} />}

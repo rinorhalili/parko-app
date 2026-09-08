@@ -1,4 +1,3 @@
-import { PARKINGS } from './data'
 import { OSM_PARKING_SNAPSHOT } from './osmParkingSnapshot'
 import { OFFICIAL_PRISHTINA_PARKING_MARKERS } from './officialPrishtinaParking'
 import { deriveMunicipalParkingData } from './prishtinaParkingRules'
@@ -300,13 +299,8 @@ async function loadOsmParkings(signal?: AbortSignal) {
   if (!osmParkings.length) throw new Error('No parking data returned')
   const officialParkings = OFFICIAL_PRISHTINA_PARKING_MARKERS.map(fromOfficialPrishtinaParkingMarker)
 
-  const enrichedSeeds = PARKINGS.map((seed) => {
-    const liveMatch = osmParkings.find((parking) => parking.id === seed.id || distanceMeters(seed.coordinates, parking.coordinates) < 45)
-    return liveMatch ? { ...seed, ...liveMatch, name: seed.name } : seed
-  })
-  const seedParkings = withoutDuplicates(enrichedSeeds, officialParkings, 30)
-  const osmWithoutDuplicates = withoutDuplicates(osmParkings, [...officialParkings, ...seedParkings], 30)
-  return [...officialParkings, ...seedParkings, ...osmWithoutDuplicates].sort((a, b) => a.distanceMeters - b.distanceMeters)
+  const osmWithoutDuplicates = withoutDuplicates(osmParkings, officialParkings, 30)
+  return [...officialParkings, ...osmWithoutDuplicates].sort((a, b) => a.distanceMeters - b.distanceMeters)
 }
 
 export function mergeParkingSources(mapped: Parking[], backend: Parking[]) {
@@ -401,13 +395,8 @@ export function getPrishtinaParkingSnapshot() {
     .map(([type, id, lat, lng, tags]) => fromOsm({ type, id, lat, lon: lng, tags }))
     .filter((parking): parking is Parking => parking !== null)
   const officialParkings = OFFICIAL_PRISHTINA_PARKING_MARKERS.map(fromOfficialPrishtinaParkingMarker)
-  const enrichedSeeds = PARKINGS.map((seed) => {
-    const snapshotMatch = snapshotParkings.find((parking) => parking.id === seed.id || distanceMeters(seed.coordinates, parking.coordinates) < 45)
-    return snapshotMatch ? { ...seed, ...snapshotMatch, name: seed.name } : seed
-  })
-  const seedParkings = withoutDuplicates(enrichedSeeds, officialParkings, 30)
-  const snapshotWithoutDuplicates = withoutDuplicates(snapshotParkings, [...officialParkings, ...seedParkings], 30)
-  return [...officialParkings, ...seedParkings, ...snapshotWithoutDuplicates].sort((a, b) => a.distanceMeters - b.distanceMeters)
+  const snapshotWithoutDuplicates = withoutDuplicates(snapshotParkings, officialParkings, 30)
+  return [...officialParkings, ...snapshotWithoutDuplicates].sort((a, b) => a.distanceMeters - b.distanceMeters)
 }
 
 export { USER_LOCATION }

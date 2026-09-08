@@ -36,6 +36,36 @@ npm start
 
 The dependency-free Node server serves `dist/`, proxies third-party APIs, and adds TTL caching. The default port is `4173`.
 
+## Full application stack
+
+The web app is a responsive PWA and is the supported mobile client: it installs on Android and iOS, uses the platform location permission, and has an offline shell. The API is an independent Express/Prisma service; PostgreSQL/PostGIS is the source of truth for parking, reports, community, moderation and notifications. Redis backs Socket.IO fan-out and BullMQ workers.
+
+Start a complete local stack:
+
+```bash
+cp backend/.env.docker.example backend/.env
+# Set distinct JWT values and a non-default POSTGRES_PASSWORD.
+# In Docker, DATABASE_URL must use host `postgres` and REDIS_URL host `redis`.
+cd backend
+docker compose up --build
+```
+
+The `migrate` service provisions the Prisma schema on an empty development database. Import the versioned OSM parking dataset after the stack is ready:
+
+```bash
+docker compose exec api npm run import:parking
+```
+
+For host-based development, run PostGIS and Redis, use `localhost` in `DATABASE_URL` and `REDIS_URL`, then run `npm run dev` and `npm run dev:worker` in `backend/`. Run `npm run dev` in the repository root for the web client. The Vite proxy routes `/api/v1` and Socket.IO to the API.
+
+### Deployment and operations
+
+Build and deploy the web bundle to any HTTPS static host. Deploy the API and worker as separate services from `backend/Dockerfile`, backed by managed Postgres with PostGIS and managed Redis. Configure `VITE_API_BASE_URL` and `VITE_SOCKET_URL` to the API's HTTPS origin before building web assets. Supply all backend variables from `backend/.env.example` through the host secret manager; refresh credentials are HTTP-only secure cookies, so web and API must be same-site or configured for the appropriate secure cookie policy.
+
+Run the schema bootstrap once per release before API/worker rollout, then run `npm run import:parking` when refreshing the OSM dataset. Back up PostgreSQL daily with point-in-time recovery enabled; Redis is rebuildable queue/cache state. Use `/health` for API health checks and structured Pino logs for monitoring. Roll back by redeploying the prior immutable image; take a database backup before any schema change.
+
+CI runs web type checks, tests, build, plus backend generation, build and tests on pull requests and `main`. The production release sequence is: build/test images, back up the database, provision schema, deploy API, deploy worker, deploy static web assets, then verify `/health`, login, a parking report, and Socket.IO delivery.
+
 ## Quality checks
 
 ```bash

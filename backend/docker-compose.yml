@@ -2,32 +2,69 @@ services:
   postgres:
     image: postgis/postgis:17-3.5
     environment:
-      POSTGRES_DB: parko
-      POSTGRES_USER: parko
-      POSTGRES_PASSWORD: parko
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: ${POSTGRES_DB:-parko}
+      POSTGRES_USER: ${POSTGRES_USER:-parko}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in backend/.env}
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    # 5432 is frequently occupied by a locally installed PostgreSQL on Windows.
+    # Native Node connects through localhost:5433; containers still use postgres:5432.
+    ports: ["5433:5432"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U parko -d parko"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 20
+    restart: unless-stopped
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    command: redis-server --appendonly yes --save 60 1000
+    volumes: [redis_data:/data]
+    ports: ["6379:6379"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 20
-  backend:
+    restart: unless-stopped
+  migrate:
     build: .
     env_file: .env
-    ports:
-      - "4000:4000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-parko}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-parko}?schema=public
+    command: npx prisma db push --skip-generate
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
+    restart: "no"
+  api:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-parko}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-parko}?schema=public
+      REDIS_URL: redis://redis:6379
+    ports: ["${API_PORT:-4000}:4000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+  worker:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-parko}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-parko}?schema=public
+      REDIS_URL: redis://redis:6379
+    command: npm run start:worker
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    restart: unless-stopped
+volumes:
+  postgres_data:
+  redis_data:
