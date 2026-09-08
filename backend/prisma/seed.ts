@@ -4,9 +4,13 @@ import { hashPassword } from "../src/utils/password.js";
 const prisma = new PrismaClient();
 
 async function main() {
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? "ChangeMe123!";
-  const moderatorPassword = process.env.SEED_MODERATOR_PASSWORD ?? "ChangeMe123!";
-  const userPassword = process.env.SEED_USER_PASSWORD ?? "ChangeMe123!";
+  if (process.env.NODE_ENV === "production") throw new Error("Demo seeding is disabled in production");
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+  const moderatorPassword = process.env.SEED_MODERATOR_PASSWORD;
+  const userPassword = process.env.SEED_USER_PASSWORD;
+  if (!adminPassword || !moderatorPassword || !userPassword || [adminPassword, moderatorPassword, userPassword].some((password) => password.length < 12)) {
+    throw new Error("Set explicit SEED_ADMIN_PASSWORD, SEED_MODERATOR_PASSWORD and SEED_USER_PASSWORD (at least 12 characters)");
+  }
 
   const [admin, moderator, user] = await Promise.all([
     prisma.user.upsert({

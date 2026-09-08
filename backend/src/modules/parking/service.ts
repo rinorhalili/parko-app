@@ -1,6 +1,7 @@
 import type { ParkingStatus, ParkingType, Prisma } from "@prisma/client";
 import { prisma } from "../../database/prisma.js";
 import { notFound } from "../../utils/errors.js";
+import { effectiveStatus, publicParkingWhere } from './policy.js';
 
 export type NearbyQuery = {
   lat: number;
@@ -35,23 +36,28 @@ export async function nearbyParking(query: NearbyQuery) {
     type: ParkingType;
     distance: number;
     updatedAt: Date;
+    reportedAt: Date | null;
   }>>`
-    SELECT id, title, latitude, longitude, address, zone, status, type, "updatedAt",
+    SELECT id, title, latitude, longitude, address, zone, status, type, "updatedAt", "reportedAt",
       ST_Distance("geoPoint", ST_SetSRID(ST_MakePoint(${query.lng}, ${query.lat}), 4326)::geography) AS distance
     FROM "ParkingSpot"
     WHERE "geoPoint" IS NOT NULL
       AND ST_DWithin("geoPoint", ST_SetSRID(ST_MakePoint(${query.lng}, ${query.lat}), 4326)::geography, ${query.radius})
-      AND (${query.status ?? null}::"ParkingStatus" IS NULL OR status = ${query.status ?? null}::"ParkingStatus")
+      AND ("ownerId" IS NULL OR "verifiedAt" IS NOT NULL)
+      AND status NOT IN ('TEMPORARILY_UNAVAILABLE', 'RESERVED')
+      AND (${query.status ?? null}::"ParkingStatus" IS NULL OR
+        (CASE WHEN status IN ('AVAILABLE', 'OCCUPIED') AND ("reportedAt" IS NULL OR "reportedAt" <= NOW() - INTERVAL '30 minutes') THEN 'UNKNOWN'::"ParkingStatus" ELSE status END) = ${query.status ?? null}::"ParkingStatus")
       AND (${query.zone ?? null}::text IS NULL OR zone = ${query.zone ?? null})
       AND (${query.type ?? null}::"ParkingType" IS NULL OR type = ${query.type ?? null}::"ParkingType")
     ORDER BY distance ASC
     LIMIT 100
   `;
-  return rows;
+  return rows.map((row) => effectiveStatus(row));
 }
 
-export async function listParking() {
-  return prisma.parkingSpot.findMany({ orderBy: { updatedAt: "desc" }, take: 500 });
+export async function listParking(page = 0) {
+  const spots = await prisma.parkingSpot.findMany({ where: publicParkingWhere, orderBy: { id: 'asc' }, take: 200, skip: page * 200 });
+  return spots.map((spot) => effectiveStatus(spot));
 }
 
 export async function createParking(ownerId: string, input: Omit<Prisma.ParkingSpotUncheckedCreateInput, "ownerId" | "geoPoint">) {
@@ -65,7 +71,7 @@ export async function createParking(ownerId: string, input: Omit<Prisma.ParkingS
 }
 
 export async function parkingById(id: string) {
-  const spot = await prisma.parkingSpot.findUnique({ where: { id }, include: { reports: { orderBy: { createdAt: "desc" }, take: 10 } } });
+  const spot = await prisma.parkingSpot.findFirst({ where: { id, ...publicParkingWhere }, include: { reports: { where: { expiresAt: { gt: new Date() } }, orderBy: { createdAt: "desc" }, take: 10 } } });
   if (!spot) throw notFound("Parking spot not found");
-  return spot;
+  return effectiveStatus(spot);
 }

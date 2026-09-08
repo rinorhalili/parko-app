@@ -1,4 +1,4 @@
-import { lazy, StrictMode, Suspense } from 'react'
+import { lazy, StrictMode, Suspense, useEffect, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import App from './App'
 import { CrowdSourcingProvider } from './crowdsourcing'
@@ -48,7 +48,12 @@ function resolveInitialMode(): AppMode {
 }
 
 function AppRouter() {
-  const mode = resolveInitialMode()
+  const [mode, setMode] = useState(resolveInitialMode)
+  useEffect(() => {
+    const update = () => setMode(resolveInitialMode())
+    window.addEventListener('popstate', update)
+    return () => window.removeEventListener('popstate', update)
+  }, [])
 
   return (
     <>

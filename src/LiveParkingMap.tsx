@@ -3,7 +3,7 @@ import L from 'leaflet'
 import { PRISHTINA_CENTER, PRISHTINA_MAP_BOUNDS, USER_LOCATION, isWithinPrishtinaMap } from './parkingApi'
 import { accessPointIsEstimated, parkingAccessPoint } from './parkingGeometry'
 import type { Destination, DrivingRoute, MapSettings, MapVariant, Parking, ParkingLoadStatus, ParkingPalette } from './types'
-import { useCrowdSourcing } from './crowdsourcing'
+
 
 type MapMode = 'home' | 'details' | 'navigation' | 'walking'
 const PRISHTINA_LEAFLET_BOUNDS: [L.LatLngTuple, L.LatLngTuple] = [
@@ -136,7 +136,6 @@ export default function LiveParkingMap({
 }) {
   // Availability is reflected on the parking cards; no locally fabricated
   // "leaving" pins are drawn on the map.
-  useCrowdSourcing()
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const baseTileLayerRef = useRef<L.TileLayer | null>(null)
@@ -152,6 +151,8 @@ export default function LiveParkingMap({
   const focusParkingRef = useRef<string | null>(null)
   const automaticViewportRef = useRef<string | null>(null)
   const manualViewportRef = useRef(false)
+  const recenterPositionRef = useRef(userLocation)
+  recenterPositionRef.current = userLocation
   const [mapZoom, setMapZoom] = useState(14)
   const [mapReadyToken, setMapReadyToken] = useState(0)
   onSelectRef.current = onSelect
@@ -270,21 +271,20 @@ export default function LiveParkingMap({
 
   useEffect(() => {
     if (!recenterToken || !mapRef.current) return
+    const userLocation = recenterPositionRef.current
     manualViewportRef.current = false
     if (!isWithinPrishtinaMap(userLocation)) {
       mapRef.current.flyTo([PRISHTINA_CENTER.lat, PRISHTINA_CENTER.lng], 13, { duration: .45 })
       return
     }
     mapRef.current.flyTo([userLocation.lat, userLocation.lng], mode === 'navigation' ? 17 : 16, { duration: .45 })
-  }, [recenterToken, mode, userLocation.lat, userLocation.lng])
+  }, [recenterToken])
 
   useEffect(() => {
     const map = mapRef.current
     const parkingLayer = parkingLayerRef.current
-    const routeLayer = routeLayerRef.current
-    if (!map || !parkingLayer || !routeLayer) return
+    if (!map || !parkingLayer) return
     parkingLayer.clearLayers()
-    routeLayer.clearLayers()
     if (mode === 'home' && !destination && !route) automaticViewportRef.current = null
 
     const selectionFocused = mode === 'home' && Boolean(route || destination)
@@ -333,7 +333,9 @@ export default function LiveParkingMap({
       interactiveLayers.forEach((layer) => {
         layer.bindPopup(createPopup(parking), { closeButton: false })
         const showParkingLabel = mode !== 'navigation' && mode !== 'walking' && mapZoom >= 17 && (isSelected || Boolean(rank && rank <= 3))
-        layer.bindTooltip(rank ? `#${rank} · ${parking.name} · ${priceLabel(parking.pricePerHour)}` : `${parking.name} · ${priceLabel(parking.pricePerHour)}`, {
+        const label = document.createElement('span')
+        label.textContent = `${rank ? `#${rank} · ` : ''}${parking.name} · ${priceLabel(parking.pricePerHour)}`
+        layer.bindTooltip(label, {
           permanent: showParkingLabel,
           direction: 'top',
           className: 'parking-rank-tooltip',
@@ -364,6 +366,13 @@ export default function LiveParkingMap({
 
     })
 
+  }, [visibleParkings, selected.id, mode, Boolean(route || destination), Boolean(destination), recommendationRanks, mapZoom, mapReadyToken, mapSettings.parkingPalette, mapSettings.emphasizeAreas, mapSettings.largePointMarkers, mapSettings.showPointParking])
+
+  useEffect(() => {
+    const map = mapRef.current
+    const routeLayer = routeLayerRef.current
+    if (!map || !routeLayer) return
+    routeLayer.clearLayers()
     if (userLocationLive && isWithinPrishtinaMap(userLocation)) {
       if (userLocationAccuracy) {
         L.circle([userLocation.lat, userLocation.lng], {

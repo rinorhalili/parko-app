@@ -28,7 +28,7 @@ export interface User {
 export interface AuthTokens {
   user: User
   accessToken: string
-  refreshToken: string
+  refreshToken?: string
 }
 
 export interface LoginInput {

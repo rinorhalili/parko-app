@@ -8,8 +8,6 @@ import type { Parking, ParkingAccess } from './types'
 const OVERPASS_URLS = [
   '/api/overpass',
   'https://overpass.kumi.systems/api/interpreter',
-  'https://overpass-api.de/api/interpreter',
-  'https://overpass.nchc.org.tw/api/interpreter',
 ]
 export const PRISHTINA_CENTER = { lat: 42.6608, lng: 21.1608 } as const
 export const PRISHTINA_MAP_BOUNDS = {
@@ -227,47 +225,50 @@ type BackendParkingSpot = {
   capacity: number | null
   status: 'AVAILABLE' | 'OCCUPIED' | 'UNKNOWN' | 'RESERVED' | 'TEMPORARILY_UNAVAILABLE'
   reportedAt: string | null
+  ownerId?: string | null
+  verifiedAt?: string | null
 }
 
 async function loadBackendParkingSpots(signal?: AbortSignal) {
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-  const data = await listParking()
+  const data = await listParking(signal)
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
   return (data as BackendParkingSpot[])
     .filter((spot) => isWithinPrishtinaMap({ lat: spot.latitude, lng: spot.longitude }))
     .map((spot): Parking => {
       const type = spot.type === 'PRIVATE' ? 'private' : spot.type === 'STREET' ? 'street' : 'public'
-      const live = spot.status === 'AVAILABLE' || spot.status === 'OCCUPIED'
+      const live = Boolean(spot.reportedAt && Date.now() - Date.parse(spot.reportedAt) < 30 * 60_000 && ['AVAILABLE', 'OCCUPIED'].includes(spot.status))
       return {
         id: spot.id,
         name: spot.title,
         zone: spot.zone ?? 'Prishtinë',
         address: spot.address ?? 'Prishtinë, Kosovë',
         capacity: spot.capacity,
-        spaces: spot.status === 'AVAILABLE' ? 1 : spot.status === 'OCCUPIED' ? 0 : null,
-        status: spot.status === 'AVAILABLE' ? 'available' : spot.status === 'OCCUPIED' ? 'full' : 'unknown',
+        spaces: null,
+        status: live ? spot.status === 'AVAILABLE' ? 'available' : 'full' : 'unknown',
         pricePerHour: null,
         distanceMeters: distanceMeters(USER_LOCATION, { lat: spot.latitude, lng: spot.longitude }),
-        driveMinutes: 0,
-        confidence: 'high',
+        driveMinutes: Math.max(1, Math.ceil(distanceMeters(USER_LOCATION, { lat: spot.latitude, lng: spot.longitude }) / 400)),
+        confidence: spot.ownerId ? (spot.verifiedAt ? 'medium' : 'low') : 'medium',
         updatedMinutesAgo: spot.reportedAt ? Math.max(0, Math.round((Date.now() - Date.parse(spot.reportedAt)) / 60_000)) : 0,
         type,
         open24h: false,
         covered: spot.type === 'GARAGE',
         cardPayment: false,
         evCharging: false,
-        accessible: false,
+        accessible: spot.type === 'ACCESSIBLE',
         free: false,
         coordinates: { lat: spot.latitude, lng: spot.longitude },
-        access: type === 'private' ? 'private' : 'unknown',
-        source: spot.id.startsWith('prishtina-parking-') ? 'municipal' : 'openstreetmap',
-        operator: spot.id.startsWith('prishtina-parking-') ? 'Prishtina Parking' : 'OpenStreetMap',
+        access: ['TEMPORARILY_UNAVAILABLE', 'RESERVED'].includes(spot.status) ? 'no' : type === 'private' ? 'private' : 'unknown',
+        source: spot.ownerId ? 'community' : spot.id.startsWith('prishtina-parking-') ? 'municipal' : spot.id.startsWith('osm-') ? 'openstreetmap' : 'community',
+        operator: !spot.ownerId && spot.id.startsWith('prishtina-parking-') ? 'Prishtina Parking' : null,
+        availabilityUpdatedAt: live ? spot.reportedAt! : undefined,
         availabilitySource: live ? 'Parko community' : undefined,
       }
     })
 }
 
-export async function loadPrishtinaParkings(signal?: AbortSignal) {
+async function loadOsmParkings(signal?: AbortSignal) {
   const query = `[out:json][timeout:30];nwr["amenity"="parking"](${PRISHTINA_PARKING_BOUNDS});out body center geom;`
   let payload: OverpassResponse | null = null
   let lastError: unknown = new Error('Overpass is unavailable')
@@ -277,7 +278,7 @@ export async function loadPrishtinaParkings(signal?: AbortSignal) {
     const timeoutController = new AbortController()
     const forwardAbort = () => timeoutController.abort()
     signal?.addEventListener('abort', forwardAbort, { once: true })
-    const timeout = window.setTimeout(() => timeoutController.abort(), endpoint.startsWith('/') ? 35_000 : 15_000)
+    const timeout = window.setTimeout(() => timeoutController.abort(), 8_000)
     try {
       const response = await fetch(`${endpoint}?data=${encodeURIComponent(query)}`, {
         signal: timeoutController.signal,
@@ -297,22 +298,50 @@ export async function loadPrishtinaParkings(signal?: AbortSignal) {
   if (!payload) throw lastError
   const osmParkings = (payload.elements ?? []).map(fromOsm).filter((parking): parking is Parking => parking !== null)
   if (!osmParkings.length) throw new Error('No parking data returned')
-  let approvedParkings: Parking[] = []
-  try {
-    approvedParkings = await loadBackendParkingSpots(signal)
-  } catch (error) {
-    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-    console.warn('Parko backend parking records could not be loaded; continuing with map data.', error)
-  }
   const officialParkings = OFFICIAL_PRISHTINA_PARKING_MARKERS.map(fromOfficialPrishtinaParkingMarker)
 
   const enrichedSeeds = PARKINGS.map((seed) => {
     const liveMatch = osmParkings.find((parking) => parking.id === seed.id || distanceMeters(seed.coordinates, parking.coordinates) < 45)
     return liveMatch ? { ...seed, ...liveMatch, name: seed.name } : seed
   })
-  const seedParkings = withoutDuplicates(enrichedSeeds, [...officialParkings, ...approvedParkings], 30)
-  const osmWithoutDuplicates = withoutDuplicates(osmParkings, [...officialParkings, ...approvedParkings, ...seedParkings], 30)
-  return [...officialParkings, ...approvedParkings, ...seedParkings, ...osmWithoutDuplicates].sort((a, b) => a.distanceMeters - b.distanceMeters)
+  const seedParkings = withoutDuplicates(enrichedSeeds, officialParkings, 30)
+  const osmWithoutDuplicates = withoutDuplicates(osmParkings, [...officialParkings, ...seedParkings], 30)
+  return [...officialParkings, ...seedParkings, ...osmWithoutDuplicates].sort((a, b) => a.distanceMeters - b.distanceMeters)
+}
+
+export function mergeParkingSources(mapped: Parking[], backend: Parking[]) {
+  const byId = new Map(mapped.map((parking) => [parking.id, parking]))
+  for (const record of backend) {
+    const original = byId.get(record.id)
+    byId.set(record.id, original ? {
+      ...original,
+      status: record.status,
+      spaces: record.spaces,
+      availabilitySource: record.availabilitySource,
+      availabilityUpdatedAt: record.availabilityUpdatedAt,
+      updatedMinutesAgo: record.updatedMinutesAgo,
+      ...(record.access === 'no' ? { access: 'no' as const } : {}),
+    } : record)
+  }
+  return [...byId.values()]
+}
+
+let osmCache: { parkings: Parking[]; expires: number } | undefined
+export async function loadPrishtinaParkings(signal?: AbortSignal, onUpdate?: (parkings: Parking[]) => void) {
+  let mapped = osmCache && osmCache.expires > Date.now() ? osmCache.parkings : getPrishtinaParkingSnapshot()
+  let backend: Parking[] = []
+  const publish = () => { if (!signal?.aborted) onUpdate?.(mergeParkingSources(mapped, backend)) }
+  const results = await Promise.allSettled([
+    (osmCache && osmCache.expires > Date.now() ? Promise.resolve(mapped) : loadOsmParkings(signal)).then((data) => {
+      mapped = data
+      osmCache = { parkings: data, expires: Date.now() + 5 * 60_000 }
+      publish()
+    }),
+    loadBackendParkingSpots(signal).then((data) => { backend = data; publish() }),
+  ])
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+  if (results.every((result) => result.status === 'rejected')) throw new Error('Parking updates unavailable')
+  return mergeParkingSources(mapped, backend)
 }
 
 type OsmApiElement = {

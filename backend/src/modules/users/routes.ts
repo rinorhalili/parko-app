@@ -43,7 +43,7 @@ userRoutes.patch("/me/password", authenticate, validate({ body: passwordSchema }
 
 userRoutes.get("/:id", validate({ params: idParams }), async (req, res, next) => {
   try {
-    ok(res, await prisma.user.findUniqueOrThrow({ where: { id: req.params.id as string }, omit: { passwordHash: true } }));
+    ok(res, await prisma.user.findUniqueOrThrow({ where: { id: req.params.id as string }, select: { id: true, name: true, username: true, avatar: true, bio: true, reputationScore: true, isVerified: true } }));
   } catch (error) {
     next(error);
   }

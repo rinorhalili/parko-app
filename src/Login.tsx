@@ -40,6 +40,7 @@ export default function Login({ onClose }: LoginProps) {
           const url = new URL(window.location.href)
           url.searchParams.set('view', 'dashboard')
           window.history.replaceState({}, '', url)
+          window.dispatchEvent(new PopStateEvent('popstate'))
         }
         onClose()
       } else {

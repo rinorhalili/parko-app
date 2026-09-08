@@ -2867,3 +2867,5 @@ body { background: #edf1f5; }
   .sheet-primary-actions .button,
   .parking-preview-actions .button { font-size: 8px; }
 }
+.app-feedback { position: fixed; z-index: 1600; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(92vw, 500px); display: flex; align-items: center; gap: 8px; padding: 12px; border-radius: 16px; background: #102033; color: white; box-shadow: 0 4px 18px #10203330; font-size: 14px; }
+.app-feedback button { min-width: 44px; min-height: 44px; border: 0; border-radius: 10px; background: #fff; color: #102033; padding: 8px; }

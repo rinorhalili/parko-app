@@ -1,7 +1,7 @@
 import type { ApiErrorBody, ApiResponse, AuthTokens } from './types'
 
-export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000/api/v1').replace(/\/$/, '')
-export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL ?? API_BASE_URL.replace(/\/api\/v1\/?$/, '')
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '')
+export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || API_BASE_URL.replace(/\/api\/v1\/?$/, '') || window.location.origin
 
 const ACCESS_TOKEN_KEY = 'parko:access-token:v1'
 const REFRESH_TOKEN_KEY = 'parko:refresh-token:v1'
@@ -34,12 +34,14 @@ export function getAccessToken() { return readToken(ACCESS_TOKEN_KEY) }
 
 export function setAuthTokens(tokens: AuthTokens) {
   writeToken(ACCESS_TOKEN_KEY, tokens.accessToken)
-  writeToken(REFRESH_TOKEN_KEY, tokens.refreshToken)
+  writeToken(REFRESH_TOKEN_KEY, null)
+  window.dispatchEvent(new Event('parko:auth-changed'))
 }
 
 export function clearAuthTokens() {
   writeToken(ACCESS_TOKEN_KEY, null)
   writeToken(REFRESH_TOKEN_KEY, null)
+  window.dispatchEvent(new Event('parko:auth-changed'))
 }
 
 function notifyAuthExpired() {
@@ -48,13 +50,13 @@ function notifyAuthExpired() {
 
 async function refreshAccessToken() {
   const refreshToken = readToken(REFRESH_TOKEN_KEY)
-  if (!refreshToken) return null
 
   const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ refreshToken })
+    body: JSON.stringify({ refreshToken }),
+    signal: AbortSignal.timeout(12_000)
   })
   if (!response.ok) {
     clearAuthTokens()
@@ -81,8 +83,16 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}, retry 
   const accessToken = getAccessToken()
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`)
 
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers, credentials: 'include' })
-  if (response.status === 401 && retry && path !== '/auth/refresh') {
+  let response: Response
+  try {
+    const timeout = AbortSignal.timeout(12_000)
+    const signal = init.signal ? AbortSignal.any([init.signal, timeout]) : timeout
+    response = await fetch(`${API_BASE_URL}${path}`, { ...init, signal, headers, credentials: 'include' })
+  } catch (error) {
+    if (init.signal?.aborted) throw error
+    throw new ApiError(0, 'Serveri nuk përgjigjet. Provo përsëri.', 'NETWORK_ERROR')
+  }
+  if (response.status === 401 && retry && !['/auth/refresh', '/auth/login', '/auth/register'].includes(path)) {
     const refreshedToken = await refreshOnce()
     if (refreshedToken) return apiRequest<T>(path, init, false)
   }

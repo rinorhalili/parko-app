@@ -71,22 +71,6 @@ function straightLineDistance(start: Coordinate, end: Coordinate) {
   return radius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
-function fallbackRoute(start: Coordinate, end: Coordinate): DrivingRoute {
-  const distance = Math.round(straightLineDistance(start, end) * 1.35)
-  return {
-    coordinates: [
-      start,
-      { lat: start.lat, lng: (start.lng + end.lng) / 2 },
-      { lat: end.lat, lng: (start.lng + end.lng) / 2 },
-      end,
-    ],
-    distanceMeters: distance,
-    durationSeconds: Math.max(120, Math.round(distance / 7.5)),
-    steps: [{ instruction: 'Vazhdo drejt parkingut', roadName: 'Rruga më e afërt', distanceMeters: distance, maneuverType: 'continue' }],
-    source: 'fallback',
-  }
-}
-
 function decodePolyline6(encoded: string) {
   const coordinates: Coordinate[] = []
   let index = 0
@@ -201,7 +185,7 @@ export async function loadDrivingRoute(start: Coordinate, end: Coordinate, signa
     }
   }
 
-  return fallbackRoute(start, end)
+  throw new Error('Rruga nuk u gjet. Provo përsëri.')
 }
 
 export async function loadDrivingMatrix(start: Coordinate, parkings: Parking[], signal?: AbortSignal): Promise<DrivingMatrixEntry[]> {

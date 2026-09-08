@@ -21,11 +21,7 @@ function availabilityChance(parking: Parking) {
 
 export function walkableParkingCandidates(parkings: Parking[], destination: Destination, walkLimitMinutes: number) {
   const safelyAccessible = parkings.filter((parking) => ['public', 'permissive', 'unknown'].includes(parking.access))
-  const preciselyMappedAreas = safelyAccessible.filter((parking) => (
-    parking.geometry?.length || /^osm-(way|relation)-/.test(parking.id)
-  ))
-  const reliableSource = preciselyMappedAreas.length >= 3 ? preciselyMappedAreas : safelyAccessible
-  const all = reliableSource
+  const all = safelyAccessible
     .map((parking) => {
       const directDistance = distanceMeters(parking.coordinates, destination.coordinates)
       const walkDistanceMeters = Math.round(directDistance * 1.22)
@@ -35,7 +31,7 @@ export function walkableParkingCandidates(parkings: Parking[], destination: Dest
     .sort((a, b) => a.walkMinutes - b.walkMinutes)
 
   const inside = all.filter((candidate) => candidate.walkMinutes <= walkLimitMinutes)
-  return inside.length >= 3 ? inside : all.slice(0, Math.max(3, inside.length))
+  return inside
 }
 
 export function rankParkings(

@@ -46,10 +46,13 @@ export async function login(input: { email: string; password: string }, meta?: {
 }
 
 export async function refresh(refreshToken: string) {
-  const session = await prisma.refreshToken.findUnique({ where: { tokenHash: hashToken(refreshToken) }, include: { user: true } });
-  if (!session || session.revokedAt || session.expiresAt <= new Date() || !session.user.isActive) throw unauthorized("Invalid refresh token");
-  await prisma.refreshToken.update({ where: { id: session.id }, data: { revokedAt: new Date() } });
-  return issueTokens(session.user);
+  return prisma.$transaction(async (tx) => {
+    const session = await tx.refreshToken.findUnique({ where: { tokenHash: hashToken(refreshToken) }, include: { user: true } });
+    if (!session || session.revokedAt || session.expiresAt <= new Date() || !session.user.isActive) throw unauthorized("Invalid refresh token");
+    const consumed = await tx.refreshToken.updateMany({ where: { id: session.id, revokedAt: null }, data: { revokedAt: new Date() } });
+    if (consumed.count !== 1) throw unauthorized("Refresh token already used");
+    return issueTokens(session.user, undefined, tx);
+  });
 }
 
 export async function logout(refreshToken?: string) {
@@ -62,11 +65,11 @@ export async function me(userId: string) {
   return publicUser(user);
 }
 
-async function issueTokens(user: { id: string; role: Role; name: string; username: string; email: string; reputationScore: number; avatar: string | null; bio: string | null; isVerified: boolean }, meta?: { ip?: string; userAgent?: string }) {
+async function issueTokens(user: { id: string; role: Role; name: string; username: string; email: string; reputationScore: number; avatar: string | null; bio: string | null; isVerified: boolean }, meta?: { ip?: string; userAgent?: string }, db: Prisma.TransactionClient = prisma) {
   const tokenUser = { id: user.id, role: user.role };
   const accessToken = signAccessToken(tokenUser);
   const refreshToken = signRefreshToken(tokenUser);
-  await prisma.refreshToken.create({
+  await db.refreshToken.create({
     data: {
       userId: user.id,
       tokenHash: hashToken(refreshToken),

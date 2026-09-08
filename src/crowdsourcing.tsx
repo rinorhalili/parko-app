@@ -14,6 +14,7 @@ const CrowdSourcingContext = createContext<CrowdContextValue | null>(null)
 export function CrowdSourcingProvider({ children }: { children: ReactNode }) {
   const [reports, setReports] = useState<CommunityParkingReport[]>([])
   const [alerts, setAlerts] = useState<CommunityStreetAlert[]>([])
+  useEffect(() => { const timer = setInterval(() => setReports((current) => current.filter((report) => report.expiresAt > Date.now())), 30_000); return () => clearInterval(timer) }, [])
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
     let active = true
@@ -26,6 +27,7 @@ export function CrowdSourcingProvider({ children }: { children: ReactNode }) {
     return () => { active = false }
   }, [])
   useSocket({ onParkingReport: (report) => {
+    if (!['AVAILABLE', 'OCCUPIED'].includes(report.status)) return
     const next = { id: report.id, parkingId: report.parkingSpotId, status: report.status === 'AVAILABLE' ? 'AVAILABLE' as const : 'OCCUPIED' as const, createdAt: Date.parse(report.createdAt), expiresAt: Date.parse(report.expiresAt) }
     setReports((current) => [next, ...current.filter((item) => item.parkingId !== next.parkingId)])
   } })
@@ -67,10 +69,10 @@ export function SpotVouching({ parking }: { parking: Parking }) {
   }
   const free = report?.status === 'AVAILABLE'
   return <section className="crowd-card" aria-label="Verifiko disponueshmërinë">
-    <header><span><small>Komuniteti · live</small><strong>{report ? (free ? 'Raportuar ende i lirë' : 'Raportuar i zënë') : 'A është ende i lirë?'}</strong></span><b>{relativeVerifiedTime(report?.createdAt)}</b></header>
+    <header><span><small>Komuniteti</small><strong>{report ? (free ? 'Raportuar ende i lirë' : 'Raportuar i zënë') : 'A është ende i lirë?'}</strong></span><b>{relativeVerifiedTime(report?.createdAt)}</b></header>
     <div className="crowd-card__actions">
-      <button className={free ? 'selected' : ''} disabled={sending} onClick={() => void submit('free')} aria-pressed={free}>+1 / Still Free</button>
-      <button className={report?.status === 'OCCUPIED' ? 'selected crowd-card__taken' : ''} disabled={sending} onClick={() => void submit('taken')} aria-pressed={report?.status === 'OCCUPIED'}>Taken</button>
+      <button className={free ? 'selected' : ''} disabled={sending} onClick={() => void submit('free')} aria-pressed={free}>Ende i lirë</button>
+      <button className={report?.status === 'OCCUPIED' ? 'selected crowd-card__taken' : ''} disabled={sending} onClick={() => void submit('taken')} aria-pressed={report?.status === 'OCCUPIED'}>I zënë</button>
     </div>
     {error && <small className="crowd-card__error" role="alert">{error}</small>}
   </section>

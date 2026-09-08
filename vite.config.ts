@@ -38,6 +38,8 @@ export default defineConfig(({ mode }) => {
     host: '127.0.0.1',
     port: 5173,
     proxy: {
+      '/api/v1': { target: env.PARKO_API_URL || 'http://127.0.0.1:4000', changeOrigin: true },
+      '/socket.io': { target: env.PARKO_API_URL || 'http://127.0.0.1:4000', changeOrigin: true, ws: true },
       '/api/overpass': {
         target: 'https://overpass-api.de',
         changeOrigin: true,

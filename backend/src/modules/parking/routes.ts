@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from 'zod';
 import { authenticate } from "../../middleware/authenticate.js";
 import { validate } from "../../middleware/validate.js";
 import { ok } from "../../utils/apiResponse.js";
@@ -7,9 +8,10 @@ import { coordinatesQuery, createParkingSchema, idParams } from "./validation.js
 
 export const parkingRoutes = Router();
 
-parkingRoutes.get("/", async (_req, res, next) => {
+parkingRoutes.get("/", validate({ query: z.object({ page: z.coerce.number().int().min(0).max(100).default(0) }) }), async (req, res, next) => {
   try {
-    ok(res, await listParking());
+    res.setHeader('Cache-Control', 'public, max-age=30');
+    ok(res, await listParking(Number(req.query.page)));
   } catch (error) {
     next(error);
   }

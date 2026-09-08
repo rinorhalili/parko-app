@@ -1,7 +1,15 @@
 import { apiRequest } from './client'
 import type { CreateParkingInput, NearbyParkingSpot, ParkingSpot } from './types'
 
-export function listParking() { return apiRequest<ParkingSpot[]>('/parking') }
+export async function listParking(signal?: AbortSignal) {
+  const items: ParkingSpot[] = []
+  for (let page = 0; page <= 100; page++) {
+    const batch = await apiRequest<ParkingSpot[]>(`/parking?page=${page}`, { signal })
+    items.push(...batch)
+    if (batch.length < 200) return items
+  }
+  return items
+}
 
 export function getParking(id: string) { return apiRequest<ParkingSpot>(`/parking/${encodeURIComponent(id)}`) }
 

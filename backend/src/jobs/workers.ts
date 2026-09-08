@@ -8,8 +8,12 @@ export function startWorkers() {
     "report-expiration",
     async () => {
       await prisma.parkingReport.updateMany({
-        where: { expiresAt: { lt: new Date() } },
+        where: { expiresAt: { lt: new Date() }, confidence: { gt: 0 } },
         data: { confidence: 0 }
+      });
+      await prisma.parkingSpot.updateMany({
+        where: { status: { in: ['AVAILABLE', 'OCCUPIED'] }, OR: [{ reportedAt: null }, { reportedAt: { lte: new Date(Date.now() - 30 * 60_000) } }] },
+        data: { status: 'UNKNOWN' }
       });
     },
     { connection: redis }

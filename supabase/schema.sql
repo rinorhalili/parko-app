@@ -300,52 +300,8 @@ drop policy if exists spot_reviews_delete_own_or_admin on public.spot_reviews_vo
 create policy spot_reviews_delete_own_or_admin on public.spot_reviews_vouches
 for delete to authenticated using (user_id = (select auth.uid()) or public.is_admin());
 
--- Development administrator. The trigger creates the profile for new users; this
--- upsert also repairs an existing auth user whose profile row is missing.
-do $$
-declare
-  admin_id uuid;
-begin
-  select id
-  into admin_id
-  from auth.users
-  where email = 'bledar@email.com'
-  limit 1;
-
-  if admin_id is null then
-    insert into auth.users (
-      id, email, encrypted_password, email_confirmed_at, raw_app_meta_data,
-      raw_user_meta_data, aud, role
-    )
-    values (
-      gen_random_uuid(),
-      'bledar@email.com',
-      crypt('admin', gen_salt('bf')),
-      now(),
-      '{"provider":"email","providers":["email"]}'::jsonb,
-      '{"role":"ADMIN","full_name":"Bledar"}'::jsonb,
-      'authenticated',
-      'authenticated'
-    )
-    returning id into admin_id;
-  else
-    update auth.users
-    set encrypted_password = crypt('admin', gen_salt('bf')),
-        email_confirmed_at = coalesce(email_confirmed_at, now()),
-        raw_user_meta_data = '{"role":"ADMIN","full_name":"Bledar"}'::jsonb
-    where id = admin_id;
-  end if;
-
-  insert into public.profiles (id, full_name, email, role)
-  select id, nullif(raw_user_meta_data ->> 'full_name', ''), email, 'ADMIN'::public.user_role
-  from auth.users
-  where id = admin_id
-  on conflict (id) do update set
-    full_name = coalesce(excluded.full_name, public.profiles.full_name),
-    email = excluded.email,
-    role = 'ADMIN'::public.user_role;
-end
-$$;
+-- Administrator accounts must be created through trusted server-side provisioning.
+-- Never create or reset passwords in a schema script.
 
 -- Demonstration data. submitted_by is null because auth.users is managed by Supabase.
 insert into public.parking_spots (
@@ -627,3 +583,13 @@ create policy "moderators read audit logs" on public.audit_logs for select to au
 do $$ begin
   alter publication supabase_realtime add table public.community_parking_reports, public.street_alerts, public.notifications;
 exception when duplicate_object then null; end $$;
+
+-- Legacy Supabase hardening. Apply separately to an existing deployment as well.
+-- Profile creation is handled by the auth trigger; privileged fields stay server-owned.
+revoke insert, update, delete on public.profiles from anon, authenticated;
+grant update (full_name, phone_number, username, avatar_url, bio) on public.profiles to authenticated;
+-- Existing RLS still scopes editable rows to their owner.
+revoke insert, update on public.parking_spots from authenticated;
+grant insert (submitted_by, title, description, city, address, type, latitude, longitude, location, price_per_hour, zone, is_covered, is_suv_friendly, street_view_url, photo_urls) on public.parking_spots to authenticated;
+grant update (title, description, address, street_view_url, photo_urls) on public.parking_spots to authenticated;
+revoke all on function public.record_reputation(uuid, integer, text, uuid) from public, anon, authenticated;

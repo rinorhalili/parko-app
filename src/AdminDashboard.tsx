@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import Login from './Login'
 import { getAccessToken, ApiError } from './api/client'
-import { me } from './api/authService'
+import { me, logout } from './api/authService'
 import { listAdminParking, updateAdminParkingStatus } from './api/adminService'
 
 type ParkingCategory = 'public' | 'street' | 'prishtina' | 'private'
@@ -16,13 +16,14 @@ type SpotSubmission = {
   city: string
   address: string
   category: ParkingCategory
-  proposedPrice: number
+  proposedPrice: number | null
   lat: number
   lng: number
   notes: string
   riskLevel: RiskLevel
-  communityVotes: number
+  communityVotes: number | null
   duplicateSignals: number
+  reviewState: string
 }
 
 type ParkingSpotRow = {
@@ -38,16 +39,15 @@ type ParkingSpotRow = {
   longitude: number
   status: string
   createdAt: string
+  verifiedAt: string | null
 }
 
-const sidebarItems: Array<{ key: NavKey; label: string; count: number }> = [
-  { key: 'queue', label: 'Miratime', count: 24 },
-  { key: 'map', label: 'Harta live', count: 318 },
-  { key: 'reports', label: 'Raporte rreziku', count: 12 },
-  { key: 'users', label: 'Përdorues anonim', count: 1845 },
+const sidebarItems: Array<{ key: NavKey; label: string }> = [
+  { key: 'queue', label: 'Në pritje' },
+  { key: 'map', label: 'Të gjitha parkimet' },
+  { key: 'reports', label: 'Të çaktivizuara' },
 ]
-
-const cityOptions = ['Të gjitha qytetet', 'Prishtina', 'Prizren', 'Peja', 'Ferizaj', 'Gjakova', 'Mitrovica']
+const scopes: Record<NavKey, string> = { queue: 'pending', map: 'all', reports: 'disabled', users: 'all' }
 const rejectionReasons = [
   'Lokacion i dyfishuar',
   'Nuk verifikohet në hartë',
@@ -676,7 +676,8 @@ const styles = `
   }
 `
 
-function formatPrice(price: number) {
+function formatPrice(price: number | null) {
+  if (price === null) return 'Çmimi i panjohur'
   return price === 0 ? 'Falas' : `${price.toFixed(2)} €/orë`
 }
 
@@ -690,22 +691,15 @@ function submissionFromSpot(spot: ParkingSpotRow): SpotSubmission {
     city: 'Prishtina',
     address: spot.address ?? spot.title,
     category,
-    proposedPrice: 0,
+    proposedPrice: null,
     lat: spot.latitude,
     lng: spot.longitude,
     notes: spot.description ?? 'Pa shënim nga raportuesi.',
     riskLevel,
-    communityVotes: spot.capacity ?? 0,
+    communityVotes: spot.capacity,
+    reviewState: spot.status === 'TEMPORARILY_UNAVAILABLE' ? 'I çaktivizuar' : spot.ownerId && !spot.verifiedAt ? 'Në pritje' : 'I publikuar',
     duplicateSignals: 0,
   }
-}
-
-function riskLabel(risk: RiskLevel) {
-  return {
-    low: 'Ulët',
-    medium: 'Mesëm',
-    high: 'Lartë',
-  }[risk]
 }
 
 function MetricCard({ label, value, meta, color }: { label: string; value: string; meta: string; color: string }) {
@@ -749,7 +743,7 @@ function SubmissionCard({ submission, active, onSelect }: { submission: SpotSubm
             <small>{submission.submittedAt}</small>
           </span>
         </span>
-        <span className={`chip ${submission.riskLevel}`}>{riskLabel(submission.riskLevel)}</span>
+        <span className="chip">{submission.reviewState}</span>
       </span>
       <span className="queue-card__meta">
         <span>{meta.label}</span>
@@ -810,7 +804,7 @@ function CommunityMapPreview({ items, selectedId, onSelect }: { items: SpotSubmi
       })
       const marker = L.marker([item.lat, item.lng], { icon, title: `${item.id} · ${meta.label}` })
       marker.on('click', () => onSelectRef.current(item.id))
-      marker.bindTooltip(`${item.id} · ${meta.label}`, { direction: 'top' })
+      marker.bindTooltip(Object.assign(document.createElement('span'), { textContent: `${item.id} · ${meta.label}` }), { direction: 'top' })
       marker.addTo(layer)
       bounds.push([item.lat, item.lng])
     })
@@ -830,11 +824,17 @@ export default function AdminDashboard() {
   const [actionInProgress, setActionInProgress] = useState(false)
   const [activeTab, setActiveTab] = useState<NavKey>('queue')
   const [searchTerm, setSearchTerm] = useState('')
-  const [cityFilter, setCityFilter] = useState(cityOptions[0])
+  const [page, setPage] = useState(0)
+  const [total, setTotal] = useState(0)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [success, setSuccess] = useState('')
+  const requestVersion = useRef(0)
+  useEffect(() => { const timer = setTimeout(() => { setSearchQuery(searchTerm.trim()); setPage(0) }, 250); return () => clearTimeout(timer) }, [searchTerm])
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [rejectReason, setRejectReason] = useState(rejectionReasons[0])
 
-  const loadPendingSubmissions = async () => {
+  const loadPendingSubmissions = useCallback(async () => {
+    const version = ++requestVersion.current
     setIsLoading(true)
     setError('')
     if (!getAccessToken()) {
@@ -846,36 +846,27 @@ export default function AdminDashboard() {
     setNeedsLogin(false)
     try {
       const user = await me()
-      if (user.role !== 'ADMIN') throw new Error('Nuk ke leje administratori.')
+      if (version !== requestVersion.current) return
+      if (user.role !== 'ADMIN') throw new ApiError(403, 'Nuk ke leje administratori.')
       setIsAdmin(true)
-      setSubmissions((await listAdminParking() as ParkingSpotRow[]).map(submissionFromSpot))
+      const result = await listAdminParking(page, searchQuery, scopes[activeTab])
+      if (version !== requestVersion.current) return
+      setSubmissions(result.items.map(submissionFromSpot)); setTotal(result.total); setSelectedIndex(0)
     } catch (reason) {
-      setIsAdmin(false)
+      if (version !== requestVersion.current) return
+      if (reason instanceof ApiError && [401, 403].includes(reason.status)) { setIsAdmin(false); setNeedsLogin(reason.status === 401) }
       setError(reason instanceof ApiError ? reason.message : reason instanceof Error ? reason.message : 'Paneli nuk u ngarkua.')
     } finally {
-      setIsLoading(false)
+      if (version === requestVersion.current) setIsLoading(false)
     }
-  }
+  }, [page, searchQuery, activeTab])
 
   useEffect(() => {
     void loadPendingSubmissions()
-    return undefined
-  }, [])
+    return () => { requestVersion.current++ }
+  }, [loadPendingSubmissions])
 
-  const filteredSubmissions = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase()
-    return submissions.filter((item) => {
-      const cityMatches = cityFilter === cityOptions[0] || item.city === cityFilter
-      const textMatches =
-        term.length === 0 ||
-        item.address.toLowerCase().includes(term) ||
-        item.city.toLowerCase().includes(term) ||
-        item.id.toLowerCase().includes(term) ||
-        item.anonymousId.toLowerCase().includes(term) ||
-        categoryMeta[item.category].label.toLowerCase().includes(term)
-      return cityMatches && textMatches
-    })
-  }, [cityFilter, searchTerm])
+  const filteredSubmissions = submissions
 
   useEffect(() => {
     if (selectedIndex > filteredSubmissions.length - 1) {
@@ -890,21 +881,23 @@ export default function AdminDashboard() {
     if (index >= 0) setSelectedIndex(index)
   }
 
-  const updateStatus = async (status: 'AVAILABLE' | 'TEMPORARILY_UNAVAILABLE') => {
+  const updateStatus = async (action: 'approve' | 'disable') => {
     if (!selectedSubmission || !isAdmin || actionInProgress) return
+    if (action === 'disable' && !window.confirm(`Çaktivizo ${selectedSubmission.address}? Parkingu nuk do të rekomandohet. Arsyeja: ${rejectReason}`)) return
     setActionInProgress(true)
     setError('')
     try {
-      await updateAdminParkingStatus(selectedSubmission.id, status)
+      await updateAdminParkingStatus(selectedSubmission.id, action, action === 'disable' ? rejectReason : undefined)
+      setSuccess(action === 'approve' ? 'Parkingu u publikua. Disponueshmëria mbetet e panjohur.' : 'Parkingu u çaktivizua.')
       await loadPendingSubmissions()
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Përditësimi dështoi.')
     } finally { setActionInProgress(false) }
   }
 
-  if (isLoading) return <div className="app-loading" role="status">Duke ngarkuar panelin…</div>
-  if (needsLogin) return <Login onClose={() => undefined} />
-  if (!isAdmin) return <div className="app-loading" role="alert">{error || 'Nuk ke leje administratori.'}</div>
+  if (isLoading && !isAdmin) return <div className="app-loading" role="status">Duke ngarkuar panelin…</div>
+  if (needsLogin) return <Login onClose={() => { setNeedsLogin(false); void loadPendingSubmissions() }} />
+  if (!isAdmin) return <div className="app-loading" role="alert">{error || 'Nuk ke leje administratori.'}<button onClick={() => void loadPendingSubmissions()}>Provo përsëri</button><a href="?view=app">Kthehu te harta</a></div>
 
   return (
     <div className="admin-dashboard">
@@ -913,19 +906,20 @@ export default function AdminDashboard() {
       <div className="admin-shell">
         <header className="admin-topbar">
           <div className="admin-title">
-            <small>Parko Community OS</small>
-            <h1>Admin Dashboard</h1>
+            <small>Parko Prishtina</small>
+            <h1>Menaxhimi i parkimeve</h1>
           </div>
           <div className="admin-actions" aria-label="Veprime të adminit">
-            <button className="admin-button" type="button">Eksporto radhën</button>
-            <button className="admin-button admin-button--primary" type="button" onClick={() => void loadPendingSubmissions()} disabled={isLoading || actionInProgress}>Sinkronizo live</button>
+            <a className="admin-button" href="?view=app">Harta</a><button className="admin-button" onClick={() => { void logout().finally(() => { setIsAdmin(false); setNeedsLogin(true) }) }}>Dil</button>
+            <button className="admin-button admin-button--primary" type="button" onClick={() => void loadPendingSubmissions()} disabled={isLoading || actionInProgress}>{isLoading ? 'Duke ngarkuar…' : 'Rifresko'}</button>
           </div>
         </header>
         {error && <div className="error-message" role="alert">{error}</div>}
+        {success && <div role="status">{success}</div>}
 
         <section className="metrics-grid" aria-label="Statistikat kryesore">
-          <MetricCard label="Publike" value={String(submissions.filter((item) => item.category === 'public').length)} meta="Në pritje për moderim" color={categoryMeta.public.color} />
-          <MetricCard label="Në rrugë" value={String(submissions.filter((item) => item.category === 'street').length)} meta="Kërkojnë kontroll rreziku" color={categoryMeta.street.color} />
+          <MetricCard label="Publike" value={String(submissions.filter((item) => item.category === 'public').length)} meta="Në këtë faqe" color={categoryMeta.public.color} />
+          <MetricCard label="Në rrugë" value={String(submissions.filter((item) => item.category === 'street').length)} meta="Në këtë faqe" color={categoryMeta.street.color} />
           <MetricCard label="Prishtina Parking" value={String(submissions.filter((item) => item.category === 'prishtina').length)} meta="Zona zyrtare ose komunale" color={categoryMeta.prishtina.color} />
           <MetricCard label="Private" value={String(submissions.filter((item) => item.category === 'private').length)} meta="Shfaqen me qasje të kufizuar" color={categoryMeta.private.color} />
         </section>
@@ -934,7 +928,7 @@ export default function AdminDashboard() {
           <aside className="admin-sidebar">
             <nav className="nav-list" aria-label="Navigimi i adminit">
               {sidebarItems.map((item) => (
-                <SidebarNavItem key={item.key} label={item.label} count={item.count} active={activeTab === item.key} onClick={() => setActiveTab(item.key)} />
+                <SidebarNavItem key={item.key} label={item.label} count={activeTab === item.key ? total : 0} active={activeTab === item.key} onClick={() => { setPage(0); setActiveTab(item.key) }} />
               ))}
             </nav>
 
@@ -946,19 +940,17 @@ export default function AdminDashboard() {
                 placeholder="Kërko lokacion ose ID"
                 aria-label="Kërko raportimet"
               />
-              <select className="admin-select" value={cityFilter} onChange={(event) => setCityFilter(event.target.value)} aria-label="Filtro sipas qytetit">
-                {cityOptions.map((city) => <option key={city} value={city}>{city}</option>)}
-              </select>
+
             </div>
 
             <section className="queue-panel" aria-label="Radha e raportimeve">
               <div className="queue-header">
                 <h2>Radha</h2>
-                <small>{filteredSubmissions.length} lokacione</small>
+                <small>{total} lokacione</small>
               </div>
               <div className="queue-list">
                 {filteredSubmissions.length === 0 ? (
-                  <div className="queue-card"><b>Ska rezultate</b><small>Ndrysho filtrin ose kërkimin.</small></div>
+                  <div className="queue-card"><b>{isLoading ? 'Duke ngarkuar…' : 'Nuk ka rezultate'}</b><small>{searchTerm ? 'Provo një emër ose rrugë tjetër.' : 'Nuk ka parkime në këtë kategori.'}</small></div>
                 ) : filteredSubmissions.map((submission, index) => (
                   <SubmissionCard
                     key={submission.id}
@@ -968,13 +960,18 @@ export default function AdminDashboard() {
                   />
                 ))}
               </div>
+              <div className="admin-actions">
+                <button className="admin-button" disabled={page === 0 || isLoading || actionInProgress} onClick={() => setPage((value) => value - 1)}>Para</button>
+                <span>Faqja {page + 1}</span>
+                <button className="admin-button" disabled={(page + 1) * 50 >= total || isLoading || actionInProgress} onClick={() => setPage((value) => value + 1)}>Tjetër</button>
+              </div>
             </section>
           </aside>
 
           <main className="admin-main">
             <div className="main-grid">
               <section className="review-panel" aria-label="Detajet e raportimit">
-                {selectedSubmission && <span className="panel-kicker"><span className="queue-dot" />{selectedSubmission.id} · i verifikuar në mënyrë anonime</span>}
+                {selectedSubmission && <span className="panel-kicker"><span className="queue-dot" />{selectedSubmission.id} · {selectedSubmission.reviewState}</span>}
                 {!selectedSubmission && <span className="panel-kicker">Nuk ka raportime në pritje</span>}
                 {selectedSubmission && <>
                 <div className="detail-title">
@@ -983,7 +980,7 @@ export default function AdminDashboard() {
                 </div>
                 <div className="detail-meta">
                   <CategoryPill category={selectedSubmission.category} />
-                  <span className={`chip ${selectedSubmission.riskLevel}`}>Rrezik {riskLabel(selectedSubmission.riskLevel)}</span>
+                  
                 </div>
 
                 <div className="detail-grid">
@@ -996,8 +993,8 @@ export default function AdminDashboard() {
                     <strong>{selectedSubmission.submittedAt}</strong>
                   </div>
                   <div className="detail-item">
-                    <small>Sinjale</small>
-                    <strong>{selectedSubmission.communityVotes} vota · {selectedSubmission.duplicateSignals} dubl.</strong>
+                    <small>Kapaciteti</small>
+                    <strong>{selectedSubmission.communityVotes ?? 'I panjohur'}</strong>
                   </div>
                 </div>
 
@@ -1007,30 +1004,7 @@ export default function AdminDashboard() {
                 </section>
                 </>}
 
-                <section className="tools-panel" aria-label="Mjetet kryesore të adminit">
-                  <div className="panel-header">
-                    <h3>Tools për komunitet</h3>
-                    <span className="chip low">Live</span>
-                  </div>
-                  <div className="tool-grid">
-                    <article className="tool-card">
-                      <strong>Moderim raportesh</strong>
-                      <small>Mirato, refuzo, bashko dublimet</small>
-                    </article>
-                    <article className="tool-card">
-                      <strong>Kontroll privatësie</strong>
-                      <small>Anonimizim dhe auditim i të dhënave</small>
-                    </article>
-                    <article className="tool-card">
-                      <strong>Rreziqe në rrugë</strong>
-                      <small>Polici, merimangë, gjoba dhe bllokime</small>
-                    </article>
-                    <article className="tool-card">
-                      <strong>Health check</strong>
-                      <small>Harta, sinkronizimi, raporte offline</small>
-                    </article>
-                  </div>
-                </section>
+
               </section>
 
               <section className="verification-panel" aria-label="Verifikimi në hartë">
@@ -1041,19 +1015,19 @@ export default function AdminDashboard() {
                   </div>
                   {selectedSubmission && <CommunityMapPreview items={filteredSubmissions} selectedId={selectedSubmission.id} onSelect={selectById} />}
                   <div className="map-caption">
-                    Pa foto dhe pa emra publikë. Admini sheh lokacionin, kategorinë, sinjalet dhe statusin e verifikimit.
+                    Kontrollo lokacionin dhe qasjen para publikimit. Miratimi nuk konfirmon vende të lira.
                   </div>
                 </section>
               </section>
             </div>
 
             <div className="action-bar" aria-label="Vendimi i adminit">
-              <button className="admin-button admin-button--primary" type="button" onClick={() => void updateStatus('AVAILABLE')} disabled={!selectedSubmission || actionInProgress}>Shëno të disponueshëm</button>
+              <button className="admin-button admin-button--primary" type="button" onClick={() => void updateStatus('approve')} disabled={!selectedSubmission || actionInProgress || isLoading}>Mirato / aktivizo</button>
               <select className="admin-select reject-select" value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} aria-label="Arsyeja e refuzimit">
                 {rejectionReasons.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
               </select>
-              <button className="admin-button admin-button--danger" type="button" onClick={() => void updateStatus('TEMPORARILY_UNAVAILABLE')} disabled={!selectedSubmission || actionInProgress}>Çaktivizo përkohësisht</button>
-              <button className="admin-button admin-button--warning" type="button" disabled> Dërgo për kontroll në terren</button>
+              <button className="admin-button admin-button--danger" type="button" onClick={() => void updateStatus('disable')} disabled={!selectedSubmission || actionInProgress || isLoading}>Çaktivizo përkohësisht</button>
+              
             </div>
           </main>
         </div>

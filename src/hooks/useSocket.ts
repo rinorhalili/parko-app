@@ -13,6 +13,8 @@ type SocketOptions = {
 }
 
 export function useSocket(options: SocketOptions = {}) {
+  const [authToken, setAuthToken] = useState(getAccessToken)
+  useEffect(() => { const update = () => setAuthToken(getAccessToken()); window.addEventListener('parko:auth-changed', update); return () => window.removeEventListener('parko:auth-changed', update) }, [])
   const { enabled = true, parkingSpotId, zone } = options
   const handlers = useRef(options)
   handlers.current = options
@@ -28,6 +30,7 @@ export function useSocket(options: SocketOptions = {}) {
     const socket = io(SOCKET_URL, {
       auth: (callback: (credentials: { token: string | null }) => void) => callback({ token: getAccessToken() }),
       withCredentials: true,
+      transports: ['polling'],
       reconnection: true,
       reconnectionAttempts: Infinity
     })
@@ -39,6 +42,7 @@ export function useSocket(options: SocketOptions = {}) {
       socket.emit('community:subscribe')
     })
     socket.on('disconnect', () => setStatus('disconnected'))
+    socket.on('connect_error', () => setStatus('disconnected'))
     socket.on('parking:updated', (event: SocketEventMap['parking:updated']) => handlers.current.onParkingUpdate?.(event))
     socket.on('parking:reported', (event: SocketEventMap['parking:reported']) => handlers.current.onParkingReport?.(event))
     for (const event of ['post:new', 'comment:new', 'moderation:update'] as const) {
@@ -50,7 +54,7 @@ export function useSocket(options: SocketOptions = {}) {
       socket.disconnect()
       socketRef.current = null
     }
-  }, [enabled, parkingSpotId, zone])
+  }, [enabled, parkingSpotId, zone, authToken])
 
   return { socket: socketRef.current, status, isConnected: status === 'connected' }
 }

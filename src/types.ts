@@ -39,7 +39,7 @@ export type Parking = {
   geometry?: MapCoordinate[][]
   access: ParkingAccess
   osmUrl?: string
-  source: 'openstreetmap' | 'municipal'
+  source: 'openstreetmap' | 'municipal' | 'community'
   availabilitySource?: string
   availabilityUpdatedAt?: string
   accessPoint?: MapCoordinate

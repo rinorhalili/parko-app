@@ -1,4 +1,5 @@
-import { createServer } from 'node:http'
+import { createServer, request as httpRequest } from 'node:http'
+import { request as httpsRequest } from 'node:https'
 import { readFile, stat } from 'node:fs/promises'
 import { extname, join, normalize, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -39,14 +40,32 @@ async function proxyGet(request, response, prefix, target, ttl) {
   const targetUrl = new URL(`${target}${suffix}${sourceUrl.search}`)
   const key = targetUrl.toString()
   const cached = cache.get(key)
+  if (cached && cached.expires <= Date.now()) cache.delete(key)
   if (cached && cached.expires > Date.now()) {
     send(response, cached.status, cached.body, { 'Content-Type': cached.type, 'X-Parko-Cache': 'HIT' })
     return
   }
   const upstream = await fetch(targetUrl, { headers: { Accept: 'application/json', 'User-Agent': 'Parko-Prishtina/1.0' }, signal: AbortSignal.timeout(15_000) })
-  const body = Buffer.from(await upstream.arrayBuffer())
+  const chunks = []
+  let size = 0
+  for await (const chunk of upstream.body ?? []) {
+    size += chunk.length
+    if (size > 8 * 1024 * 1024) throw new Error('Upstream response too large')
+    chunks.push(chunk)
+  }
+  const body = Buffer.concat(chunks)
   const type = upstream.headers.get('content-type') ?? 'application/json'
-  if (upstream.ok) cache.set(key, { status: upstream.status, body, type, expires: Date.now() + ttl })
+  if (upstream.ok) {
+    const now = Date.now()
+    for (const [oldKey, value] of cache) if (value.expires <= now) cache.delete(oldKey)
+    let bytes = [...cache.values()].reduce((sum, value) => sum + value.body.length, 0)
+    while (cache.size && (cache.size >= 128 || bytes + body.length > 16 * 1024 * 1024)) {
+      const oldest = cache.keys().next().value
+      bytes -= cache.get(oldest).body.length
+      cache.delete(oldest)
+    }
+    cache.set(key, { status: upstream.status, body, type, expires: now + ttl })
+  }
   send(response, upstream.status, body, { 'Content-Type': type, 'X-Parko-Cache': 'MISS' })
 }
 
@@ -59,9 +78,23 @@ async function optionalForward(request, response, target, emptyStatus = 204) {
 
 const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png' }
 
+// Keep credentials and HttpOnly refresh cookies on the application's own origin.
+function proxyBackend(request, response) {
+  const target = new URL(request.url, process.env.PARKO_API_URL || 'http://127.0.0.1:4000')
+  const forward = target.protocol === 'https:' ? httpsRequest : httpRequest
+  const upstream = forward(target, { method: request.method, headers: { ...request.headers, host: target.host }, timeout: 15_000 }, (incoming) => {
+    response.writeHead(incoming.statusCode || 502, incoming.headers)
+    incoming.pipe(response)
+  })
+  upstream.on('timeout', () => upstream.destroy(new Error('Backend timeout')))
+  upstream.on('error', () => { if (!response.headersSent) send(response, 502, JSON.stringify({ error: { code: 'BACKEND_UNAVAILABLE', message: 'Serveri nuk është i disponueshëm.' } }), { 'Content-Type': 'application/json' }); else response.destroy() })
+  request.pipe(upstream)
+}
+
 createServer(async (request, response) => {
   try {
     const pathname = new URL(request.url, 'http://localhost').pathname
+    if (pathname.startsWith('/api/v1/') || pathname.startsWith('/socket.io/')) return proxyBackend(request, response)
     if (pathname === '/api/occupancy') return await optionalForward(request, response, process.env.PARKO_OCCUPANCY_URL)
     if (pathname === '/api/telemetry') return await optionalForward(request, response, process.env.PARKO_TELEMETRY_URL)
     if (pathname === '/api/push-subscription') return await optionalForward(request, response, process.env.PARKO_PUSH_SUBSCRIPTION_URL)
@@ -74,7 +107,7 @@ createServer(async (request, response) => {
     const safePath = (candidate === dist || candidate.startsWith(`${dist}${sep}`)) ? candidate : join(dist, 'index.html')
     let filePath = safePath
     try { if (!(await stat(filePath)).isFile()) filePath = join(dist, 'index.html') } catch { filePath = join(dist, 'index.html') }
-    send(response, 200, await readFile(filePath), { 'Content-Type': mime[extname(filePath)] ?? 'application/octet-stream', 'Cache-Control': filePath.endsWith('index.html') ? 'no-cache' : 'public, max-age=31536000, immutable' })
+    send(response, 200, await readFile(filePath), { 'Content-Type': mime[extname(filePath)] ?? 'application/octet-stream', 'Cache-Control': filePath.includes(`${sep}assets${sep}`) ? 'public, max-age=31536000, immutable' : 'no-cache' })
   } catch (error) {
     send(response, 502, JSON.stringify({ error: error instanceof Error ? error.message : 'Upstream failure' }), { 'Content-Type': 'application/json' })
   }
