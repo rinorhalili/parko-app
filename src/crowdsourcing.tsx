@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { loadCommunityState, submitParkingAvailability, type CommunityParkingReport, type CommunityStreetAlert } from './communityApi'
-import { supabase } from './lib/supabase'
+import { useSocket } from './hooks/useSocket'
 import type { Parking } from './types'
 
 type CrowdContextValue = {
@@ -23,12 +23,12 @@ export function CrowdSourcingProvider({ children }: { children: ReactNode }) {
       if (active) setError(reason instanceof Error ? reason.message : 'Raportimet e komunitetit nuk u ngarkuan.')
     })
     void refresh()
-    const channel = supabase.channel('community-live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'community_parking_reports' }, () => void refresh())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'street_alerts' }, () => void refresh())
-      .subscribe()
-    return () => { active = false; void supabase.removeChannel(channel) }
+    return () => { active = false }
   }, [])
+  useSocket({ onParkingReport: (report) => {
+    const next = { id: report.id, parkingId: report.parkingSpotId, status: report.status === 'AVAILABLE' ? 'AVAILABLE' as const : 'OCCUPIED' as const, createdAt: Date.parse(report.createdAt), expiresAt: Date.parse(report.expiresAt) }
+    setReports((current) => [next, ...current.filter((item) => item.parkingId !== next.parkingId)])
+  } })
   const value = useMemo<CrowdContextValue>(() => ({ reports, alerts, error,
     vouchSpot: async (parking, status) => {
       setError(null)

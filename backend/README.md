@@ -25,8 +25,11 @@ For a local database stack:
 docker compose up postgres redis
 npx prisma db push
 npm run seed
+npm run import:parking
 npm run dev
 ```
+
+`npm run import:parking` imports the versioned OpenStreetMap snapshot used by the web map. It is safe to run again: records retain their stable `osm-<kind>-<id>` identifiers so map reports and backend records match.
 
 ## API
 

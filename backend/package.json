@@ -10,7 +10,8 @@
     "test": "vitest run",
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "import:parking": "tsx scripts/import-prishtina-parking.ts"
   },
   "dependencies": {
     "@prisma/client": "6.12.0",

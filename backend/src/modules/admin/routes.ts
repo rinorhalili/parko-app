@@ -9,9 +9,35 @@ import { ok } from "../../utils/apiResponse.js";
 const idParams = z.object({ id: z.uuid() });
 const userPatch = z.object({ isActive: z.boolean().optional(), isVerified: z.boolean().optional() });
 const rolePatch = z.object({ role: z.enum(["USER", "MODERATOR", "ADMIN"]) });
+const parkingPatch = z.object({
+  status: z.enum(["AVAILABLE", "OCCUPIED", "UNKNOWN", "RESERVED", "TEMPORARILY_UNAVAILABLE"]),
+  title: z.string().min(2).max(120).optional(),
+  description: z.string().max(1000).nullable().optional(),
+  address: z.string().max(200).nullable().optional(),
+  zone: z.string().max(80).nullable().optional(),
+  capacity: z.number().int().positive().nullable().optional()
+});
 
 export const adminRoutes = Router();
 adminRoutes.use(authenticate, authorize("ADMIN"));
+
+adminRoutes.get("/parking", async (_req, res, next) => {
+  try {
+    ok(res, await prisma.parkingSpot.findMany({ orderBy: { updatedAt: "desc" }, take: 500 }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+adminRoutes.patch("/parking/:id", validate({ params: z.object({ id: z.string().min(1).max(120) }), body: parkingPatch }), async (req, res, next) => {
+  try {
+    const spot = await prisma.parkingSpot.update({ where: { id: req.params.id as string }, data: req.body });
+    await prisma.adminAction.create({ data: { adminId: req.user!.id, action: "parking.update", targetId: spot.id, metadata: req.body } });
+    ok(res, spot);
+  } catch (error) {
+    next(error);
+  }
+});
 
 adminRoutes.get("/users", async (_req, res, next) => {
   try {

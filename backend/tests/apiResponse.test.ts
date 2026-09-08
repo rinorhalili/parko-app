@@ -13,4 +13,15 @@ describe("API shell", () => {
     expect(response.body.success).toBe(false);
     expect(response.body.error.code).toBe("VALIDATION_ERROR");
   });
+
+  it("does not expose admin parking data without a valid access token", async () => {
+    const response = await request(createApp()).get("/api/v1/admin/parking").expect(401);
+    expect(response.body.error.code).toBe("UNAUTHORIZED");
+  });
+
+  it("adds baseline browser security headers", async () => {
+    const response = await request(createApp()).get("/health").expect(200);
+    expect(response.headers["x-content-type-options"]).toBe("nosniff");
+    expect(response.headers["content-security-policy"]).toContain("default-src 'self'");
+  });
 });

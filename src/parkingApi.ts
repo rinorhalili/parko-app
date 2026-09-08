@@ -2,7 +2,7 @@ import { PARKINGS } from './data'
 import { OSM_PARKING_SNAPSHOT } from './osmParkingSnapshot'
 import { OFFICIAL_PRISHTINA_PARKING_MARKERS } from './officialPrishtinaParking'
 import { deriveMunicipalParkingData } from './prishtinaParkingRules'
-import { supabase, supabaseConfigError } from './lib/supabase'
+import { listParking } from './api/parkingService'
 import type { Parking, ParkingAccess } from './types'
 
 const OVERPASS_URLS = [
@@ -216,57 +216,53 @@ function withoutDuplicates(parkings: Parking[], existing: Parking[], thresholdMe
   ))
 }
 
-type ApprovedParkingSpot = {
+type BackendParkingSpot = {
   id: string
   title: string
-  city: string
   address: string | null
-  type: 'FREE' | 'PAID_PUBLIC' | 'PRIVATE' | 'STREET_RISKY'
+  zone: string | null
+  type: 'STREET' | 'GARAGE' | 'LOT' | 'PRIVATE' | 'ACCESSIBLE'
   latitude: number
   longitude: number
-  price_per_hour: number | null
-  is_covered: boolean
+  capacity: number | null
+  status: 'AVAILABLE' | 'OCCUPIED' | 'UNKNOWN' | 'RESERVED' | 'TEMPORARILY_UNAVAILABLE'
+  reportedAt: string | null
 }
 
-async function loadApprovedParkingSpots(signal?: AbortSignal) {
-  if (supabaseConfigError) return []
-  const { data, error } = await supabase
-    .from('parking_spots')
-    .select('id, title, city, address, type, latitude, longitude, price_per_hour, is_covered')
-    .eq('status', 'APPROVED')
-    .abortSignal(signal ?? new AbortController().signal)
-  if (error) throw error
-
-  return (data as ApprovedParkingSpot[])
-    .filter((spot) => spot.city.toLowerCase().includes('prisht'))
+async function loadBackendParkingSpots(signal?: AbortSignal) {
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+  const data = await listParking()
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+  return (data as BackendParkingSpot[])
     .filter((spot) => isWithinPrishtinaMap({ lat: spot.latitude, lng: spot.longitude }))
     .map((spot): Parking => {
-      const pricePerHour = spot.price_per_hour
-      const type = spot.type === 'PRIVATE' ? 'private' : spot.type === 'STREET_RISKY' ? 'street' : 'public'
+      const type = spot.type === 'PRIVATE' ? 'private' : spot.type === 'STREET' ? 'street' : 'public'
+      const live = spot.status === 'AVAILABLE' || spot.status === 'OCCUPIED'
       return {
-        id: `supabase-${spot.id}`,
+        id: spot.id,
         name: spot.title,
-        zone: 'Prishtinë',
+        zone: spot.zone ?? 'Prishtinë',
         address: spot.address ?? 'Prishtinë, Kosovë',
-        capacity: null,
-        spaces: null,
-        status: 'unknown',
-        pricePerHour,
+        capacity: spot.capacity,
+        spaces: spot.status === 'AVAILABLE' ? 1 : spot.status === 'OCCUPIED' ? 0 : null,
+        status: spot.status === 'AVAILABLE' ? 'available' : spot.status === 'OCCUPIED' ? 'full' : 'unknown',
+        pricePerHour: null,
         distanceMeters: distanceMeters(USER_LOCATION, { lat: spot.latitude, lng: spot.longitude }),
         driveMinutes: 0,
         confidence: 'high',
-        updatedMinutesAgo: 0,
+        updatedMinutesAgo: spot.reportedAt ? Math.max(0, Math.round((Date.now() - Date.parse(spot.reportedAt)) / 60_000)) : 0,
         type,
         open24h: false,
-        covered: spot.is_covered,
+        covered: spot.type === 'GARAGE',
         cardPayment: false,
         evCharging: false,
         accessible: false,
-        free: spot.type === 'FREE' || pricePerHour === 0,
+        free: false,
         coordinates: { lat: spot.latitude, lng: spot.longitude },
         access: type === 'private' ? 'private' : 'unknown',
-        source: 'municipal',
-        operator: 'Parko community',
+        source: spot.id.startsWith('prishtina-parking-') ? 'municipal' : 'openstreetmap',
+        operator: spot.id.startsWith('prishtina-parking-') ? 'Prishtina Parking' : 'OpenStreetMap',
+        availabilitySource: live ? 'Parko community' : undefined,
       }
     })
 }
@@ -303,10 +299,10 @@ export async function loadPrishtinaParkings(signal?: AbortSignal) {
   if (!osmParkings.length) throw new Error('No parking data returned')
   let approvedParkings: Parking[] = []
   try {
-    approvedParkings = await loadApprovedParkingSpots(signal)
+    approvedParkings = await loadBackendParkingSpots(signal)
   } catch (error) {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-    console.warn('Approved Supabase parking spots could not be loaded; continuing with map data.', error)
+    console.warn('Parko backend parking records could not be loaded; continuing with map data.', error)
   }
   const officialParkings = OFFICIAL_PRISHTINA_PARKING_MARKERS.map(fromOfficialPrishtinaParkingMarker)
 

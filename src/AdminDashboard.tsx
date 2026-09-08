@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
-import { supabase, supabaseConfigError, supabaseNetworkError } from './lib/supabase'
 import Login from './Login'
+import { getAccessToken, ApiError } from './api/client'
+import { me } from './api/authService'
+import { listAdminParking, updateAdminParkingStatus } from './api/adminService'
 
 type ParkingCategory = 'public' | 'street' | 'prishtina' | 'private'
 type NavKey = 'queue' | 'map' | 'reports' | 'users'
@@ -25,18 +27,17 @@ type SpotSubmission = {
 
 type ParkingSpotRow = {
   id: string
-  submitted_by: string | null
+  ownerId: string | null
   title: string
   description: string | null
-  city: string
   address: string | null
-  type: 'FREE' | 'PAID_PUBLIC' | 'PRIVATE' | 'STREET_RISKY'
-  price_per_hour: number | null
+  zone: string | null
+  type: 'STREET' | 'GARAGE' | 'LOT' | 'PRIVATE' | 'ACCESSIBLE'
+  capacity: number | null
   latitude: number
   longitude: number
-  upvotes: number
-  downvotes: number
-  created_at: string
+  status: string
+  createdAt: string
 }
 
 const sidebarItems: Array<{ key: NavKey; label: string; count: number }> = [
@@ -680,23 +681,21 @@ function formatPrice(price: number) {
 }
 
 function submissionFromSpot(spot: ParkingSpotRow): SpotSubmission {
-  const category: ParkingCategory = spot.type === 'PAID_PUBLIC'
-    ? 'prishtina'
-    : spot.type === 'PRIVATE' ? 'private' : spot.type === 'STREET_RISKY' ? 'street' : 'public'
-  const riskLevel: RiskLevel = spot.type === 'STREET_RISKY' ? 'high' : spot.type === 'PRIVATE' ? 'medium' : 'low'
+  const category: ParkingCategory = spot.type === 'PRIVATE' ? 'private' : spot.type === 'STREET' ? 'street' : spot.zone?.toLowerCase().includes('prishtina parking') ? 'prishtina' : 'public'
+  const riskLevel: RiskLevel = spot.status === 'TEMPORARILY_UNAVAILABLE' ? 'high' : spot.type === 'PRIVATE' ? 'medium' : 'low'
   return {
     id: spot.id,
-    anonymousId: spot.submitted_by ? `Përdorues ${spot.submitted_by.slice(0, 8)}` : 'Përdorues anonim',
-    submittedAt: new Intl.DateTimeFormat('sq-AL', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(spot.created_at)),
-    city: spot.city,
+    anonymousId: spot.ownerId ? `Përdorues ${spot.ownerId.slice(0, 8)}` : 'Dataset Parko',
+    submittedAt: new Intl.DateTimeFormat('sq-AL', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(spot.createdAt)),
+    city: 'Prishtina',
     address: spot.address ?? spot.title,
     category,
-    proposedPrice: spot.price_per_hour ?? 0,
+    proposedPrice: 0,
     lat: spot.latitude,
     lng: spot.longitude,
     notes: spot.description ?? 'Pa shënim nga raportuesi.',
     riskLevel,
-    communityVotes: spot.upvotes + spot.downvotes,
+    communityVotes: spot.capacity ?? 0,
     duplicateSignals: 0,
   }
 }
@@ -838,60 +837,29 @@ export default function AdminDashboard() {
   const loadPendingSubmissions = async () => {
     setIsLoading(true)
     setError('')
-    if (supabaseConfigError) {
-      setError(supabaseConfigError)
-      setIsLoading(false)
-      return
-    }
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    if (sessionError) {
-      setError(supabaseNetworkError(sessionError))
-      setIsLoading(false)
-      return
-    }
-    if (!session?.user) {
+    if (!getAccessToken()) {
       setNeedsLogin(true)
       setIsAdmin(false)
       setIsLoading(false)
       return
     }
     setNeedsLogin(false)
-    const user = session.user
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-    const metadataRole = typeof user.user_metadata?.role === 'string' ? user.user_metadata.role.toUpperCase() : ''
-    if (profileError && metadataRole !== 'ADMIN') {
-      setError(supabaseNetworkError(profileError))
+    try {
+      const user = await me()
+      if (user.role !== 'ADMIN') throw new Error('Nuk ke leje administratori.')
+      setIsAdmin(true)
+      setSubmissions((await listAdminParking() as ParkingSpotRow[]).map(submissionFromSpot))
+    } catch (reason) {
       setIsAdmin(false)
+      setError(reason instanceof ApiError ? reason.message : reason instanceof Error ? reason.message : 'Paneli nuk u ngarkua.')
+    } finally {
       setIsLoading(false)
-      return
     }
-    if (profile?.role !== 'ADMIN' && metadataRole !== 'ADMIN') {
-      setError('Nuk ke leje administratori.')
-      setIsAdmin(false)
-      setIsLoading(false)
-      return
-    }
-    setIsAdmin(true)
-    const { data, error: spotsError } = await supabase
-      .from('parking_spots')
-      .select('id, submitted_by, title, description, city, address, type, price_per_hour, latitude, longitude, upvotes, downvotes, created_at')
-      .eq('status', 'PENDING')
-      .order('created_at', { ascending: false })
-    if (spotsError) setError(spotsError.message)
-    else setSubmissions((data as ParkingSpotRow[]).map(submissionFromSpot))
-    setIsLoading(false)
   }
 
   useEffect(() => {
     void loadPendingSubmissions()
-    const { data: authListener } = supabase.auth.onAuthStateChange(() => {
-      void loadPendingSubmissions()
-    })
-    return () => authListener.subscription.unsubscribe()
+    return undefined
   }, [])
 
   const filteredSubmissions = useMemo(() => {
@@ -922,22 +890,16 @@ export default function AdminDashboard() {
     if (index >= 0) setSelectedIndex(index)
   }
 
-  const updateStatus = async (status: 'APPROVED' | 'REJECTED') => {
+  const updateStatus = async (status: 'AVAILABLE' | 'TEMPORARILY_UNAVAILABLE') => {
     if (!selectedSubmission || !isAdmin || actionInProgress) return
     setActionInProgress(true)
     setError('')
-    const { error: updateError } = await supabase
-      .from('parking_spots')
-      .update({ status })
-      .eq('id', selectedSubmission.id)
-      .eq('status', 'PENDING')
-    if (updateError) {
-      setError(updateError.message)
-    } else {
-      setSubmissions((current) => current.filter((item) => item.id !== selectedSubmission.id))
-      setSelectedIndex((current) => Math.max(0, Math.min(current, filteredSubmissions.length - 2)))
-    }
-    setActionInProgress(false)
+    try {
+      await updateAdminParkingStatus(selectedSubmission.id, status)
+      await loadPendingSubmissions()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Përditësimi dështoi.')
+    } finally { setActionInProgress(false) }
   }
 
   if (isLoading) return <div className="app-loading" role="status">Duke ngarkuar panelin…</div>
@@ -1086,11 +1048,11 @@ export default function AdminDashboard() {
             </div>
 
             <div className="action-bar" aria-label="Vendimi i adminit">
-              <button className="admin-button admin-button--primary" type="button" onClick={() => void updateStatus('APPROVED')} disabled={!selectedSubmission || actionInProgress}>Mirato dhe publiko</button>
+              <button className="admin-button admin-button--primary" type="button" onClick={() => void updateStatus('AVAILABLE')} disabled={!selectedSubmission || actionInProgress}>Shëno të disponueshëm</button>
               <select className="admin-select reject-select" value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} aria-label="Arsyeja e refuzimit">
                 {rejectionReasons.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
               </select>
-              <button className="admin-button admin-button--danger" type="button" onClick={() => void updateStatus('REJECTED')} disabled={!selectedSubmission || actionInProgress}>Refuzo</button>
+              <button className="admin-button admin-button--danger" type="button" onClick={() => void updateStatus('TEMPORARILY_UNAVAILABLE')} disabled={!selectedSubmission || actionInProgress}>Çaktivizo përkohësisht</button>
               <button className="admin-button admin-button--warning" type="button" disabled> Dërgo për kontroll në terren</button>
             </div>
           </main>

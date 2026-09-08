@@ -26,7 +26,7 @@ export function useSocket(options: SocketOptions = {}) {
     }
 
     const socket = io(SOCKET_URL, {
-      auth: (callback) => callback({ token: getAccessToken() }),
+      auth: (callback: (credentials: { token: string | null }) => void) => callback({ token: getAccessToken() }),
       withCredentials: true,
       reconnection: true,
       reconnectionAttempts: Infinity

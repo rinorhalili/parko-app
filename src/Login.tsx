@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
-import { getProfileRole, supabase, supabaseConfigError, supabaseNetworkError } from './lib/supabase'
+import { useState } from 'react'
+import { ApiError } from './api/client'
+import { login, register } from './api/authService'
 
 type AuthMode = 'login' | 'register'
 
@@ -10,18 +11,12 @@ interface LoginProps {
 export default function Login({ onClose }: LoginProps) {
   const [mode, setMode] = useState<AuthMode>('login')
   const [email, setEmail] = useState('')
+  const [name, setName] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-
-  useEffect(() => {
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session) onClose()
-    })
-
-    return () => authListener.subscription.unsubscribe()
-  }, [onClose])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -39,41 +34,24 @@ export default function Login({ onClose }: LoginProps) {
 
     setIsLoading(true)
     try {
-      if (supabaseConfigError) {
-        setError(supabaseConfigError)
-        return
-      }
       if (mode === 'login') {
-        const { data, error: authError } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password,
-        })
-        if (authError) throw authError
-        const metadataRole = typeof data.user.user_metadata?.role === 'string' ? data.user.user_metadata.role.toUpperCase() : ''
-        let profileRole: string | undefined
-        try {
-          profileRole = await getProfileRole(data.user.id)
-        } catch (profileError) {
-          console.warn('Profile lookup failed after sign-in; using auth metadata:', profileError)
-        }
-        if (profileRole === 'ADMIN' || metadataRole === 'ADMIN') {
+        const tokens = await login({ email: email.trim(), password })
+        if (tokens.user.role === 'ADMIN') {
           const url = new URL(window.location.href)
           url.searchParams.set('view', 'dashboard')
           window.history.replaceState({}, '', url)
         }
         onClose()
       } else {
-        const { data, error: authError } = await supabase.auth.signUp({
-          email: email.trim(),
-          password,
-        })
-        if (authError) throw authError
-        if (!data.session) {
-          setError('Registration successful. Check your email to confirm your account.')
+        if (!name.trim() || !username.trim()) {
+          setError('Please add your name and username')
+          return
         }
+        await register({ name: name.trim(), username: username.trim(), email: email.trim(), password })
+        onClose()
       }
     } catch (authError) {
-      setError(supabaseNetworkError(authError))
+      setError(authError instanceof ApiError ? authError.message : 'Unable to reach the Parko server. Please try again.')
     } finally {
       setIsLoading(false)
     }
@@ -285,7 +263,6 @@ export default function Login({ onClose }: LoginProps) {
           <h2 className="login-title">Parko</h2>
         </div>
 
-        {supabaseConfigError && <div className="error-message" role="alert">{supabaseConfigError}</div>}
         <div className="login-tabs">
           <button
             className={`login-tab ${mode === 'login' ? 'active' : ''}`}
@@ -303,6 +280,17 @@ export default function Login({ onClose }: LoginProps) {
 
         <form className="login-form" onSubmit={handleSubmit}>
           {error && <div className="error-message">{error}</div>}
+
+          {mode === 'register' && <>
+            <div className="form-group">
+              <label className="form-label" htmlFor="name">Name</label>
+              <input id="name" className="form-input" value={name} onChange={(e) => setName(e.target.value)} disabled={isLoading} autoComplete="name" required />
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="username">Username</label>
+              <input id="username" className="form-input" value={username} onChange={(e) => setUsername(e.target.value.replace(/\s/g, ''))} disabled={isLoading} autoComplete="username" required />
+            </div>
+          </>}
 
           <div className="form-group">
             <label className="form-label" htmlFor="email">Email</label>

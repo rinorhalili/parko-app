@@ -1,14 +1,14 @@
 import { createAdapter } from "@socket.io/redis-adapter";
 import type { Server as HttpServer } from "node:http";
 import { Server } from "socket.io";
-import { env } from "../config/env.js";
+import { corsOrigins } from "../config/env.js";
 import { redis } from "../database/redis.js";
 import { verifyAccessToken } from "../utils/tokens.js";
 import { setIo } from "./io.js";
 
 export function createSocketServer(httpServer: HttpServer) {
   const io = new Server(httpServer, {
-    cors: { origin: env.CORS_ORIGIN, credentials: true }
+    cors: { origin: corsOrigins, credentials: true }
   });
 
   const pub = redis.duplicate();
@@ -30,9 +30,9 @@ export function createSocketServer(httpServer: HttpServer) {
     const user = socket.data.user as { id: string };
     socket.join(`user:${user.id}`);
 
-    socket.on("parking:subscribe", (payload: { spotId?: string; zone?: string }) => {
-      if (payload.spotId) socket.join(`parking:${payload.spotId}`);
-      if (payload.zone) socket.join(`zone:${payload.zone}`);
+    socket.on("parking:subscribe", (payload: { spotId?: string; zone?: string } = {}) => {
+      if (typeof payload.spotId === "string" && payload.spotId.length <= 120) socket.join(`parking:${payload.spotId}`);
+      if (typeof payload.zone === "string" && payload.zone.length <= 80) socket.join(`zone:${payload.zone}`);
     });
 
     socket.on("community:subscribe", () => socket.join("community"));

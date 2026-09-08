@@ -51,7 +51,7 @@ export async function nearbyParking(query: NearbyQuery) {
 }
 
 export async function listParking() {
-  return prisma.parkingSpot.findMany({ orderBy: { updatedAt: "desc" }, take: 100 });
+  return prisma.parkingSpot.findMany({ orderBy: { updatedAt: "desc" }, take: 500 });
 }
 
 export async function createParking(ownerId: string, input: Omit<Prisma.ParkingSpotUncheckedCreateInput, "ownerId" | "geoPoint">) {

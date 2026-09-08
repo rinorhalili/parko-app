@@ -20,4 +20,4 @@ export const createParkingSchema = z.object({
   capacity: z.number().int().positive().optional()
 });
 
-export const idParams = z.object({ id: z.uuid() });
+export const idParams = z.object({ id: z.string().min(1).max(120) });
