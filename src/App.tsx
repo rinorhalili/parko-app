@@ -1,5 +1,5 @@
 import { useRoutingOrigin } from './hooks/useRoutingOrigin'
-import { useCrowdSourcing } from './crowdsourcing'
+import { LeavingButton, SpotVouching, useCrowdSourcing } from './crowdsourcing'
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { loadVerifiedAvailability, mergeVerifiedAvailability } from './availabilityApi'
 import LiveParkingMap, { DEFAULT_MAP_SETTINGS } from './LiveParkingMap'
@@ -13,8 +13,7 @@ import { loadDrivingMatrix, loadDrivingRoute, loadWalkingRoute } from './routing
 import { kartaViewUrl, walkingDirectionsUrl } from './streetView'
 import { handleOpenExternal } from './externalLinks'
 import { captureEvent } from './telemetry'
-import { AlertBanner, LeavingButton, SpotVouching } from './crowdsourcing'
-import { submitParkingAvailability } from './communityApi'
+import type { CommunityParkingReport } from './communityApi'
 import { SaveMyParkedLocationCard, SmsTariffHelper } from './DriverTools'
 import type { DrivingMatrixEntry } from './routingApi'
 import type { Destination, DrivingRoute, Filters, MapSettings, MapVariant, Parking, ParkingLoadStatus, ParkingPalette, ParkingPreference, RankedParking, Screen } from './types'
@@ -40,7 +39,6 @@ function normalizedMapSettings(value?: Partial<MapSettings>): MapSettings {
 }
 
 const RECENT_DESTINATIONS_KEY = 'parko-recent-destinations'
-const PARKING_REPORTS_KEY = 'parko-live-parking-reports'
 type LocationStatus = 'idle' | 'locating' | 'ready' | 'outside' | 'denied' | 'unavailable'
 type SheetState = 'collapsed' | 'medium' | 'expanded'
 
@@ -72,28 +70,8 @@ function AppIcon({ name, size = 20 }: { name: AppIconName; size?: number }) {
   )
 }
 
-type ParkingReport = {
-  parkingId: string
-  availability?: 'free-spots' | 'full'
-  payment?: 'free' | 'paid'
-  policeRisk?: boolean
-  updatedAt: number
-}
-
-type ParkingReportPatch = Omit<Partial<ParkingReport>, 'parkingId' | 'updatedAt'>
-
-function loadParkingReports() {
-  try {
-    const value = JSON.parse(localStorage.getItem(PARKING_REPORTS_KEY) ?? '{}') as Record<string, ParkingReport>
-    return value && typeof value === 'object' ? value : {}
-  } catch {
-    return {}
-  }
-}
-
-function saveParkingReports(reports: Record<string, ParkingReport>) {
-  try { localStorage.setItem(PARKING_REPORTS_KEY, JSON.stringify(reports)) } catch { /* storage can be unavailable */ }
-}
+type ParkingReport = CommunityParkingReport
+type ParkingReportPatch = Pick<ParkingReport, 'availability' | 'payment' | 'policeRisk'>
 
 function reportAgeLabel(report?: ParkingReport) {
   if (!report) return ''
@@ -1145,7 +1123,6 @@ function DetailsView({ parking, report, onReport, route, destination, smartMatch
 
         <section className="details-community">
           <h2>Komuniteti</h2>
-          <AlertBanner zone={parking.zone} />
           <SpotVouching parking={parking} />
           <LeavingButton parking={parking} />
           <div className="report-control-row report-control-row--details">
@@ -1278,7 +1255,7 @@ export default function App() {
   const [route, setRoute] = useState<DrivingRoute | null>(null)
   const [routeNotice, setRouteNotice] = useState('')
   const [routeRetry, setRouteRetry] = useState(0)
-  const { reports: communityReports } = useCrowdSourcing()
+  const { reports: communityReports, submitReport } = useCrowdSourcing()
   const [availabilityClock, setAvailabilityClock] = useState(Date.now)
   useEffect(() => { const timer = setInterval(() => setAvailabilityClock(Date.now()), 30_000); return () => clearInterval(timer) }, [])
   const [walkingRoute, setWalkingRoute] = useState<DrivingRoute | null>(null)
@@ -1296,7 +1273,6 @@ export default function App() {
   const [parkingPreviewOpen, setParkingPreviewOpen] = useState(false)
   const [recenterToken, setRecenterToken] = useState(0)
   const [savedParkingIds, setSavedParkingIds] = useState<Set<string>>(() => new Set(persistedPreferences.savedParkingIds ?? []))
-  const [parkingReports, setParkingReports] = useState<Record<string, ParkingReport>>(loadParkingReports)
   const [userLocation, setUserLocation] = useState(USER_LOCATION)
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle')
   const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null)
@@ -1433,11 +1409,11 @@ export default function App() {
     const stale = parking.availabilityUpdatedAt && availabilityClock - Date.parse(parking.availabilityUpdatedAt) >= 30 * 60_000
     let result: Parking = stale ? { ...parking, spaces: null, status: 'unknown', availabilitySource: undefined } : parking
     const community = communityReports.find((report) => report.parkingId === parking.id && report.expiresAt > availabilityClock)
-    if (community && result.access !== 'no' && (!result.availabilityUpdatedAt || community.createdAt > Date.parse(result.availabilityUpdatedAt))) {
+    if (community?.availability && result.access !== 'no' && (!result.availabilityUpdatedAt || community.createdAt > Date.parse(result.availabilityUpdatedAt))) {
       result = { ...result, spaces: null, status: community.status === 'AVAILABLE' ? 'available' : 'full', availabilitySource: 'Komuniteti Parko', availabilityUpdatedAt: new Date(community.createdAt).toISOString(), updatedMinutesAgo: Math.floor((availabilityClock - community.createdAt) / 60_000) }
     }
-    return applyParkingReport(result, parkingReports[parking.id])
-  }), [parkings, parkingReports, communityReports, availabilityClock])
+    return applyParkingReport(result, community)
+  }), [parkings, communityReports, availabilityClock])
   const locatedParkings = useMemo(() => reportedParkings.map((parking) => ({
     ...parking,
     distanceMeters: distanceMeters(routingOrigin, parking.coordinates),

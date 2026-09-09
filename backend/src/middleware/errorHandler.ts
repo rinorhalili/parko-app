@@ -8,6 +8,14 @@ export function errorHandler(error: unknown, req: Request, res: Response, _next:
     return res.status(error.status).json({ success: false, error: { code: error.code, message: error.message } });
   }
 
+  if (error instanceof SyntaxError && "body" in error) {
+    return res.status(400).json({ success: false, error: { code: "INVALID_JSON", message: "Invalid JSON request body" } });
+  }
+
+  if (typeof error === "object" && error !== null && "type" in error && error.type === "entity.too.large") {
+    return res.status(413).json({ success: false, error: { code: "PAYLOAD_TOO_LARGE", message: "Request body is too large" } });
+  }
+
   logger.error({ err: error, requestId: req.id }, "Unhandled API error");
   return res.status(500).json({
     success: false,

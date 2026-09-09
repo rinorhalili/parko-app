@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { defaultParking } from './data'
+import { defaultParking } from './testFixtures'
 import { walkableParkingCandidates } from './parkingRanking'
 import type { Destination } from './types'
 

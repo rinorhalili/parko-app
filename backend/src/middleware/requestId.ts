@@ -10,7 +10,8 @@ declare global {
 }
 
 export function requestId(req: Request, res: Response, next: NextFunction) {
-  req.id = req.header("x-request-id") ?? nanoid();
+  const provided = req.header("x-request-id");
+  req.id = provided && /^[a-zA-Z0-9_-]{8,128}$/.test(provided) ? provided : nanoid();
   res.setHeader("x-request-id", req.id);
   next();
 }

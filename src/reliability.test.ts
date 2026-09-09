@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { defaultParking } from './data'
+import { defaultParking } from './testFixtures'
 import { mergeParkingSources } from './parkingApi'
 import { walkableParkingCandidates } from './parkingRanking'
 import { loadDrivingRoute } from './routingApi'

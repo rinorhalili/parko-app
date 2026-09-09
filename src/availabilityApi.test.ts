@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { mergeVerifiedAvailability } from './availabilityApi'
-import { defaultParking } from './data'
+import { defaultParking } from './testFixtures'
 
 describe('verified occupancy merge', () => {
   it('merges a fresh verified record', () => {

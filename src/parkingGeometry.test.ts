@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parkingAccessPoint } from './parkingGeometry'
-import { defaultParking } from './data'
+import { defaultParking } from './testFixtures'
 
 describe('parking access point', () => {
   it('prefers a verified entrance', () => {

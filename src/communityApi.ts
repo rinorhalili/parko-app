@@ -1,51 +1,68 @@
 import { getAccessToken } from './api/client'
 import { createParkingReport, listParkingReports } from './api/reportService'
-import type { MapCoordinate, Parking } from './types'
+import type { Parking } from './types'
 
 export type CommunityAvailability = 'AVAILABLE' | 'OCCUPIED'
+export type CommunityReportStatus = CommunityAvailability | 'UNKNOWN'
 
 export type CommunityParkingReport = {
   id: string
   parkingId: string
-  status: CommunityAvailability
+  status: CommunityReportStatus
+  availability?: 'free-spots' | 'full'
+  payment?: 'free' | 'paid'
+  policeRisk?: boolean
   createdAt: number
+  updatedAt: number
   expiresAt: number
 }
 
-export type CommunityStreetAlert = {
+type ApiReport = {
   id: string
-  kind: 'police' | 'spider'
-  street: string
-  zone: string
-  createdAt: number
-  expiresAt: number
+  parkingSpotId: string
+  status: CommunityReportStatus
+  payment: 'FREE' | 'PAID' | null
+  policeRisk: boolean | null
+  createdAt: string
+  expiresAt: string
 }
 
-function asReport(row: { id: string; parkingSpotId: string; status: string; createdAt: string; expiresAt: string }): CommunityParkingReport {
-  const status: CommunityAvailability = row.status === 'AVAILABLE' ? 'AVAILABLE' : 'OCCUPIED'
-  return { id: row.id, parkingId: row.parkingSpotId, status, createdAt: Date.parse(row.createdAt), expiresAt: Date.parse(row.expiresAt) }
-}
-
-export async function loadCommunityState() {
-  const reports = await listParkingReports()
-  const now = Date.now()
+function asReport(row: ApiReport): CommunityParkingReport {
   return {
-    reports: reports.filter((report) => Date.parse(report.expiresAt) > now).map(asReport),
-    alerts: [],
+    id: row.id,
+    parkingId: row.parkingSpotId,
+    status: row.status,
+    ...(row.status === 'AVAILABLE' ? { availability: 'free-spots' as const } : row.status === 'OCCUPIED' ? { availability: 'full' as const } : {}),
+    ...(row.payment ? { payment: row.payment === 'FREE' ? 'free' as const : 'paid' as const } : {}),
+    ...(row.policeRisk === null ? {} : { policeRisk: row.policeRisk }),
+    createdAt: Date.parse(row.createdAt),
+    updatedAt: Date.parse(row.createdAt),
+    expiresAt: Date.parse(row.expiresAt),
   }
 }
 
-export async function submitParkingAvailability(parking: Parking, status: CommunityAvailability) {
-  if (!getAccessToken()) throw new Error('Ky veprim kërkon hyrje në llogari.')
-  return asReport(await createParkingReport({
+export async function loadCommunityState() {
+  const { items } = await listParkingReports()
+  const now = Date.now()
+  return { reports: (items as ApiReport[]).filter((report) => Date.parse(report.expiresAt) > now).map(asReport) }
+}
+
+export type ParkingObservation = {
+  availability?: CommunityAvailability
+  payment?: 'free' | 'paid'
+  policeRisk?: boolean
+}
+
+export async function submitParkingObservation(parking: Parking, observation: ParkingObservation) {
+  if (!getAccessToken()) throw new Error('Ky veprim kerkon hyrje ne llogari.')
+  const report = await createParkingReport({
     parkingSpotId: parking.id,
-    status,
+    status: observation.availability ?? 'UNKNOWN',
     latitude: parking.coordinates.lat,
     longitude: parking.coordinates.lng,
     confidence: 60,
-  }))
-}
-
-export async function submitStreetAlert(_kind: CommunityStreetAlert['kind'], _street: string, _zone: string, _coordinate?: MapCoordinate) {
-  throw new Error('Street alerts are not available in the new Parko service yet.')
+    payment: observation.payment === 'free' ? 'FREE' : observation.payment === 'paid' ? 'PAID' : undefined,
+    policeRisk: observation.policeRisk,
+  })
+  return asReport(report as ApiReport)
 }

@@ -3,7 +3,7 @@ import type { ApiErrorBody, ApiResponse, AuthTokens } from './types'
 export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '')
 export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || API_BASE_URL.replace(/\/api\/v1\/?$/, '') || window.location.origin
 
-const ACCESS_TOKEN_KEY = 'parko:access-token:v1'
+let accessToken: string | null = null
 let refreshPromise: Promise<string | null> | null = null
 
 export class ApiError extends Error {
@@ -18,26 +18,18 @@ export class ApiError extends Error {
   }
 }
 
-function readToken(key: string) {
-  try { return localStorage.getItem(key) } catch { return null }
-}
-
-function writeToken(key: string, value: string | null) {
-  try {
-    if (value) localStorage.setItem(key, value)
-    else localStorage.removeItem(key)
-  } catch { /* Storage may be disabled. */ }
-}
-
-export function getAccessToken() { return readToken(ACCESS_TOKEN_KEY) }
+export function getAccessToken() { return accessToken }
 
 export function setAuthTokens(tokens: AuthTokens) {
-  writeToken(ACCESS_TOKEN_KEY, tokens.accessToken)
+  accessToken = tokens.accessToken
+  // Remove the legacy persisted token if a previous build created one.
+  try { localStorage.removeItem('parko:access-token:v1') } catch { /* Storage may be disabled. */ }
   window.dispatchEvent(new Event('parko:auth-changed'))
 }
 
 export function clearAuthTokens() {
-  writeToken(ACCESS_TOKEN_KEY, null)
+  accessToken = null
+  try { localStorage.removeItem('parko:access-token:v1') } catch { /* Storage may be disabled. */ }
   window.dispatchEvent(new Event('parko:auth-changed'))
 }
 

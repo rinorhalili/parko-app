@@ -31,6 +31,11 @@ enum ParkingType {
   ACCESSIBLE
 }
 
+enum PaymentReport {
+  FREE
+  PAID
+}
+
 enum ReactionType {
   LIKE
   HELPFUL
@@ -77,7 +82,9 @@ model User {
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
   sessions        RefreshToken[]
+  resetTokens     PasswordResetToken[]
   parkingSpots    ParkingSpot[]
+  reservations    ParkingReservation[]
   parkingReports  ParkingReport[]
   posts           Post[]
   comments        Comment[]
@@ -94,6 +101,7 @@ model User {
 model RefreshToken {
   id        String    @id @default(uuid())
   userId    String
+  familyId  String    @default(uuid())
   tokenHash String    @unique
   userAgent String?
   ipAddress String?
@@ -103,6 +111,20 @@ model RefreshToken {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([userId, familyId])
+  @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
   @@index([expiresAt])
 }
 
@@ -143,6 +165,8 @@ model ParkingReport {
   geoPoint      Unsupported("geography(Point,4326)")?
   description   String?
   confidence    Int           @default(50)
+  payment       PaymentReport?
+  policeRisk    Boolean?
   expiresAt     DateTime
   createdAt     DateTime      @default(now())
   reporter      User          @relation(fields: [reporterId], references: [id], onDelete: Cascade)
@@ -163,6 +187,7 @@ model ParkingReservation {
   cancelledAt   DateTime?
   createdAt     DateTime    @default(now())
   parkingSpot   ParkingSpot @relation(fields: [parkingSpotId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([parkingSpotId, startsAt])
   @@index([userId, expiresAt])

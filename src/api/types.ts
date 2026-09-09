@@ -83,6 +83,8 @@ export interface ParkingReport {
   longitude: number
   description: string | null
   confidence: number
+  payment: 'FREE' | 'PAID' | null
+  policeRisk: boolean | null
   expiresAt: string
   createdAt: string
   parkingSpot?: ParkingSpot
@@ -96,6 +98,8 @@ export interface CreateParkingReportInput {
   longitude: number
   description?: string
   confidence?: number
+  payment?: 'FREE' | 'PAID'
+  policeRisk?: boolean
 }
 
 export interface CommunityPost {

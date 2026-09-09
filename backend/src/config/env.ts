@@ -6,16 +6,21 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(4000),
   DATABASE_URL: z.string().url(),
   REDIS_URL: z.string().url().default("redis://localhost:6379"),
-  JWT_ACCESS_SECRET: z.string().min(16),
-  JWT_REFRESH_SECRET: z.string().min(16),
+  JWT_ACCESS_SECRET: z.string().min(32),
+  JWT_REFRESH_SECRET: z.string().min(32),
   JWT_ACCESS_EXPIRES_IN: z.string().default("15m"),
   JWT_REFRESH_EXPIRES_IN: z.string().default("30d"),
+  JWT_ISSUER: z.string().min(1).default("parko-api"),
+  JWT_AUDIENCE: z.string().min(1).default("parko-clients"),
   CORS_ORIGIN: z.string().min(1).default("http://localhost:5173"),
-  LOG_LEVEL: z.string().default("info")
+  LOG_LEVEL: z.string().default("info"),
+  PASSWORD_RESET_WEB_URL: z.string().url().optional(),
+  PASSWORD_RESET_DELIVERY_URL: z.string().url().optional(),
+  PASSWORD_RESET_DELIVERY_TOKEN: z.string().min(16).optional()
 }).superRefine((value, context) => {
   if (value.NODE_ENV !== "production") return;
   for (const [key, secret] of [["JWT_ACCESS_SECRET", value.JWT_ACCESS_SECRET], ["JWT_REFRESH_SECRET", value.JWT_REFRESH_SECRET]] as const) {
-    if (secret.toLowerCase().includes("change-me")) {
+    if (/(change-me|replace-with|example|test-)/i.test(secret)) {
       context.addIssue({ code: "custom", path: [key], message: "must be replaced in production" });
     }
   }
@@ -29,3 +34,4 @@ const envSchema = z.object({
 
 export const env = envSchema.parse(process.env);
 export const corsOrigins = env.CORS_ORIGIN.split(",").map((origin) => origin.trim()).filter(Boolean);
+export const isTrustedOrigin = (origin: string) => corsOrigins.includes(origin);

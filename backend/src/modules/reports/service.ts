@@ -12,6 +12,8 @@ export async function createParkingReport(reporterId: string, input: {
   longitude: number;
   description?: string;
   confidence: number;
+  payment?: "FREE" | "PAID";
+  policeRisk?: boolean;
 }) {
   const spot = await prisma.parkingSpot.findUnique({ where: { id: input.parkingSpotId } });
   if (!spot) throw notFound("Parking spot not found");
@@ -35,7 +37,9 @@ export async function createParkingReport(reporterId: string, input: {
         latitude: input.latitude,
         longitude: input.longitude,
         description: input.description,
-        confidence: 50,
+        confidence: Math.min(input.confidence, 75),
+        payment: input.payment,
+        policeRisk: input.policeRisk,
         expiresAt: new Date(Date.now() + 30 * 60_000)
       }
     });
@@ -44,11 +48,13 @@ export async function createParkingReport(reporterId: string, input: {
       SET "geoPoint" = ST_SetSRID(ST_MakePoint(${created.longitude}, ${created.latitude}), 4326)::geography
       WHERE id = ${created.id}
     `;
-    const updated = await tx.parkingSpot.updateMany({
-      where: { id: input.parkingSpotId, ...publicParkingWhere, status: { notIn: ['RESERVED', 'TEMPORARILY_UNAVAILABLE'] } },
-      data: { status: input.status as ParkingStatus, reportedAt: new Date() }
-    });
-    if (updated.count !== 1) throw badRequest('This parking is not open for reports');
+    if (input.status !== "UNKNOWN") {
+      const updated = await tx.parkingSpot.updateMany({
+        where: { id: input.parkingSpotId, ...publicParkingWhere, status: { notIn: ['RESERVED', 'TEMPORARILY_UNAVAILABLE'] } },
+        data: { status: input.status as ParkingStatus, reportedAt: new Date() }
+      });
+      if (updated.count !== 1) throw badRequest('This parking is not open for reports');
+    }
     return created;
   });
 
@@ -58,6 +64,15 @@ export async function createParkingReport(reporterId: string, input: {
   return report;
 }
 
-export async function listParkingReports() {
-  return prisma.parkingReport.findMany({ where: { expiresAt: { gt: new Date() }, parkingSpot: { ...publicParkingWhere, status: { notIn: ['RESERVED', 'TEMPORARILY_UNAVAILABLE'] } } }, orderBy: { createdAt: "desc" }, take: 100, include: { reporter: { select: { id: true, username: true, reputationScore: true } } } });
+export async function listParkingReports({ page = 0, pageSize = 100, parkingSpotId }: { page?: number; pageSize?: number; parkingSpotId?: string } = {}) {
+  const where = {
+    expiresAt: { gt: new Date() },
+    ...(parkingSpotId ? { parkingSpotId } : {}),
+    parkingSpot: { ...publicParkingWhere, status: { notIn: ['RESERVED', 'TEMPORARILY_UNAVAILABLE'] } }
+  };
+  const [items, total] = await Promise.all([
+    prisma.parkingReport.findMany({ where, orderBy: { createdAt: "desc" }, take: pageSize, skip: page * pageSize, include: { reporter: { select: { id: true, username: true, reputationScore: true } } } }),
+    prisma.parkingReport.count({ where })
+  ]);
+  return { items, total, page, pageSize };
 }

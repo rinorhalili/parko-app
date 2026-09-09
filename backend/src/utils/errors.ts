@@ -13,3 +13,4 @@ export const unauthorized = (message = "Authentication required") => new AppErro
 export const forbidden = (message = "Forbidden") => new AppError(403, "FORBIDDEN", message);
 export const notFound = (message = "Not found") => new AppError(404, "NOT_FOUND", message);
 export const conflict = (message: string) => new AppError(409, "CONFLICT", message);
+export const serviceUnavailable = (message = "Service unavailable") => new AppError(503, "SERVICE_UNAVAILABLE", message);
