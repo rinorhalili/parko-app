@@ -1,9 +1,11 @@
-import type { ParkingStatus } from "@prisma/client";
+import type { ParkingStatus, Prisma } from "@prisma/client";
 import { prisma } from "../../database/prisma.js";
 import { emitRealtime } from "../../websocket/io.js";
 import { badRequest, notFound } from "../../utils/errors.js";
 import { recordEvent } from "../reputation/service.js";
 import { publicParkingWhere } from '../parking/policy.js';
+
+const NON_REPORTABLE_STATUSES: ParkingStatus[] = ['RESERVED', 'TEMPORARILY_UNAVAILABLE'];
 
 export async function createParkingReport(reporterId: string, input: {
   parkingSpotId: string;
@@ -17,7 +19,7 @@ export async function createParkingReport(reporterId: string, input: {
 }) {
   const spot = await prisma.parkingSpot.findUnique({ where: { id: input.parkingSpotId } });
   if (!spot) throw notFound("Parking spot not found");
-  if ((spot.ownerId && !spot.verifiedAt) || ['RESERVED', 'TEMPORARILY_UNAVAILABLE'].includes(spot.status)) throw badRequest('This parking is not open for reports');
+  if ((spot.ownerId && !spot.verifiedAt) || NON_REPORTABLE_STATUSES.includes(spot.status)) throw badRequest('This parking is not open for reports');
 
   const recent = await prisma.parkingReport.count({
     where: {
@@ -50,7 +52,7 @@ export async function createParkingReport(reporterId: string, input: {
     `;
     if (input.status !== "UNKNOWN") {
       const updated = await tx.parkingSpot.updateMany({
-        where: { id: input.parkingSpotId, ...publicParkingWhere, status: { notIn: ['RESERVED', 'TEMPORARILY_UNAVAILABLE'] } },
+        where: { id: input.parkingSpotId, ...publicParkingWhere, status: { notIn: NON_REPORTABLE_STATUSES } },
         data: { status: input.status as ParkingStatus, reportedAt: new Date() }
       });
       if (updated.count !== 1) throw badRequest('This parking is not open for reports');
@@ -65,10 +67,10 @@ export async function createParkingReport(reporterId: string, input: {
 }
 
 export async function listParkingReports({ page = 0, pageSize = 100, parkingSpotId }: { page?: number; pageSize?: number; parkingSpotId?: string } = {}) {
-  const where = {
+  const where: Prisma.ParkingReportWhereInput = {
     expiresAt: { gt: new Date() },
     ...(parkingSpotId ? { parkingSpotId } : {}),
-    parkingSpot: { ...publicParkingWhere, status: { notIn: ['RESERVED', 'TEMPORARILY_UNAVAILABLE'] } }
+    parkingSpot: { ...publicParkingWhere, status: { notIn: NON_REPORTABLE_STATUSES } }
   };
   const [items, total] = await Promise.all([
     prisma.parkingReport.findMany({ where, orderBy: { createdAt: "desc" }, take: pageSize, skip: page * pageSize, include: { reporter: { select: { id: true, username: true, reputationScore: true } } } }),
