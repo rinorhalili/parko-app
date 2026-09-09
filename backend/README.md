@@ -38,6 +38,7 @@ All application endpoints live under `/api/v1`.
 - `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`
 - `GET /parking`, `GET /parking/nearby`, `GET /parking/:id`, `POST /parking`
 - `POST /reports/parking`, `GET /reports/parking`
+- `GET /reservations/me`, `GET /reservations/parking/:parkingSpotId`, `POST /reservations`, `DELETE /reservations/:id`
 - `GET /posts`, `POST /posts`, `GET /posts/:id`, `PATCH /posts/:id`, `DELETE /posts/:id`
 - `GET /posts/:postId/comments`, `POST /posts/:postId/comments`, `PATCH /comments/:id`, `DELETE /comments/:id`
 - `POST|DELETE /posts/:id/reactions`, `POST|DELETE /comments/:id/reactions`
@@ -64,6 +65,10 @@ Socket.IO requires the JWT access token in `handshake.auth.token`. Clients can j
 - `community:subscribe`
 
 Events emitted include `parking:reported`, `parking:updated`, `post:new`, `comment:new`, and `moderation:update`.
+
+## Native clients
+
+Browser sessions use an HTTP-only refresh cookie. Native clients send `X-Parko-Client: native` for register, login and refresh; the API then returns the rotating refresh token in the response body so it can be stored in the platform secure keystore. Never use this header for browser clients.
 
 ## Security
 

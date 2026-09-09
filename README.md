@@ -40,6 +40,19 @@ The dependency-free Node server serves `dist/`, proxies third-party APIs, and ad
 
 The web app is a responsive PWA and is the supported mobile client: it installs on Android and iOS, uses the platform location permission, and has an offline shell. The API is an independent Express/Prisma service; PostgreSQL/PostGIS is the source of truth for parking, reports, community, moderation and notifications. Redis backs Socket.IO fan-out and BullMQ workers.
 
+### Native mobile client
+
+The Expo client lives in `mobile/` and uses the same API and JWT refresh flow as the web client. From that directory:
+
+```bash
+npm install
+npm run start
+npm run android
+npm run ios
+```
+
+Set `expo.extra.apiBaseUrl` and `expo.extra.socketUrl` in `mobile/app.json` for a reachable API. Android emulators use `10.0.2.2`; physical devices require the development machine's LAN IP and an HTTPS URL for production. Native location permissions, SecureStore token persistence and notification permissions are configured in `mobile/app.json`.
+
 Start a complete local stack:
 
 ```bash

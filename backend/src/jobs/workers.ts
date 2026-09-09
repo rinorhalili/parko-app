@@ -2,6 +2,8 @@ import { Worker } from "bullmq";
 import { logger } from "../config/logger.js";
 import { redis } from "../database/redis.js";
 import { prisma } from "../database/prisma.js";
+import { syncReservationStatuses } from "../modules/reservations/service.js";
+import { deliverPendingPushNotifications } from "../modules/notifications/service.js";
 
 export function startWorkers() {
   const reportWorker = new Worker(
@@ -15,6 +17,7 @@ export function startWorkers() {
         where: { status: { in: ['AVAILABLE', 'OCCUPIED'] }, OR: [{ reportedAt: null }, { reportedAt: { lte: new Date(Date.now() - 30 * 60_000) } }] },
         data: { status: 'UNKNOWN' }
       });
+      await syncReservationStatuses();
     },
     { connection: redis }
   );
@@ -22,7 +25,8 @@ export function startWorkers() {
   const notificationWorker = new Worker(
     "notifications",
     async () => {
-      logger.debug("Notification queue tick");
+      const result = await deliverPendingPushNotifications();
+      logger.debug(result, "Notification queue tick");
     },
     { connection: redis }
   );

@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "Parko",
+    "slug": "parko",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "parko",
+    "userInterfaceStyle": "automatic",
+    "ios": {"supportsTablet": true,"bundleIdentifier":"com.parko.app","infoPlist":{"NSLocationWhenInUseUsageDescription":"Parko uses your location to find nearby parking."}},
+    "android": {"package":"com.parko.app","permissions":["ACCESS_COARSE_LOCATION","ACCESS_FINE_LOCATION","POST_NOTIFICATIONS"]},
+    "plugins":["expo-secure-store","expo-location","expo-notifications"],
+    "extra":{"apiBaseUrl":"http://10.0.2.2:4000/api/v1","socketUrl":"http://10.0.2.2:4000"}
+  }
+}

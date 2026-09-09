@@ -50,7 +50,7 @@ export async function createParkingReport(reporterId: string, input: {
     `;
     if (input.status !== "UNKNOWN") {
       const updated = await tx.parkingSpot.updateMany({
-        where: { id: input.parkingSpotId, ...publicParkingWhere, status: { notIn: ['RESERVED', 'TEMPORARILY_UNAVAILABLE'] } },
+        where: { id: input.parkingSpotId, ...publicParkingWhere, status: { notIn: ["RESERVED", "TEMPORARILY_UNAVAILABLE"] as ParkingStatus[] } },
         data: { status: input.status as ParkingStatus, reportedAt: new Date() }
       });
       if (updated.count !== 1) throw badRequest('This parking is not open for reports');
@@ -68,7 +68,7 @@ export async function listParkingReports({ page = 0, pageSize = 100, parkingSpot
   const where = {
     expiresAt: { gt: new Date() },
     ...(parkingSpotId ? { parkingSpotId } : {}),
-    parkingSpot: { ...publicParkingWhere, status: { notIn: ['RESERVED', 'TEMPORARILY_UNAVAILABLE'] } }
+    parkingSpot: { ...publicParkingWhere, status: { notIn: ["RESERVED", "TEMPORARILY_UNAVAILABLE"] as ParkingStatus[] } }
   };
   const [items, total] = await Promise.all([
     prisma.parkingReport.findMany({ where, orderBy: { createdAt: "desc" }, take: pageSize, skip: page * pageSize, include: { reporter: { select: { id: true, username: true, reputationScore: true } } } }),

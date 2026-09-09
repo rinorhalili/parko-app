@@ -40,7 +40,7 @@ export function CrowdSourcingProvider({ children }: { children: ReactNode }) {
     const next: CommunityParkingReport = {
       id: report.id,
       parkingId: report.parkingSpotId,
-      status: report.status,
+      status: report.status === 'AVAILABLE' || report.status === 'OCCUPIED' ? report.status : 'UNKNOWN',
       ...(report.status === 'AVAILABLE' ? { availability: 'free-spots' as const } : report.status === 'OCCUPIED' ? { availability: 'full' as const } : {}),
       ...(report.payment ? { payment: report.payment === 'FREE' ? 'free' as const : 'paid' as const } : {}),
       ...(report.policeRisk === null ? {} : { policeRisk: report.policeRisk }),

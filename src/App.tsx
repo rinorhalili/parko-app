@@ -13,7 +13,7 @@ import { loadDrivingMatrix, loadDrivingRoute, loadWalkingRoute } from './routing
 import { kartaViewUrl, walkingDirectionsUrl } from './streetView'
 import { handleOpenExternal } from './externalLinks'
 import { captureEvent } from './telemetry'
-import type { CommunityParkingReport } from './communityApi'
+import { submitParkingObservation, type CommunityParkingReport } from './communityApi'
 import { SaveMyParkedLocationCard, SmsTariffHelper } from './DriverTools'
 import type { DrivingMatrixEntry } from './routingApi'
 import type { Destination, DrivingRoute, Filters, MapSettings, MapVariant, Parking, ParkingLoadStatus, ParkingPalette, ParkingPreference, RankedParking, Screen } from './types'
@@ -39,6 +39,7 @@ function normalizedMapSettings(value?: Partial<MapSettings>): MapSettings {
 }
 
 const RECENT_DESTINATIONS_KEY = 'parko-recent-destinations'
+const PARKING_REPORTS_KEY = 'parko-parking-reports:v1'
 type LocationStatus = 'idle' | 'locating' | 'ready' | 'outside' | 'denied' | 'unavailable'
 type SheetState = 'collapsed' | 'medium' | 'expanded'
 
@@ -116,6 +117,19 @@ function loadRecentDestinations(): Destination[] {
   } catch {
     return []
   }
+}
+
+function loadParkingReports(): Record<string, ParkingReport> {
+  try {
+    const value = JSON.parse(localStorage.getItem(PARKING_REPORTS_KEY) ?? '{}') as Record<string, ParkingReport>
+    return value && typeof value === 'object' ? value : {}
+  } catch {
+    return {}
+  }
+}
+
+function saveParkingReports(value: Record<string, ParkingReport>) {
+  try { localStorage.setItem(PARKING_REPORTS_KEY, JSON.stringify(value)) } catch { /* Storage may be unavailable. */ }
 }
 
 function StatusBar({ light = false }: { light?: boolean }) {
@@ -1256,6 +1270,7 @@ export default function App() {
   const [routeNotice, setRouteNotice] = useState('')
   const [routeRetry, setRouteRetry] = useState(0)
   const { reports: communityReports, submitReport } = useCrowdSourcing()
+  const [parkingReports, setParkingReports] = useState<Record<string, ParkingReport>>(loadParkingReports)
   const [availabilityClock, setAvailabilityClock] = useState(Date.now)
   useEffect(() => { const timer = setInterval(() => setAvailabilityClock(Date.now()), 30_000); return () => clearInterval(timer) }, [])
   const [walkingRoute, setWalkingRoute] = useState<DrivingRoute | null>(null)
@@ -1638,13 +1653,18 @@ export default function App() {
     if (!parking) return
     if (patch.availability) {
       try {
-        await submitParkingAvailability(parking, patch.availability === 'free-spots' ? 'AVAILABLE' : 'OCCUPIED')
+        const report = await submitParkingObservation(parking, { availability: patch.availability === 'free-spots' ? 'AVAILABLE' : 'OCCUPIED' })
+        setParkingReports((current) => {
+          const next = { ...current, [parkingId]: report }
+          saveParkingReports(next)
+          return next
+        })
       } catch (error) {
         setRouteNotice(error instanceof Error ? error.message : 'Raportimi nuk u dërgua.')
         return
       }
     }
-    setParkingReports((current) => {
+    setParkingReports((current: Record<string, ParkingReport>) => {
       const nextReport = { ...(current[parkingId] ?? { parkingId }), ...patch, updatedAt: Date.now() }
       const next = { ...current, [parkingId]: nextReport }
       saveParkingReports(next)

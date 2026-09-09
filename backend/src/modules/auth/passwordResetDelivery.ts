@@ -9,7 +9,7 @@ type PasswordResetDelivery = {
 };
 
 export function passwordResetDeliveryConfigured() {
-  return Boolean(env.PASSWORD_RESET_WEB_URL && env.PASSWORD_RESET_DELIVERY_URL);
+  return Boolean(env.PASSWORD_RESET_WEB_URL && (env.PASSWORD_RESET_DELIVERY_URL || (env.RESEND_API_KEY && env.EMAIL_FROM)));
 }
 
 /**
@@ -17,6 +17,27 @@ export function passwordResetDeliveryConfigured() {
  * transactional-mail adapter so credentials never live in source control.
  */
 export async function deliverPasswordReset(payload: PasswordResetDelivery) {
+  if (env.RESEND_API_KEY && env.EMAIL_FROM) {
+    let response: Response;
+    try {
+      response = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: env.EMAIL_FROM,
+          to: [payload.email],
+          subject: "Reset your Parko password",
+          text: `Hello ${payload.name}, reset your Parko password here: ${payload.resetUrl}. This link expires at ${payload.expiresAt.toISOString()}.`
+        }),
+        signal: AbortSignal.timeout(10_000)
+      });
+    } catch {
+      throw serviceUnavailable("Password reset delivery is unavailable");
+    }
+    if (!response.ok) throw serviceUnavailable("Password reset delivery is unavailable");
+    return;
+  }
+
   if (!env.PASSWORD_RESET_DELIVERY_URL) {
     throw serviceUnavailable("Password reset delivery is not configured");
   }

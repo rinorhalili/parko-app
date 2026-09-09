@@ -15,6 +15,7 @@ import { parkingRoutes } from "./modules/parking/routes.js";
 import { postRoutes } from "./modules/posts/routes.js";
 import { reactionRoutes } from "./modules/reactions/routes.js";
 import { reportRoutes } from "./modules/reports/routes.js";
+import { reservationRoutes } from "./modules/reservations/routes.js";
 import { userRoutes } from "./modules/users/routes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { generalRateLimit } from "./middleware/rateLimit.js";
@@ -55,6 +56,7 @@ export function createApp() {
   api.use("/users", userRoutes);
   api.use("/parking", parkingRoutes);
   api.use("/reports", reportRoutes);
+  api.use("/reservations", reservationRoutes);
   api.use("/posts", postRoutes);
   api.use(commentRoutes);
   api.use(reactionRoutes);

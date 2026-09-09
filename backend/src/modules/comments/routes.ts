@@ -5,6 +5,7 @@ import { validate } from "../../middleware/validate.js";
 import { ok } from "../../utils/apiResponse.js";
 import { forbidden, notFound } from "../../utils/errors.js";
 import { emitRealtime } from "../../websocket/io.js";
+import { createNotification } from "../notifications/service.js";
 import { commentSchema, idParams, postIdParams } from "./validation.js";
 
 export const commentRoutes = Router();
@@ -23,7 +24,7 @@ commentRoutes.post("/posts/:postId/comments", authenticate, validate({ params: p
     if (!post || post.deletedAt) throw notFound("Post not found");
     const comment = await prisma.comment.create({ data: { ...req.body, postId: post.id, authorId: req.user!.id } });
     if (post.authorId !== req.user!.id) {
-      await prisma.notification.create({ data: { recipientId: post.authorId, type: "COMMENT", title: "New comment", message: "Someone commented on your post", data: { postId: post.id, commentId: comment.id } } });
+      await createNotification({ recipientId: post.authorId, type: "COMMENT", title: "New comment", message: "Someone commented on your post", data: { postId: post.id, commentId: comment.id } });
     }
     emitRealtime("comment:new", comment, "community");
     ok(res, comment, undefined, 201);

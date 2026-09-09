@@ -16,7 +16,10 @@ const envSchema = z.object({
   LOG_LEVEL: z.string().default("info"),
   PASSWORD_RESET_WEB_URL: z.string().url().optional(),
   PASSWORD_RESET_DELIVERY_URL: z.string().url().optional(),
-  PASSWORD_RESET_DELIVERY_TOKEN: z.string().min(16).optional()
+  PASSWORD_RESET_DELIVERY_TOKEN: z.string().min(16).optional(),
+  RESEND_API_KEY: z.string().min(16).optional(),
+  EMAIL_FROM: z.string().email().optional(),
+  EXPO_PUSH_ENABLED: z.coerce.boolean().default(false)
 }).superRefine((value, context) => {
   if (value.NODE_ENV !== "production") return;
   for (const [key, secret] of [["JWT_ACCESS_SECRET", value.JWT_ACCESS_SECRET], ["JWT_REFRESH_SECRET", value.JWT_REFRESH_SECRET]] as const) {

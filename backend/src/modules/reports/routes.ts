@@ -23,7 +23,7 @@ reportRoutes.get("/parking", validate({ query: z.object({
   parkingSpotId: z.string().min(1).max(120).optional()
 }) }), async (req, res, next) => {
   try {
-    ok(res, await listParkingReports(req.query as { page: number; pageSize: number; parkingSpotId?: string }));
+    ok(res, await listParkingReports(req.query as unknown as { page: number; pageSize: number; parkingSpotId?: string }));
   } catch (error) {
     next(error);
   }

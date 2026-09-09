@@ -10,18 +10,21 @@ import { login, logout, me, refresh, register, requestPasswordReset, resetPasswo
 import { loginSchema, registerSchema, resetPasswordSchema, resetRequestSchema } from "./validation.js";
 
 const cookieOptions = { httpOnly: true, secure: env.NODE_ENV === "production", sameSite: "strict" as const, path: "/api/v1/auth" };
-function sendSession(res: Response, tokens: Awaited<ReturnType<typeof login>>, status = 200) {
-  res.cookie("parko_refresh", tokens.refreshToken, { ...cookieOptions, maxAge: 30 * 24 * 60 * 60 * 1000 });
+const isNativeClient = (header: string | undefined) => header === "native";
+
+function sendSession(res: Response, tokens: Awaited<ReturnType<typeof login>>, nativeClient: boolean, status = 200) {
+  if (!nativeClient) res.cookie("parko_refresh", tokens.refreshToken, { ...cookieOptions, maxAge: 30 * 24 * 60 * 60 * 1000 });
   res.setHeader("Cache-Control", "no-store");
-  const { refreshToken: _refreshToken, ...publicSession } = tokens;
-  ok(res, publicSession, undefined, status);
+  if (nativeClient) return ok(res, tokens, undefined, status);
+  const { refreshToken: _refreshToken, ...browserSession } = tokens;
+  return ok(res, browserSession, undefined, status);
 }
 
 export const authRoutes = Router();
 
 authRoutes.post("/register", authRateLimit, validate({ body: registerSchema }), async (req, res, next) => {
   try {
-    sendSession(res, await register(req.body, { ip: req.ip, userAgent: req.get("user-agent") }), 201);
+    sendSession(res, await register(req.body, { ip: req.ip, userAgent: req.get("user-agent") }), isNativeClient(req.get("x-parko-client")), 201);
   } catch (error) {
     next(error);
   }
@@ -29,7 +32,7 @@ authRoutes.post("/register", authRateLimit, validate({ body: registerSchema }), 
 
 authRoutes.post("/login", authRateLimit, validate({ body: loginSchema }), async (req, res, next) => {
   try {
-    sendSession(res, await login(req.body, { ip: req.ip, userAgent: req.get("user-agent") }));
+    sendSession(res, await login(req.body, { ip: req.ip, userAgent: req.get("user-agent") }), isNativeClient(req.get("x-parko-client")));
   } catch (error) {
     next(error);
   }
@@ -39,7 +42,7 @@ authRoutes.post("/refresh", authRateLimit, requireTrustedCookieOrigin, async (re
   try {
     const token = req.cookies?.parko_refresh ?? req.body?.refreshToken;
     if (typeof token !== "string" || token.length > 4096) { res.status(401).json({ success: false, error: { code: "UNAUTHORIZED", message: "Session expired" } }); return; }
-    sendSession(res, await refresh(token, { ip: req.ip, userAgent: req.get("user-agent") }));
+    sendSession(res, await refresh(token, { ip: req.ip, userAgent: req.get("user-agent") }), isNativeClient(req.get("x-parko-client")));
   } catch (error) {
     next(error);
   }
