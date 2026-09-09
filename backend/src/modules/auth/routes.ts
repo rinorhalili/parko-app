@@ -3,7 +3,7 @@ import type { Response } from "express";
 import { env } from "../../config/env.js";
 import { authenticate } from "../../middleware/authenticate.js";
 import { requireTrustedCookieOrigin } from "../../middleware/csrfOrigin.js";
-import { authRateLimit } from "../../middleware/rateLimit.js";
+import { authRateLimit, sessionRateLimit } from "../../middleware/rateLimit.js";
 import { validate } from "../../middleware/validate.js";
 import { ok } from "../../utils/apiResponse.js";
 import { login, logout, me, refresh, register, requestPasswordReset, resetPassword } from "./service.js";
@@ -38,7 +38,7 @@ authRoutes.post("/login", authRateLimit, validate({ body: loginSchema }), async 
   }
 });
 
-authRoutes.post("/refresh", authRateLimit, requireTrustedCookieOrigin, async (req, res, next) => {
+authRoutes.post("/refresh", sessionRateLimit, requireTrustedCookieOrigin, async (req, res, next) => {
   try {
     const token = req.cookies?.parko_refresh ?? req.body?.refreshToken;
     if (typeof token !== "string" || token.length > 4096) { res.status(401).json({ success: false, error: { code: "UNAUTHORIZED", message: "Session expired" } }); return; }

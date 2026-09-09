@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import Login from './Login'
-import { getAccessToken, ApiError } from './api/client'
+import { getAccessToken, restoreSession, ApiError } from './api/client'
 import { me, logout } from './api/authService'
 import { listAdminParking, updateAdminParkingStatus } from './api/adminService'
 
@@ -837,14 +837,15 @@ export default function AdminDashboard() {
     const version = ++requestVersion.current
     setIsLoading(true)
     setError('')
-    if (!getAccessToken()) {
-      setNeedsLogin(true)
-      setIsAdmin(false)
-      setIsLoading(false)
-      return
-    }
-    setNeedsLogin(false)
     try {
+      if (!getAccessToken()) await restoreSession()
+      if (version !== requestVersion.current) return
+      if (!getAccessToken()) {
+        setNeedsLogin(true)
+        setIsAdmin(false)
+        return
+      }
+      setNeedsLogin(false)
       const user = await me()
       if (version !== requestVersion.current) return
       if (user.role !== 'ADMIN') throw new ApiError(403, 'Nuk ke leje administratori.')

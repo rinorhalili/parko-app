@@ -10,7 +10,8 @@ import { restoreSession } from './api/client'
 initTelemetry()
 // A page reload obtains a fresh short-lived access token from the HTTP-only
 // refresh cookie; no refresh credential is persisted in browser storage.
-void restoreSession()
+// Browsing the map remains possible while the account service is unreachable.
+void restoreSession().catch(() => undefined)
 const isLocalDevelopment = ['localhost', '127.0.0.1'].includes(window.location.hostname)
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

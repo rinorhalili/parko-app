@@ -32,6 +32,15 @@ export default function Login({ onClose }: LoginProps) {
       return
     }
 
+    if (mode === 'register' && (password.length < 12 || password.length > 128)) {
+      setError('Fjalëkalimi duhet të ketë 12–128 karaktere.')
+      return
+    }
+    if (mode === 'register' && !/^[a-zA-Z0-9_]{3,40}$/.test(username.trim())) {
+      setError('Username duhet të ketë 3–40 karaktere: shkronja, numra ose _.')
+      return
+    }
+
     setIsLoading(true)
     try {
       if (mode === 'login') {

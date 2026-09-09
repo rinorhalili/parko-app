@@ -19,17 +19,19 @@ npm run prisma:validate
 npm run dev
 ```
 
-For a local database stack:
+For the complete local stack, set unique passwords/secrets in `.env` first. Run these commands from `backend/` with Docker Desktop running:
 
 ```bash
-docker compose up postgres redis
-npx prisma db push
-npm run seed
+docker compose -p parko-local up -d --build
+npm run prisma:generate
 npm run import:parking
-npm run dev
 ```
 
-`npm run import:parking` imports the versioned OpenStreetMap snapshot used by the web map. It is safe to run again: records retain their stable `osm-<kind>-<id>` identifiers so map reports and backend records match.
+The API runs at `http://127.0.0.1:4000` and initializes the local schema automatically. Start the website with `npm run dev` from the project root; Vite proxies `/api` to the API. Use `docker compose -p parko-local ps` to check the services and `docker compose -p parko-local stop` to stop them without removing database data. This is a fresh local database, so create a test account through the app; no demo accounts are installed.
+
+For native scripts, `.env` needs `DATABASE_URL` pointing to `127.0.0.1:5433` and `REDIS_URL` to `127.0.0.1:6379`. Include the exact frontend origin in `CORS_ORIGIN` (for example `http://localhost:5173,http://127.0.0.1:5173`). Database, Redis, and API ports are bound to this computer only; phone testing should use Vite's LAN address and API proxy.
+
+`npm run import:parking` imports the versioned OpenStreetMap snapshot and official municipal markers used by the web map. It is safe to run again: records retain their stable identifiers so map reports and backend records match. Availability remains unknown until reported; the import does not invent live availability or prices. Do not use the demo seed for real parking data.
 
 ## API
 

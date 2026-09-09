@@ -1064,13 +1064,13 @@ function SettingsView({ settings, preferredType, walkingMinutes, typeCounts, onC
   )
 }
 
-function DetailsView({ parking, report, onReport, route, destination, smartMatch, saved, userLocation, userLocationLive, userLocationAccuracy, mapSettings, onToggleSaved, onBack, onNavigate, onStreetView }: { parking: Parking; report?: ParkingReport; onReport: (parkingId: string, patch: ParkingReportPatch) => void; route: DrivingRoute | null; destination: Destination | null; smartMatch?: RankedParking; saved: boolean; userLocation: Parking['coordinates']; userLocationLive: boolean; userLocationAccuracy: number | null; mapSettings: MapSettings; onToggleSaved: () => void; onBack: () => void; onNavigate: () => void; onStreetView: () => void }) {
+function DetailsView({ parking, report, onReport, route, routeLoading, routeError, destination, smartMatch, saved, userLocation, userLocationLive, userLocationAccuracy, mapSettings, onToggleSaved, onBack, onNavigate, onStreetView }: { parking: Parking; report?: ParkingReport; onReport: (parkingId: string, patch: ParkingReportPatch) => void; route: DrivingRoute | null; routeLoading: boolean; routeError: string; destination: Destination | null; smartMatch?: RankedParking; saved: boolean; userLocation: Parking['coordinates']; userLocationLive: boolean; userLocationAccuracy: number | null; mapSettings: MapSettings; onToggleSaved: () => void; onBack: () => void; onNavigate: () => void; onStreetView: () => void }) {
   const [reportOpen, setReportOpen] = useState(false)
   const routeMinutes = route ? Math.max(1, Math.ceil(route.durationSeconds / 60)) : parking.driveMinutes
   const routeDistance = route?.distanceMeters ?? parking.distanceMeters
   const categoryLabel = municipalCategoryLabel(parking)
   const usefulRouteSteps = (route?.steps ?? []).filter((step) => step.maneuverType !== 'depart').slice(0, 4)
-  const routeSourceLabel = route?.source === 'osrm' ? 'Rutë reale nga rrjeti rrugor' : route ? 'Rutë paraprake' : 'Duke llogaritur rutën…'
+  const routeSourceLabel = !userLocationLive ? 'Nevojitet lokacioni' : route ? 'Rruga është gati' : routeLoading ? 'Duke llogaritur rutën…' : 'Rruga nuk është e disponueshme'
   return (
     <div className="screen screen--map">
       <StatusBar />
@@ -1106,7 +1106,7 @@ function DetailsView({ parking, report, onReport, route, destination, smartMatch
                 </li>
               ))}
             </ol>
-          ) : <p>Rruga po përgatitet. Mund të nisësh navigimin sapo të shfaqet vija blu në hartë.</p>}
+          ) : <p role="status">{!userLocationLive ? 'Aktivizo lejen e lokacionit për të llogaritur rrugën nga vendndodhja jote.' : routeLoading ? 'Po kërkojmë rrugën deri te hyrja e parkingut.' : routeError || 'Provo përsëri për të llogaritur rrugën.'}</p>}
         </section>
         <button className="street-view-inline street-view-inline--details" onClick={onStreetView} aria-label={`Hap KartaView për ${parking.name}`}>◎ Hap Street View 360°</button>
 
@@ -1158,7 +1158,7 @@ function DetailsView({ parking, report, onReport, route, destination, smartMatch
           : <span className="text-button report-link report-link--disabled">Burimi nuk ka faqe raportimi</span>}
       </section>
       <div className="details-actions">
-        <button className="button" onClick={onNavigate}>Nisu drejt parkingut</button>
+        <button className="button" onClick={onNavigate} disabled={userLocationLive && routeLoading}>{!userLocationLive ? 'Aktivizo lokacionin' : routeLoading ? 'Duke llogaritur…' : !route ? 'Provo përsëri' : 'Nisu drejt parkingut'}</button>
       </div>
     </div>
   )
@@ -1268,6 +1268,8 @@ export default function App() {
   const [loadStatus, setLoadStatus] = useState<ParkingLoadStatus>('loading')
   const [route, setRoute] = useState<DrivingRoute | null>(null)
   const [routeNotice, setRouteNotice] = useState('')
+  const [routeLoading, setRouteLoading] = useState(false)
+  const [routeError, setRouteError] = useState('')
   const [routeRetry, setRouteRetry] = useState(0)
   const { reports: communityReports, submitReport } = useCrowdSourcing()
   const [parkingReports, setParkingReports] = useState<Record<string, ParkingReport>>(loadParkingReports)
@@ -1304,17 +1306,21 @@ export default function App() {
 
   useEffect(() => {
     const controller = new AbortController()
-    if (!shouldLoadRoute) { setRoute(null); return }
+    if (!shouldLoadRoute) { setRoute(null); setRouteLoading(false); setRouteError(''); return }
     setRouteNotice('')
+    setRouteError('')
+    setRouteLoading(true)
     loadDrivingRoute(routingOrigin, routeEntrance, controller.signal)
       .then((next) => { if (!controller.signal.aborted) setRoute(next) })
-      .catch((error: unknown) => {
-        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+      .catch(() => {
+        if (!controller.signal.aborted) {
           setRoute(null)
+          setRouteError('Rruga nuk u gjet. Kontrollo lidhjen dhe provo përsëri.')
           setRouteNotice('Rruga nuk u gjet. Kontrollo lidhjen dhe provo përsëri.')
           captureEvent('driving_route_failed')
         }
       })
+      .finally(() => { if (!controller.signal.aborted) setRouteLoading(false) })
     return () => controller.abort()
   }, [selected.id, routeEntrance.lat, routeEntrance.lng, routingOrigin, shouldLoadRoute, routeRetry])
 
@@ -1817,7 +1823,12 @@ export default function App() {
         {screen === 'saved' && <SavedView parkings={locatedParkings.filter((parking) => savedParkingIds.has(parking.id))} showDataSources={mapSettings.showDataSources} userLocation={userLocationInPrishtina ? activeUserLocation : undefined} onHome={() => setScreen('home')} onSettings={() => setScreen('settings')} onOpen={(parking) => { setSelected(parking); setDestination(null); setScreen('details') }} />}
         {screen === 'settings' && <SettingsView settings={mapSettings} preferredType={filters.type as ParkingTypeFilter} walkingMinutes={walkingMinutes} typeCounts={globalTypeCounts} onChange={(value) => setMapSettings(normalizedMapSettings(value))} onPreferredType={(type) => setFilters((current) => ({ ...current, type }))} onWalkingMinutes={setWalkingMinutes} onReset={() => { setMapSettings(DEFAULT_MAP_SETTINGS); setFilters(initialFilters); setWalkingMinutes(10) }} onLogin={() => setShowLoginModal(true)} onHome={() => setScreen('home')} onSaved={() => setScreen('saved')} onCommunity={() => setScreen('community')} />}
         {screen === 'community' && <Suspense fallback={<div className="app-loading" role="status">Duke hapur komunitetin…</div>}><CommunityView onBack={() => setScreen('settings')} onLogin={() => setShowLoginModal(true)} /></Suspense>}
-          {screen === 'details' && <DetailsView parking={currentSelected} report={parkingReports[currentSelected.id]} onReport={(id, patch) => { void reportParking(id, patch) }} route={route} destination={destination} smartMatch={selectedRankedParking} saved={savedParkingIds.has(currentSelected.id)} userLocation={activeUserLocation} userLocationLive={userLocationInPrishtina} userLocationAccuracy={locationAccuracy} mapSettings={mapSettings} onToggleSaved={toggleSavedParking} onBack={() => setScreen('home')} onNavigate={() => { if (!userLocationInPrishtina || !route) { setRouteNotice('Aktivizo lokacionin dhe prit llogaritjen e rrugës.'); requestUserLocation({ recenter: false }); setRouteRetry((value) => value + 1); return }; setRouteNotice(''); setScreen('navigation') }} onStreetView={() => setStreetViewParking(currentSelected)} />}
+          {screen === 'details' && <DetailsView parking={currentSelected} report={parkingReports[currentSelected.id]} onReport={(id, patch) => { void reportParking(id, patch) }} route={route} routeLoading={routeLoading} routeError={routeError} destination={destination} smartMatch={selectedRankedParking} saved={savedParkingIds.has(currentSelected.id)} userLocation={activeUserLocation} userLocationLive={userLocationInPrishtina} userLocationAccuracy={locationAccuracy} mapSettings={mapSettings} onToggleSaved={toggleSavedParking} onBack={() => setScreen('home')} onNavigate={() => {
+            if (!userLocationInPrishtina) { setRouteNotice('Aktivizo lokacionin për të nisur navigimin.'); requestUserLocation({ recenter: false }); return }
+            if (routeLoading) return
+            if (!route) { setRouteNotice(''); setRouteRetry((value) => value + 1); return }
+            setRouteNotice(''); setScreen('navigation')
+          }} onStreetView={() => setStreetViewParking(currentSelected)} />}
         {screen === 'navigation' && <NavigationView parking={currentSelected} route={route} userLocation={activeUserLocation} userLocationLive={userLocationInPrishtina} userLocationAccuracy={locationAccuracy} mapSettings={mapSettings} recenterToken={recenterToken} hasDestination={Boolean(destination)} onRecenter={requestUserLocation} onStop={() => setScreen('details')} onArrive={() => setScreen(destination ? 'walking' : 'home')} />}
         {screen === 'walking' && destination && displayedWalkingRoute && selectedRankedParking && <WalkingView parking={currentSelected} destination={destination} route={displayedWalkingRoute} match={selectedRankedParking} directionsHref={selectedWalkingDirectionsHref} userLocation={activeUserLocation} userLocationLive={userLocationInPrishtina} userLocationAccuracy={locationAccuracy} mapSettings={mapSettings} onFinish={() => setScreen('home')} />}
         {streetViewParking && <StreetViewPanel parking={streetViewParking} onClose={() => setStreetViewParking(null)} />}

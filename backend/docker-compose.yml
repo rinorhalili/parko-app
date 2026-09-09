@@ -8,7 +8,7 @@ services:
     volumes: [postgres_data:/var/lib/postgresql/data]
     # 5432 is frequently occupied by a locally installed PostgreSQL on Windows.
     # Native Node connects through localhost:5433; containers still use postgres:5432.
-    ports: ["5433:5432"]
+    ports: ["127.0.0.1:5433:5432"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -19,7 +19,7 @@ services:
     image: redis:7-alpine
     command: redis-server --appendonly yes --save 60 1000
     volumes: [redis_data:/data]
-    ports: ["6379:6379"]
+    ports: ["127.0.0.1:6379:6379"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -42,7 +42,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-parko}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-parko}?schema=public
       REDIS_URL: redis://redis:6379
-    ports: ["${API_PORT:-4000}:4000"]
+    ports: ["127.0.0.1:${API_PORT:-4000}:4000"]
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -60,6 +60,9 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-parko}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-parko}?schema=public
       REDIS_URL: redis://redis:6379
     command: npm run start:worker
+    # The queue worker does not serve HTTP; do not inherit the API health probe.
+    healthcheck:
+      disable: true
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }

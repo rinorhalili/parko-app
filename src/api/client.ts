@@ -38,22 +38,33 @@ function notifyAuthExpired() {
 }
 
 async function refreshAccessToken() {
-  const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    // The refresh token lives only in the HTTP-only cookie issued by the API.
-    // This keeps it out of JavaScript-accessible storage.
-    body: JSON.stringify({}),
-    signal: AbortSignal.timeout(12_000)
-  })
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      // The refresh token lives only in the HTTP-only cookie issued by the API.
+      // This keeps it out of JavaScript-accessible storage.
+      body: JSON.stringify({}),
+      signal: AbortSignal.timeout(12_000)
+    })
+  } catch {
+    throw new ApiError(0, 'Serveri nuk përgjigjet. Provo përsëri.', 'NETWORK_ERROR')
+  }
   if (!response.ok) {
-    clearAuthTokens()
-    notifyAuthExpired()
-    return null
+    if (response.status === 401) {
+      clearAuthTokens()
+      notifyAuthExpired()
+      return null
+    }
+    throw new ApiError(response.status, 'Lidhja me llogarinë dështoi. Provo përsëri.', 'SESSION_UNAVAILABLE')
   }
 
-  const payload = await response.json() as ApiResponse<AuthTokens>
+  const payload = await response.json().catch(() => null) as ApiResponse<AuthTokens> | null
+  if (!payload?.data || typeof payload.data.accessToken !== 'string') {
+    throw new ApiError(502, 'Serveri dha një përgjigje të pavlefshme. Provo përsëri.', 'INVALID_RESPONSE')
+  }
   setAuthTokens(payload.data)
   return payload.data.accessToken
 }
@@ -94,8 +105,17 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}, retry 
 
   const payload = response.status === 204 ? null : await response.json().catch(() => null) as ApiResponse<T> | ApiErrorBody | null
   if (!response.ok) {
-    const error = payload && 'error' in payload ? payload.error : undefined
-    throw new ApiError(response.status, error?.message ?? 'Request failed', error?.code)
+    if (response.status === 429) {
+      const seconds = Number(response.headers.get('Retry-After'))
+      const wait = Number.isFinite(seconds) && seconds > 0 ? `Prit ${Math.ceil(seconds / 60)} min` : 'Prit disa minuta'
+      throw new ApiError(429, `Shumë kërkesa. ${wait} dhe provo përsëri.`, 'RATE_LIMITED')
+    }
+    const error = payload && typeof payload === 'object' && 'error' in payload ? payload.error : undefined
+    const fallback = response.status >= 500 ? 'Shërbimi nuk është i disponueshëm për momentin. Provo përsëri.' : response.status === 401 ? 'Hyr në llogari për të vazhduar.' : 'Kërkesa dështoi. Provo përsëri.'
+    throw new ApiError(response.status, error?.message ?? fallback, error?.code)
+  }
+  if (response.status !== 204 && (!payload || typeof payload !== 'object' || !('data' in payload))) {
+    throw new ApiError(502, 'Serveri dha një përgjigje të pavlefshme. Provo përsëri.', 'INVALID_RESPONSE')
   }
   return payload && 'data' in payload ? payload.data : payload as T
 }

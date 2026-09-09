@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { PrismaClient, type ParkingType } from "@prisma/client";

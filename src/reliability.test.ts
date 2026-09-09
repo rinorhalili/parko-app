@@ -3,10 +3,10 @@ import { defaultParking } from './testFixtures'
 import { mergeParkingSources } from './parkingApi'
 import { walkableParkingCandidates } from './parkingRanking'
 import { loadDrivingRoute } from './routingApi'
-import { apiRequest, setAuthTokens } from './api/client'
+import { apiRequest, setAuthTokens, clearAuthTokens, getAccessToken, restoreSession } from './api/client'
 import type { Destination } from './types'
 
-afterEach(() => { vi.unstubAllGlobals(); localStorage.clear() })
+afterEach(() => { vi.unstubAllGlobals(); clearAuthTokens(); localStorage.clear() })
 
 describe('parking data and radius', () => {
   it('preserves polygons and verified pricing when adding backend occupancy', () => {
@@ -30,6 +30,31 @@ describe('parking data and radius', () => {
 })
 
 describe('failure handling and credentials', () => {
+  it('explains rate limiting and the server retry time', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('Too many requests', { status: 429, headers: { 'Retry-After': '416' } })))
+    await expect(apiRequest('/auth/register', { method: 'POST' })).rejects.toMatchObject({ code: 'RATE_LIMITED', message: 'Shumë kërkesa. Prit 7 min dhe provo përsëri.' })
+  })
+  it('restores concurrent startup requests using one cookie refresh', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { accessToken: 'restored', user: {} } })))
+    vi.stubGlobal('fetch', fetchMock)
+    expect(await Promise.all([restoreSession(), restoreSession()])).toEqual(['restored', 'restored'])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(getAccessToken()).toBe('restored')
+  })
+  it('allows a visitor without a session and distinguishes an offline backend', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 401 })))
+    expect(await restoreSession()).toBeNull()
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('offline')))
+    await expect(restoreSession()).rejects.toThrow('Serveri nuk përgjigjet')
+  })
+  it.each(['<html>Parko</html>', '"unexpected JSON string"'])('rejects invalid API payload %s', async (body) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(body)))
+    await expect(apiRequest('/parking')).rejects.toMatchObject({ code: 'INVALID_RESPONSE' })
+  })
+  it('gives a useful message when the proxy cannot reach the backend', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 502 })))
+    await expect(apiRequest('/reports/parking')).rejects.toThrow('Shërbimi nuk është i disponueshëm')
+  })
   it('never fabricates a driving route when both routing services fail', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
     await expect(loadDrivingRoute({ lat: 42.66, lng: 21.16 }, { lat: 42.67, lng: 21.17 })).rejects.toThrow('Rruga nuk u gjet')
