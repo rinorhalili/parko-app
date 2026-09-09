@@ -11,6 +11,7 @@ import { authRoutes } from "./modules/auth/routes.js";
 import { commentRoutes } from "./modules/comments/routes.js";
 import { moderationRoutes } from "./modules/moderation/routes.js";
 import { notificationRoutes } from "./modules/notifications/routes.js";
+import { parkingHistoryRoutes } from "./modules/parking-history/routes.js";
 import { parkingRoutes } from "./modules/parking/routes.js";
 import { postRoutes } from "./modules/posts/routes.js";
 import { reactionRoutes } from "./modules/reactions/routes.js";
@@ -55,6 +56,7 @@ export function createApp() {
   api.use("/auth", authRoutes);
   api.use("/users", userRoutes);
   api.use("/parking", parkingRoutes);
+  api.use("/parking-history", parkingHistoryRoutes);
   api.use("/reports", reportRoutes);
   api.use("/reservations", reservationRoutes);
   api.use("/posts", postRoutes);

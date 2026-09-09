@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { handleOpenExternal } from './externalLinks'
+import { getAccessToken } from './api/client'
+import { recordParkedLocation } from './api/parkingHistoryService'
 import type { MapCoordinate } from './types'
 
 const PARKED_LOCATION_KEY = 'parko-parked-location'
@@ -82,6 +84,7 @@ export function SaveMyParkedLocationCard({ initialLocation }: { initialLocation?
     const savedAt = Date.now()
     const next: ParkedLocation = { coordinates, savedAt, endsAt: savedAt + duration * 60 * 60_000, note: note.trim(), photo }
     localStorage.setItem(PARKED_LOCATION_KEY, JSON.stringify(next))
+    if (getAccessToken()) void recordParkedLocation({ latitude: coordinates.lat, longitude: coordinates.lng, note: note.trim() || undefined }).catch(() => {})
     setLocation(next)
     setRemaining(next.endsAt - Date.now())
     setStatus('Vendi u ruajt.')

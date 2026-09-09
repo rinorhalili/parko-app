@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ApiError } from './api/client'
 import { login, register } from './api/authService'
 
@@ -15,8 +15,18 @@ export default function Login({ onClose }: LoginProps) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -101,17 +111,17 @@ export default function Login({ onClose }: LoginProps) {
         }
 
         .login-modal::-webkit-scrollbar-track {
-          background: #f1f1f1;
+          background: var(--surface-soft);
           border-radius: 10px;
         }
 
         .login-modal::-webkit-scrollbar-thumb {
-          background: #888;
+          background: var(--muted);
           border-radius: 10px;
         }
 
         .login-modal::-webkit-scrollbar-thumb:hover {
-          background: #555;
+          background: var(--ink);
         }
 
         @keyframes slideUp {
@@ -133,7 +143,7 @@ export default function Login({ onClose }: LoginProps) {
           border: none;
           font-size: 24px;
           cursor: pointer;
-          color: #a0aec0;
+          color: var(--muted);
           padding: 0;
           width: 32px;
           height: 32px;
@@ -145,8 +155,8 @@ export default function Login({ onClose }: LoginProps) {
         }
 
         .login-close-btn:hover {
-          background: #f0f0f0;
-          color: #1a202c;
+          background: var(--surface-soft);
+          color: var(--ink);
         }
 
         .login-modal {
@@ -161,7 +171,7 @@ export default function Login({ onClose }: LoginProps) {
         .login-title {
           font-size: 24px;
           font-weight: 700;
-          color: #1a202c;
+          color: var(--ink);
           margin: 0 0 8px 0;
         }
 
@@ -169,7 +179,7 @@ export default function Login({ onClose }: LoginProps) {
           display: flex;
           gap: 16px;
           margin-bottom: 24px;
-          border-bottom: 1px solid #e2e8f0;
+          border-bottom: 1px solid var(--line);
         }
 
         .login-tab {
@@ -179,7 +189,7 @@ export default function Login({ onClose }: LoginProps) {
           cursor: pointer;
           font-size: 14px;
           font-weight: 600;
-          color: #a0aec0;
+          color: var(--muted);
           transition: all 0.2s ease;
           border-bottom: 2px solid transparent;
           position: relative;
@@ -187,8 +197,8 @@ export default function Login({ onClose }: LoginProps) {
         }
 
         .login-tab.active {
-          color: #667eea;
-          border-bottom-color: #667eea;
+          color: var(--primary);
+          border-bottom-color: var(--primary);
         }
 
         .login-form {
@@ -206,12 +216,12 @@ export default function Login({ onClose }: LoginProps) {
         .form-label {
           font-size: 14px;
           font-weight: 600;
-          color: #2d3748;
+          color: var(--ink);
         }
 
         .form-input {
           padding: 12px 16px;
-          border: 1px solid #e2e8f0;
+          border: 1px solid var(--line);
           border-radius: 8px;
           font-size: 14px;
           transition: all 0.2s ease;
@@ -220,12 +230,12 @@ export default function Login({ onClose }: LoginProps) {
 
         .form-input:focus {
           outline: none;
-          border-color: #667eea;
-          box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+          border-color: var(--primary);
+          box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 10%, transparent);
         }
 
         .form-input::placeholder {
-          color: #a0aec0;
+          color: var(--muted);
         }
 
         .error-message {
@@ -240,7 +250,7 @@ export default function Login({ onClose }: LoginProps) {
 
         .login-button {
           padding: 12px 24px;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: var(--primary);
           color: white;
           border: none;
           border-radius: 8px;
@@ -253,7 +263,7 @@ export default function Login({ onClose }: LoginProps) {
 
         .login-button:hover:not(:disabled) {
           transform: translateY(-2px);
-          box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+          box-shadow: 0 10px 20px color-mix(in srgb, var(--primary) 30%, transparent);
         }
 
         .login-button:active:not(:disabled) {
@@ -264,6 +274,10 @@ export default function Login({ onClose }: LoginProps) {
           opacity: 0.7;
           cursor: not-allowed;
         }
+
+        .password-input-wrap { position: relative; }
+        .password-input-wrap .form-input { box-sizing: border-box; width: 100%; padding-right: 48px; }
+        .password-toggle { position: absolute; top: 50%; right: 12px; display: grid; width: 24px; height: 24px; padding: 0; border: 0; background: transparent; color: var(--muted); cursor: pointer; transform: translateY(-50%); place-items: center; }
       `}</style>
 
       <div className="login-modal" onClick={(e) => e.stopPropagation()}>
@@ -313,38 +327,49 @@ export default function Login({ onClose }: LoginProps) {
               onChange={(e) => setEmail(e.target.value)}
               disabled={isLoading}
               autoComplete="email"
+              autoFocus
               required
             />
           </div>
 
           <div className="form-group">
             <label className="form-label" htmlFor="password">Password</label>
-            <input
-              id="password"
-              type="password"
-              className="form-input"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={isLoading}
-              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              required
-            />
+            <div className="password-input-wrap">
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                className="form-input"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={isLoading}
+                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                required
+              />
+              <button type="button" className="password-toggle" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Fshih fjalëkalimin' : 'Shfaq fjalëkalimin'}>
+                {showPassword ? <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 4.2A10.7 10.7 0 0 1 12 4c5.5 0 9.3 4.5 10 8-.3 1.3-1 2.7-2 3.9M6.2 6.2C4.4 7.7 3.3 9.8 3 12c.7 3.5 4.5 8 9 8 1.3 0 2.5-.3 3.6-.8" /></svg> : <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 12s3.3-8 9-8 9 8 9 8-3.3 8-9 8-9-8-9-8Z" /><circle cx="12" cy="12" r="3" /></svg>}
+              </button>
+            </div>
           </div>
 
           {mode === 'register' && (
             <div className="form-group">
               <label className="form-label" htmlFor="confirmPassword">Confirm Password</label>
-              <input
-                id="confirmPassword"
-                type="password"
-                className="form-input"
-                placeholder="••••••••"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                disabled={isLoading}
-                required
-              />
+              <div className="password-input-wrap">
+                <input
+                  id="confirmPassword"
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  className="form-input"
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  disabled={isLoading}
+                  required
+                />
+                <button type="button" className="password-toggle" onClick={() => setShowConfirmPassword((visible) => !visible)} aria-label={showConfirmPassword ? 'Fshih fjalëkalimin' : 'Shfaq fjalëkalimin'}>
+                  {showConfirmPassword ? <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 4.2A10.7 10.7 0 0 1 12 4c5.5 0 9.3 4.5 10 8-.3 1.3-1 2.7-2 3.9M6.2 6.2C4.4 7.7 3.3 9.8 3 12c.7 3.5 4.5 8 9 8 1.3 0 2.5-.3 3.6-.8" /></svg> : <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 12s3.3-8 9-8 9 8 9 8-3.3 8-9 8-9-8-9-8Z" /><circle cx="12" cy="12" r="3" /></svg>}
+                </button>
+              </div>
             </div>
           )}
 

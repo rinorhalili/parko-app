@@ -15,6 +15,11 @@ import { handleOpenExternal } from './externalLinks'
 import { captureEvent } from './telemetry'
 import { submitParkingObservation, type CommunityParkingReport } from './communityApi'
 import { SaveMyParkedLocationCard, SmsTariffHelper } from './DriverTools'
+import { useAuth } from './hooks/useAuth'
+import { changePassword, updateProfile } from './api/userService'
+import { listParkedHistory, type ParkedHistory } from './api/parkingHistoryService'
+import { logout } from './api/authService'
+import type { User } from './api/types'
 import type { DrivingMatrixEntry } from './routingApi'
 import type { Destination, DrivingRoute, Filters, MapSettings, MapVariant, Parking, ParkingLoadStatus, ParkingPalette, ParkingPreference, RankedParking, Screen } from './types'
 
@@ -47,7 +52,7 @@ function subtleHaptic(duration = 8) {
   if ('vibrate' in navigator) navigator.vibrate(duration)
 }
 
-type AppIconName = 'search' | 'filter' | 'pin' | 'location' | 'map' | 'heart' | 'settings' | 'route' | 'info' | 'street' | 'chevron' | 'more' | 'mute' | 'recenter'
+type AppIconName = 'search' | 'filter' | 'pin' | 'location' | 'map' | 'heart' | 'user' | 'settings' | 'route' | 'info' | 'street' | 'chevron' | 'more' | 'mute' | 'recenter'
 
 function AppIcon({ name, size = 20 }: { name: AppIconName; size?: number }) {
   const common = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
@@ -59,6 +64,7 @@ function AppIcon({ name, size = 20 }: { name: AppIconName; size?: number }) {
       {name === 'location' && <><path d="m20 4-7.5 16-2.1-6.4L4 11.5 20 4Z" {...common} /></>}
       {name === 'map' && <><path d="m3 6 5-2 8 3 5-2v13l-5 2-8-3-5 2V6Z" {...common} /><path d="M8 4v13M16 7v13" {...common} /></>}
       {name === 'heart' && <path d="M20.5 9.5c0 5-8.5 10-8.5 10s-8.5-5-8.5-10A4.5 4.5 0 0 1 12 7a4.5 4.5 0 0 1 8.5 2.5Z" {...common} />}
+      {name === 'user' && <><circle cx="12" cy="8" r="3.5" {...common} /><path d="M5 21c.8-4 3.1-6 7-6s6.2 2 7 6" {...common} /></>}
       {name === 'settings' && <><circle cx="12" cy="12" r="3" {...common} /><path d="M19 13.5v-3l-2-.7-.7-1.7.9-1.9-2.1-2.1-1.9.9-1.7-.7-.7-2h-3l-.7 2-1.7.7-1.9-.9-2.1 2.1.9 1.9-.7 1.7-2 .7v3l2 .7.7 1.7-.9 1.9 2.1 2.1 1.9-.9 1.7.7.7 2h3l.7-2 1.7-.7 1.9.9 2.1-2.1-.9-1.9.7-1.7 2-.7Z" {...common} /></>}
       {name === 'route' && <><path d="M5 19c0-4 3-4 6-4s6 0 6-4V5" {...common} /><path d="m14 8 3-3 3 3" {...common} /><circle cx="5" cy="19" r="2" {...common} /></>}
       {name === 'info' && <><circle cx="12" cy="12" r="9" {...common} /><path d="M12 11v5M12 8h.01" {...common} /></>}
@@ -238,11 +244,11 @@ function parkingTypeLabel(parking: Parking) {
   }[parking.type]
 }
 
-function BottomNav({ active = 'home', onHome, onSaved, onSettings }: { active?: 'home' | 'saved' | 'settings'; onHome?: () => void; onSaved: () => void; onSettings: () => void }) {
+function BottomNav({ active = 'home', onHome, onProfile, onSettings }: { active?: 'home' | 'profile' | 'settings'; onHome?: () => void; onProfile: () => void; onSettings: () => void }) {
   return (
     <nav className="bottom-nav" aria-label="Navigimi kryesor">
       <button className={`bottom-nav__item ${active === 'home' ? 'bottom-nav__item--active' : ''}`} onClick={onHome} aria-current={active === 'home' ? 'page' : undefined}><span><AppIcon name="map" /></span>Harta</button>
-      <button className={`bottom-nav__item ${active === 'saved' ? 'bottom-nav__item--active' : ''}`} onClick={onSaved} aria-current={active === 'saved' ? 'page' : undefined}><span><AppIcon name="heart" /></span>Ruajtur</button>
+      <button className={`bottom-nav__item ${active === 'profile' ? 'bottom-nav__item--active' : ''}`} onClick={onProfile} aria-current={active === 'profile' ? 'page' : undefined}><span><AppIcon name="user" /></span>Profili</button>
       <button className={`bottom-nav__item ${active === 'settings' ? 'bottom-nav__item--active' : ''}`} onClick={onSettings} aria-current={active === 'settings' ? 'page' : undefined}><span><AppIcon name="settings" /></span>Cilësimet</button>
     </nav>
   )
@@ -480,7 +486,7 @@ function HomeView({
   onNavigate,
   onStreetView,
   onCloseParkingPreview,
-  onSaved,
+  onProfile,
   onSettings,
   mapSettings,
   loadStatus,
@@ -530,7 +536,7 @@ function HomeView({
   onNavigate: () => void
   onStreetView: () => void
   onCloseParkingPreview: () => void
-  onSaved: () => void
+  onProfile: () => void
   onSettings: () => void
   mapSettings: MapSettings
   loadStatus: ParkingLoadStatus
@@ -967,24 +973,93 @@ function HomeView({
       </section>
       )}
 
-      <BottomNav onSaved={onSaved} onSettings={onSettings} />
+      <BottomNav onProfile={onProfile} onSettings={onSettings} />
     </div>
   )
 }
 
-function SavedView({ parkings, showDataSources, userLocation, onHome, onOpen, onSettings }: { parkings: Parking[]; showDataSources: boolean; userLocation?: Parking['coordinates']; onHome: () => void; onOpen: (parking: Parking) => void; onSettings: () => void }) {
+function ProfileView({ parkings, showDataSources, userLocation, user, onHome, onOpen, onSettings, onLogin, onProfile }: { parkings: Parking[]; showDataSources: boolean; userLocation?: Parking['coordinates']; user: User | null; onHome: () => void; onOpen: (parking: Parking) => void; onSettings: () => void; onLogin: () => void; onProfile: () => void }) {
+  const [profile, setProfile] = useState({ name: '', username: '', bio: '', avatar: '' })
+  const [profileStatus, setProfileStatus] = useState('')
+  const [password, setPassword] = useState({ currentPassword: '', newPassword: '', confirm: '' })
+  const [passwordStatus, setPasswordStatus] = useState('')
+  const [history, setHistory] = useState<ParkedHistory[]>([])
+  const [historyStatus, setHistoryStatus] = useState('')
+
+  useEffect(() => {
+    setProfile({ name: user?.name ?? '', username: user?.username ?? '', bio: user?.bio ?? '', avatar: user?.avatar ?? '' })
+  }, [user])
+
+  useEffect(() => {
+    if (!user) { setHistory([]); return }
+    let cancelled = false
+    setHistoryStatus('Duke ngarkuar…')
+    void listParkedHistory()
+      .then((items) => { if (!cancelled) { setHistory(items); setHistoryStatus('') } })
+      .catch(() => { if (!cancelled) setHistoryStatus('Historiku nuk mund të ngarkohet.') })
+    return () => { cancelled = true }
+  }, [user])
+
+  async function saveProfile(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setProfileStatus('Duke ruajtur…')
+    try {
+      await updateProfile({ name: profile.name, username: profile.username, bio: profile.bio, ...(profile.avatar.trim() ? { avatar: profile.avatar.trim() } : {}) })
+      setProfileStatus('Ndryshimet u ruajtën.')
+    } catch {
+      setProfileStatus('Ndryshimet nuk u ruajtën. Provo përsëri.')
+    }
+  }
+
+  async function savePassword(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (password.newPassword !== password.confirm) { setPasswordStatus('Fjalëkalimet e reja nuk përputhen.'); return }
+    setPasswordStatus('Duke ruajtur…')
+    try {
+      await changePassword({ currentPassword: password.currentPassword, newPassword: password.newPassword })
+      setPassword({ currentPassword: '', newPassword: '', confirm: '' })
+      setPasswordStatus('Fjalëkalimi u ndryshua.')
+    } catch {
+      setPasswordStatus('Fjalëkalimi nuk u ndryshua. Provo përsëri.')
+    }
+  }
+
   return (
     <div className="screen saved-screen">
       <StatusBar />
-      <header className="saved-header"><div><small>Parko</small><h1>Parkingjet e ruajtura</h1></div><span>{parkings.length}</span></header>
+      <header className="saved-header"><div><small>Parko</small><h1>Profili</h1></div></header>
       <main className="saved-list">
         <SaveMyParkedLocationCard initialLocation={userLocation} />
         <SmsTariffHelper />
+        {!user ? <section className="empty-state"><strong>Hyr në llogari për të parë profilin</strong><button type="button" onClick={onLogin}>Hyr ose regjistrohu</button></section> : <>
+          <section className="profile-header">
+            {user.avatar ? <img src={user.avatar} alt="" className="profile-avatar" /> : <span className="profile-avatar" aria-hidden="true">{user.name.charAt(0).toUpperCase()}</span>}
+            <div><h2>{user.name}</h2><p>@{user.username}</p>{user.bio && <p>{user.bio}</p>}</div>
+          </section>
+          <form onSubmit={saveProfile} className="settings-section profile-form">
+            <h2>Ndrysho profilin</h2>
+            <label>Emri<input value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /></label>
+            <label>Emri i përdoruesit<input value={profile.username} onChange={(event) => setProfile({ ...profile, username: event.target.value })} /></label>
+            <label>Bio<textarea value={profile.bio} onChange={(event) => setProfile({ ...profile, bio: event.target.value })} /></label>
+            <label>URL e avatarit<input type="url" value={profile.avatar} onChange={(event) => setProfile({ ...profile, avatar: event.target.value })} /></label>
+            <button type="submit">Ruaj ndryshimet</button>{profileStatus && <p role="status">{profileStatus}</p>}
+          </form>
+          <form onSubmit={savePassword} className="settings-section profile-form">
+            <h2>Ndrysho fjalëkalimin</h2>
+            <label>Fjalëkalimi aktual<input required type="password" value={password.currentPassword} onChange={(event) => setPassword({ ...password, currentPassword: event.target.value })} /></label>
+            <label>Fjalëkalimi i ri<input required minLength={8} type="password" value={password.newPassword} onChange={(event) => setPassword({ ...password, newPassword: event.target.value })} /></label>
+            <label>Konfirmo fjalëkalimin e ri<input required minLength={8} type="password" value={password.confirm} onChange={(event) => setPassword({ ...password, confirm: event.target.value })} /></label>
+            <button type="submit">Ndrysho fjalëkalimin</button>{passwordStatus && <p role="status">{passwordStatus}</p>}
+          </form>
+          <section className="settings-section"><h2>Vendet ku kam parkuar</h2>{historyStatus && <p role="status">{historyStatus}</p>}{!historyStatus && (history.length ? <ul>{history.map((entry) => <li key={entry.id}>{entry.latitude.toFixed(5)}, {entry.longitude.toFixed(5)}{entry.note && ` — ${entry.note}`}<br /><small>{new Date(entry.parkedAt).toLocaleString('sq-AL')}</small></li>)}</ul> : <p>Nuk ka vende të ruajtura ende.</p>)}</section>
+          <button type="button" className="profile-logout-button" onClick={() => { void logout().finally(onHome) }}>Dil nga llogaria</button>
+        </>}
+        <section><h2>Parkingjet e ruajtura</h2></section>
         {parkings.length ? parkings.map((parking) => (
           <ParkingCard key={parking.id} parking={parking} showSource={showDataSources} onOpen={() => onOpen(parking)} />
         )) : <div className="empty-state"><strong>Nuk ke parkingje të ruajtura</strong><span>Prek ＋ te detajet e një parkingu për ta ruajtur.</span></div>}
       </main>
-      <BottomNav active="saved" onHome={onHome} onSaved={() => undefined} onSettings={onSettings} />
+      <BottomNav active="profile" onHome={onHome} onProfile={onProfile} onSettings={onSettings} />
     </div>
   )
 }
@@ -1000,7 +1075,7 @@ const parkingPaletteOptions: Array<{ value: ParkingPalette; label: string; descr
   { value: 'operator', label: 'Sipas operatorit', description: 'Prishtina Parking / OSM / privat' },
 ]
 
-function SettingsView({ settings, preferredType, walkingMinutes, typeCounts, onChange, onPreferredType, onWalkingMinutes, onReset, onLogin, onHome, onSaved, onCommunity }: { settings: MapSettings; preferredType: ParkingTypeFilter; walkingMinutes: 5 | 10 | 15; typeCounts: ParkingTypeCounts; onChange: (settings: MapSettings) => void; onPreferredType: (type: ParkingTypeFilter) => void; onWalkingMinutes: (minutes: 5 | 10 | 15) => void; onReset: () => void; onLogin: () => void; onHome: () => void; onSaved: () => void; onCommunity: () => void }) {
+function SettingsView({ settings, preferredType, walkingMinutes, typeCounts, onChange, onPreferredType, onWalkingMinutes, onReset, onLogin, onHome, onProfile, onCommunity }: { settings: MapSettings; preferredType: ParkingTypeFilter; walkingMinutes: 5 | 10 | 15; typeCounts: ParkingTypeCounts; onChange: (settings: MapSettings) => void; onPreferredType: (type: ParkingTypeFilter) => void; onWalkingMinutes: (minutes: 5 | 10 | 15) => void; onReset: () => void; onLogin: () => void; onHome: () => void; onProfile: () => void; onCommunity: () => void }) {
   const toggle = (key: 'emphasizeAreas' | 'largePointMarkers' | 'showPointParking' | 'largeLabels' | 'showDataSources') => onChange({ ...settings, [key]: !settings[key] })
   return (
     <div className="screen settings-screen">
@@ -1059,7 +1134,7 @@ function SettingsView({ settings, preferredType, walkingMinutes, typeCounts, onC
 
         <p className="settings-data-note"><b>Pa zona të rreme.</b> Mbushja e plotë përdoret vetëm kur OpenStreetMap ka kufij realë. Parkingjet me vetëm një koordinatë mbeten pika, por mund të shfaqen më të mëdha.</p>
       </main>
-      <BottomNav active="settings" onHome={onHome} onSaved={onSaved} onSettings={() => undefined} />
+      <BottomNav active="settings" onHome={onHome} onProfile={onProfile} onSettings={() => undefined} />
     </div>
   )
 }
@@ -1253,6 +1328,7 @@ function WalkingView({ parking, destination, route, match, directionsHref, userL
 }
 
 export default function App() {
+  const { user, isLoading: authLoading } = useAuth()
   const persistedPreferences = useRef(loadPreferences()).current
   const [screen, setScreen] = useState<Screen>('home')
   const [showLoginModal, setShowLoginModal] = useState(false)
@@ -1751,13 +1827,92 @@ export default function App() {
           transform: translateY(0);
         }
 
+        .profile-header {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          padding: 16px;
+          border-radius: 16px;
+          background: #f4f7ff;
+        }
+
+        .profile-header h2, .profile-header p { margin: 0; }
+        .profile-header p + p { margin-top: 4px; }
+
+        .profile-avatar {
+          display: grid;
+          place-items: center;
+          flex: 0 0 56px;
+          width: 56px;
+          height: 56px;
+          border-radius: 50%;
+          background: #246bfd;
+          color: white;
+          font-size: 22px;
+          font-weight: 700;
+          object-fit: cover;
+        }
+
+        .profile-form {
+          display: grid;
+          gap: 12px;
+          padding: 16px;
+        }
+
+        .profile-form h2, .profile-form p { margin: 0; }
+
+        .profile-form label {
+          display: grid;
+          gap: 6px;
+          color: #23354d;
+          font-size: 14px;
+          font-weight: 600;
+        }
+
+        .profile-form input, .profile-form textarea {
+          box-sizing: border-box;
+          width: 100%;
+          border: 1px solid #cbd5e1;
+          border-radius: 10px;
+          padding: 10px 12px;
+          background: white;
+          color: #10233d;
+          font: inherit;
+        }
+
+        .profile-form textarea { min-height: 84px; resize: vertical; }
+
+        .profile-form button, .empty-state button {
+          justify-self: start;
+          border: 0;
+          border-radius: 10px;
+          padding: 10px 14px;
+          background: #246bfd;
+          color: white;
+          font: inherit;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .profile-logout-button {
+          min-height: 58px;
+          padding: 8px 12px;
+          border: 0;
+          border-radius: 14px;
+          background: #fef2f2;
+          color: #b91c1c;
+          font: inherit;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
         @media (max-width: 520px) {
           .login-auth-button { display: none; }
         }
       `}</style>
-      <button className="login-auth-button" onClick={() => setShowLoginModal(true)}>
+      {!authLoading && !user && <button className="login-auth-button" onClick={() => setShowLoginModal(true)}>
         Log In / Register
-      </button>
+      </button>}
       {routeNotice && <div className="app-feedback" role="status"><span>{routeNotice}</span><button onClick={() => { setRouteRetry((value) => value + 1); setRouteNotice('') }}>Provo përsëri</button><button aria-label="Mbyll njoftimin" onClick={() => setRouteNotice('')}>×</button></div>}
       {showLoginModal && <Suspense fallback={<div className="modal-loading" role="status">Duke hapur hyrjen…</div>}><Login onClose={() => setShowLoginModal(false)} /></Suspense>}
       {!online && <div className="offline-banner" role="status">Je offline — po shfaqim të dhënat e fundit të ruajtura.</div>}
@@ -1814,14 +1969,14 @@ export default function App() {
             }}
             onStreetView={() => setStreetViewParking(currentSelected)}
             onCloseParkingPreview={() => setParkingPreviewOpen(false)}
-            onSaved={() => setScreen('saved')}
+            onProfile={() => setScreen('profile')}
             onSettings={() => setScreen('settings')}
             mapSettings={mapSettings}
             loadStatus={loadStatus}
           />
         )}
-        {screen === 'saved' && <SavedView parkings={locatedParkings.filter((parking) => savedParkingIds.has(parking.id))} showDataSources={mapSettings.showDataSources} userLocation={userLocationInPrishtina ? activeUserLocation : undefined} onHome={() => setScreen('home')} onSettings={() => setScreen('settings')} onOpen={(parking) => { setSelected(parking); setDestination(null); setScreen('details') }} />}
-        {screen === 'settings' && <SettingsView settings={mapSettings} preferredType={filters.type as ParkingTypeFilter} walkingMinutes={walkingMinutes} typeCounts={globalTypeCounts} onChange={(value) => setMapSettings(normalizedMapSettings(value))} onPreferredType={(type) => setFilters((current) => ({ ...current, type }))} onWalkingMinutes={setWalkingMinutes} onReset={() => { setMapSettings(DEFAULT_MAP_SETTINGS); setFilters(initialFilters); setWalkingMinutes(10) }} onLogin={() => setShowLoginModal(true)} onHome={() => setScreen('home')} onSaved={() => setScreen('saved')} onCommunity={() => setScreen('community')} />}
+        {screen === 'profile' && <ProfileView parkings={locatedParkings.filter((parking) => savedParkingIds.has(parking.id))} showDataSources={mapSettings.showDataSources} userLocation={userLocationInPrishtina ? activeUserLocation : undefined} user={user} onLogin={() => setShowLoginModal(true)} onHome={() => setScreen('home')} onProfile={() => undefined} onSettings={() => setScreen('settings')} onOpen={(parking) => { setSelected(parking); setDestination(null); setScreen('details') }} />}
+        {screen === 'settings' && <SettingsView settings={mapSettings} preferredType={filters.type as ParkingTypeFilter} walkingMinutes={walkingMinutes} typeCounts={globalTypeCounts} onChange={(value) => setMapSettings(normalizedMapSettings(value))} onPreferredType={(type) => setFilters((current) => ({ ...current, type }))} onWalkingMinutes={setWalkingMinutes} onReset={() => { setMapSettings(DEFAULT_MAP_SETTINGS); setFilters(initialFilters); setWalkingMinutes(10) }} onLogin={() => setShowLoginModal(true)} onHome={() => setScreen('home')} onProfile={() => setScreen('profile')} onCommunity={() => setScreen('community')} />}
         {screen === 'community' && <Suspense fallback={<div className="app-loading" role="status">Duke hapur komunitetin…</div>}><CommunityView onBack={() => setScreen('settings')} onLogin={() => setShowLoginModal(true)} /></Suspense>}
           {screen === 'details' && <DetailsView parking={currentSelected} report={parkingReports[currentSelected.id]} onReport={(id, patch) => { void reportParking(id, patch) }} route={route} routeLoading={routeLoading} routeError={routeError} destination={destination} smartMatch={selectedRankedParking} saved={savedParkingIds.has(currentSelected.id)} userLocation={activeUserLocation} userLocationLive={userLocationInPrishtina} userLocationAccuracy={locationAccuracy} mapSettings={mapSettings} onToggleSaved={toggleSavedParking} onBack={() => setScreen('home')} onNavigate={() => {
             if (!userLocationInPrishtina) { setRouteNotice('Aktivizo lokacionin për të nisur navigimin.'); requestUserLocation({ recenter: false }); return }

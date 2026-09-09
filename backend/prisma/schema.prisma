@@ -97,6 +97,7 @@ model User {
   moderation      ModerationAction[] @relation("ModerationActor")
   adminActions    AdminAction[]
   auditLogs        AuditLog[]
+  parkedHistory    ParkedHistory[]
 }
 
 model RefreshToken {
@@ -192,6 +193,20 @@ model ParkingReservation {
 
   @@index([parkingSpotId, startsAt])
   @@index([userId, expiresAt])
+}
+
+model ParkedHistory {
+  id            String   @id @default(uuid())
+  userId        String
+  parkingSpotId String?
+  latitude      Float
+  longitude     Float
+  note          String?
+  parkedAt      DateTime @default(now())
+  leftAt        DateTime?
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, parkedAt])
 }
 
 model Post {
