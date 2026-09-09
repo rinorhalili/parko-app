@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
+import 'leaflet.markercluster'
+import 'leaflet.markercluster/dist/MarkerCluster.css'
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 import { PRISHTINA_CENTER, PRISHTINA_MAP_BOUNDS, USER_LOCATION, isWithinPrishtinaMap } from './parkingApi'
 import { accessPointIsEstimated, parkingAccessPoint } from './parkingGeometry'
 import type { Destination, DrivingRoute, MapSettings, MapVariant, Parking, ParkingLoadStatus, ParkingPalette } from './types'
@@ -141,6 +144,7 @@ export default function LiveParkingMap({
   const baseTileLayerRef = useRef<L.TileLayer | null>(null)
   const labelTileLayerRef = useRef<L.TileLayer | null>(null)
   const parkingLayerRef = useRef<L.LayerGroup | null>(null)
+  const clusterGroupRef = useRef<L.MarkerClusterGroup | null>(null)
   const routeLayerRef = useRef<L.LayerGroup | null>(null)
   const onSelectRef = useRef(onSelect)
   const onPickDestinationRef = useRef(onPickDestination)
@@ -173,6 +177,7 @@ export default function LiveParkingMap({
       center: [PRISHTINA_CENTER.lat, PRISHTINA_CENTER.lng],
       zoom: 13,
       minZoom: 12,
+      maxZoom: 19,
       maxBounds: cityBounds.pad(0.08),
       maxBoundsViscosity: 1,
       zoomControl: false,
@@ -193,6 +198,22 @@ export default function LiveParkingMap({
     const parkingPane = map.getPane('parkingAreas')
     if (parkingPane) parkingPane.style.zIndex = '420'
     parkingLayerRef.current = L.layerGroup().addTo(map)
+    try {
+      clusterGroupRef.current = L.markerClusterGroup({
+        maxClusterRadius: 50,
+        disableClusteringAtZoom: 16,
+        spiderfyOnMaxZoom: false,
+        showCoverageOnHover: false,
+        iconCreateFunction: (cluster) => L.divIcon({
+          html: `<div class="parking-cluster-bubble">${cluster.getChildCount()}</div>`,
+          className: 'parking-cluster-icon',
+          iconSize: L.point(38, 38),
+        }),
+      }).addTo(map)
+    } catch (error) {
+      console.error('Failed to initialize parking marker clustering', error)
+      clusterGroupRef.current = null
+    }
     routeLayerRef.current = L.layerGroup().addTo(map)
     map.on('click', (event) => {
       if (modeRef.current !== 'home' || !pickingDestinationRef.current) return
@@ -243,6 +264,7 @@ export default function LiveParkingMap({
       mapRef.current = null
       baseTileLayerRef.current = null
       labelTileLayerRef.current = null
+      clusterGroupRef.current = null
     }
   }, [])
 
@@ -283,17 +305,21 @@ export default function LiveParkingMap({
   useEffect(() => {
     const map = mapRef.current
     const parkingLayer = parkingLayerRef.current
-    if (!map || !parkingLayer) return
+    const clusterGroup = clusterGroupRef.current
+    if (!map || !parkingLayer || !clusterGroup) return
     parkingLayer.clearLayers()
+    clusterGroup.clearLayers()
     if (mode === 'home' && !destination && !route) automaticViewportRef.current = null
 
     const selectionFocused = mode === 'home' && Boolean(route || destination)
 
+    let processedParkingCount = 0
     visibleParkings.forEach((parking) => {
       if (!parking.geometry?.length && !mapSettings.showPointParking && mode === 'home') return
       const usefulOverviewPoint = parking.pricePerHour !== null || parking.free || Boolean(parking.availabilitySource)
       const detailedPointZoom = mapSettings.largePointMarkers ? (destination ? 13.5 : 14) : (destination ? 13.5 : 15)
       if (!parking.geometry?.length && mapZoom < detailedPointZoom && !usefulOverviewPoint) return
+      processedParkingCount += 1
       const category = priceClass(parking.pricePerHour)
       const isSelected = selected.id === parking.id
       const rank = recommendationRanks?.get(parking.id)
@@ -306,7 +332,7 @@ export default function LiveParkingMap({
         : mapSettings.emphasizeAreas
           ? mapZoom < 14 ? .42 : .56
           : mapZoom < 14 ? .2 : .34
-      const interactiveLayers: L.Path[] = parking.geometry?.length
+      const interactiveLayers: Array<L.Path | L.Marker> = parking.geometry?.length
         ? parking.geometry.map((ring) => L.polygon(
           ring.map(({ lat, lng }) => [lat, lng] as L.LatLngTuple),
           {
@@ -320,14 +346,14 @@ export default function LiveParkingMap({
             lineJoin: 'round',
           },
         ))
-        : [L.circleMarker([parking.coordinates.lat, parking.coordinates.lng], {
+        : [L.marker([parking.coordinates.lat, parking.coordinates.lng], {
           pane: 'parkingAreas',
-          className: `parking-point parking-point--${category}${isSelected ? ' parking-point--selected' : ''}${restricted ? ' parking-point--restricted' : ''}`,
-          radius: isSelected ? (mapSettings.largePointMarkers ? 11 : 8) : (mapSettings.largePointMarkers ? 8 : 5.5),
-          color: isSelected ? '#0b3fd1' : '#fff',
-          weight: isSelected ? 3.5 : mapSettings.largePointMarkers ? 2.25 : 1.5,
-          fillColor: color,
-          fillOpacity: restricted ? .45 : .9,
+          icon: L.divIcon({
+            className: '',
+            html: `<span class="parking-point parking-point--${category}${isSelected ? ' parking-point--selected' : ''}${restricted ? ' parking-point--restricted' : ''}" style="--parking-point-color:${color};--parking-point-border:${isSelected ? '#0b3fd1' : '#fff'};--parking-point-opacity:${restricted ? .45 : .9};--parking-point-size:${isSelected ? (mapSettings.largePointMarkers ? 22 : 16) : (mapSettings.largePointMarkers ? 16 : 11)}px;--parking-point-border-width:${isSelected ? 3.5 : mapSettings.largePointMarkers ? 2.25 : 1.5}px"></span>`,
+            iconSize: L.point(isSelected ? (mapSettings.largePointMarkers ? 22 : 16) : (mapSettings.largePointMarkers ? 16 : 11), isSelected ? (mapSettings.largePointMarkers ? 22 : 16) : (mapSettings.largePointMarkers ? 16 : 11)),
+            iconAnchor: L.point(isSelected ? (mapSettings.largePointMarkers ? 11 : 8) : (mapSettings.largePointMarkers ? 8 : 5.5), isSelected ? (mapSettings.largePointMarkers ? 11 : 8) : (mapSettings.largePointMarkers ? 8 : 5.5)),
+          }),
         })]
 
       interactiveLayers.forEach((layer) => {
@@ -350,7 +376,7 @@ export default function LiveParkingMap({
           focusParkingRef.current = parking.id
           onSelectRef.current(parking)
         })
-        layer.addTo(parkingLayer)
+        layer.addTo(parking.geometry?.length ? parkingLayer : clusterGroup)
         const element = layer.getElement()
         element?.setAttribute('role', 'button')
         element?.setAttribute('aria-label', `${parking.name} · ${priceLabel(parking.pricePerHour)}`)
@@ -365,6 +391,9 @@ export default function LiveParkingMap({
       })
 
     })
+
+    const totalRendered = parkingLayer.getLayers().length + clusterGroupRef.current!.getLayers().length
+    if (totalRendered !== processedParkingCount) console.error(`Parking marker count mismatch: expected ${processedParkingCount}, rendered ${totalRendered}`)
 
   }, [visibleParkings, selected.id, mode, Boolean(route || destination), Boolean(destination), recommendationRanks, mapZoom, mapReadyToken, mapSettings.parkingPalette, mapSettings.emphasizeAreas, mapSettings.largePointMarkers, mapSettings.showPointParking])
 
@@ -545,6 +574,10 @@ export default function LiveParkingMap({
 
   return (
     <div className={`map-canvas map-canvas--${mode} map-canvas--theme-${mapSettings.variant} map-canvas--palette-${mapSettings.parkingPalette} ${mapSettings.largeLabels ? 'map-canvas--large-labels' : ''} ${destination ? 'map-canvas--destination' : ''} ${pickingDestination ? 'map-canvas--picking' : ''}`} aria-label="Harta reale e parkingjeve në Prishtinë">
+      <style>{`
+        .parking-cluster-bubble { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 50%; background: var(--primary); color: white; box-shadow: 0 3px 10px rgba(16, 32, 51, .24); font-size: 13px; font-weight: 800; }
+        .parking-point { display: block; box-sizing: border-box; width: var(--parking-point-size); height: var(--parking-point-size); border: var(--parking-point-border-width) solid var(--parking-point-border); border-radius: 50%; background: var(--parking-point-color); opacity: var(--parking-point-opacity); cursor: pointer; }
+      `}</style>
       <div ref={containerRef} className="leaflet-map" />
       {mode === 'home' && pickingDestination && <div className="map-pick-banner">Prek hartën për të vendosur destinacionin</div>}
       {mode === 'home' && destination && mapSettings.parkingPalette !== 'green' && (
