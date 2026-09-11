@@ -1,0 +1,16 @@
+import { Router } from "express";
+import { z } from "zod";
+import { authenticate } from "../middleware/authenticate.js";
+import { validate } from "../middleware/validate.js";
+import { favoritesController } from "../controllers/favorites.controller.js";
+const id = z.object({ parkingSpotId: z.uuid() }); const postId = z.object({ postId: z.uuid() }); const zone = z.object({ zone: z.string().trim().min(1).max(80) });
+export const favoritesRoutes = Router();
+favoritesRoutes.use(authenticate);
+favoritesRoutes.get("/", favoritesController.list);
+favoritesRoutes.put("/parking/:parkingSpotId", validate({ params: id }), favoritesController.favoriteParking);
+favoritesRoutes.delete("/parking/:parkingSpotId", validate({ params: id }), favoritesController.removeParking);
+favoritesRoutes.put("/posts/:postId", validate({ params: postId }), favoritesController.favoritePost);
+favoritesRoutes.delete("/posts/:postId", validate({ params: postId }), favoritesController.removePost);
+favoritesRoutes.get("/zone-alerts", favoritesController.listAlerts);
+favoritesRoutes.post("/zone-alerts", validate({ body: zone }), favoritesController.subscribeAlert);
+favoritesRoutes.delete("/zone-alerts/:zone", validate({ params: zone }), favoritesController.removeAlert);

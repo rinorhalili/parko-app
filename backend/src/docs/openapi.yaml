@@ -1,0 +1,53 @@
+openapi: 3.1.0
+info:
+  title: Parko API
+  version: 1.0.0
+  description: Parking, reservations, community and administration API.
+servers:
+  - url: /api
+  - url: /api/v1
+paths:
+  /auth/login:
+    post:
+      summary: Start an authenticated session
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/Login' } } }
+      responses: { '200': { description: Session created }, '401': { $ref: '#/components/responses/Error' } }
+  /parking:
+    get: { summary: List public parking locations, responses: { '200': { description: Parking list } } }
+    post: { summary: Create a parking location, security: [{ bearerAuth: [] }], responses: { '201': { description: Created } } }
+  /parking/{id}:
+    get: { summary: Get parking details, parameters: [{ $ref: '#/components/parameters/ParkingId' }], responses: { '200': { description: Parking location } } }
+  /parking/{id}/availability:
+    get:
+      summary: Get live calculated availability
+      parameters: [{ $ref: '#/components/parameters/ParkingId' }]
+      responses: { '200': { description: Availability } }
+  /favorites:
+    get: { summary: Current user's saved parking and posts, security: [{ bearerAuth: [] }], responses: { '200': { description: Favorite identifiers } } }
+  /favorites/parking/{parkingSpotId}:
+    put: { summary: Save a parking location, security: [{ bearerAuth: [] }], responses: { '201': { description: Saved } } }
+    delete: { summary: Remove a saved parking location, security: [{ bearerAuth: [] }], responses: { '200': { description: Removed } } }
+  /favorites/zone-alerts:
+    get: { summary: List zone alerts, security: [{ bearerAuth: [] }], responses: { '200': { description: Zone alerts } } }
+    post: { summary: Subscribe to a zone availability alert, security: [{ bearerAuth: [] }], responses: { '201': { description: Alert created } } }
+  /reservations:
+    post: { summary: Create reservation, security: [{ bearerAuth: [] }], responses: { '201': { description: Created }, '409': { $ref: '#/components/responses/Error' } } }
+  /reservations/me:
+    get: { summary: Current user reservations, security: [{ bearerAuth: [] }], responses: { '200': { description: Reservations } } }
+  /notifications:
+    get: { summary: Current user notifications, security: [{ bearerAuth: [] }], responses: { '200': { description: Notifications } } }
+  /admin/audit-logs:
+    get: { summary: Legacy audit endpoint, security: [{ bearerAuth: [] }], responses: { '200': { description: Audit logs } } }
+  /audit:
+    get: { summary: Paginated audit logs, security: [{ bearerAuth: [] }], responses: { '200': { description: Audit logs } } }
+  /health:
+    get: { summary: Service and dependency health, responses: { '200': { description: Healthy }, '503': { description: Degraded } } }
+components:
+  securitySchemes: { bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT } }
+  parameters: { ParkingId: { name: id, in: path, required: true, schema: { type: string, format: uuid } } }
+  schemas:
+    Login: { type: object, required: [email, password], properties: { email: { type: string, format: email }, password: { type: string, format: password } } }
+  responses:
+    Error: { description: Standard error response, content: { application/json: { schema: { type: object, properties: { success: { type: boolean, const: false }, error: { type: object } } } } } }

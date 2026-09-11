@@ -44,6 +44,7 @@ export function CrowdSourcingProvider({ children }: { children: ReactNode }) {
       ...(report.status === 'AVAILABLE' ? { availability: 'free-spots' as const } : report.status === 'OCCUPIED' ? { availability: 'full' as const } : {}),
       ...(report.payment ? { payment: report.payment === 'FREE' ? 'free' as const : 'paid' as const } : {}),
       ...(report.policeRisk === null ? {} : { policeRisk: report.policeRisk }),
+      ...(report.media?.length ? { media: report.media } : {}),
       createdAt: Date.parse(report.createdAt),
       updatedAt: Date.parse(report.createdAt),
       expiresAt: Date.parse(report.expiresAt),

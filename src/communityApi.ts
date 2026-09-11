@@ -12,6 +12,7 @@ export type CommunityParkingReport = {
   availability?: 'free-spots' | 'full'
   payment?: 'free' | 'paid'
   policeRisk?: boolean
+  media?: Array<{ url: string; type: 'image' }>
   createdAt: number
   updatedAt: number
   expiresAt: number
@@ -23,6 +24,7 @@ type ApiReport = {
   status: CommunityReportStatus
   payment: 'FREE' | 'PAID' | null
   policeRisk: boolean | null
+  media: Array<{ url: string; type: 'image' }> | null
   createdAt: string
   expiresAt: string
 }
@@ -35,6 +37,7 @@ function asReport(row: ApiReport): CommunityParkingReport {
     ...(row.status === 'AVAILABLE' ? { availability: 'free-spots' as const } : row.status === 'OCCUPIED' ? { availability: 'full' as const } : {}),
     ...(row.payment ? { payment: row.payment === 'FREE' ? 'free' as const : 'paid' as const } : {}),
     ...(row.policeRisk === null ? {} : { policeRisk: row.policeRisk }),
+    ...(row.media?.length ? { media: row.media } : {}),
     createdAt: Date.parse(row.createdAt),
     updatedAt: Date.parse(row.createdAt),
     expiresAt: Date.parse(row.expiresAt),
@@ -51,6 +54,7 @@ export type ParkingObservation = {
   availability?: CommunityAvailability
   payment?: 'free' | 'paid'
   policeRisk?: boolean
+  media?: Array<{ url: string; type: 'image' }>
 }
 
 export async function submitParkingObservation(parking: Parking, observation: ParkingObservation) {
@@ -63,6 +67,7 @@ export async function submitParkingObservation(parking: Parking, observation: Pa
     confidence: 60,
     payment: observation.payment === 'free' ? 'FREE' : observation.payment === 'paid' ? 'PAID' : undefined,
     policeRisk: observation.policeRisk,
+    media: observation.media,
   })
   return asReport(report as ApiReport)
 }

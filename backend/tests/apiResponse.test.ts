@@ -4,8 +4,9 @@ import request from "supertest";
 
 describe("API shell", () => {
   it("returns health status", async () => {
-    const response = await request(createApp()).get("/health").expect(200);
-    expect(response.body).toEqual({ ok: true });
+    const response = await request(createApp()).get("/health");
+    expect([200, 503]).toContain(response.status);
+    expect(response.body.data).toMatchObject({ status: expect.any(String), dependencies: { database: expect.any(String), redis: expect.any(String) } });
   });
 
   it("validates auth input", async () => {
@@ -20,7 +21,7 @@ describe("API shell", () => {
   });
 
   it("adds baseline browser security headers", async () => {
-    const response = await request(createApp()).get("/health").expect(200);
+    const response = await request(createApp()).get("/health");
     expect(response.headers["x-content-type-options"]).toBe("nosniff");
     expect(response.headers["content-security-policy"]).toContain("default-src 'self'");
   });

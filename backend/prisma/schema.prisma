@@ -98,6 +98,9 @@ model User {
   adminActions    AdminAction[]
   auditLogs        AuditLog[]
   parkedHistory    ParkedHistory[]
+  favoriteParking  FavoriteParking[]
+  favoritePosts    FavoritePost[]
+  zoneAlerts       ZoneAlert[]
 }
 
 model RefreshToken {
@@ -151,6 +154,7 @@ model ParkingSpot {
   reports     ParkingReport[]
   posts       Post[]
   reservations ParkingReservation[]
+  favoritedBy  FavoriteParking[]
 
   @@index([status])
   @@index([zone])
@@ -174,6 +178,7 @@ model ParkingReport {
   reporter      User          @relation(fields: [reporterId], references: [id], onDelete: Cascade)
   parkingSpot   ParkingSpot   @relation(fields: [parkingSpotId], references: [id], onDelete: Cascade)
   reputation    Reputation[]
+  media         Json?
 
   @@index([parkingSpotId, createdAt])
   @@index([reporterId, createdAt])
@@ -225,6 +230,7 @@ model Post {
   parkingSpot   ParkingSpot? @relation(fields: [parkingSpotId], references: [id], onDelete: SetNull)
   comments      Comment[]
   reactions     Reaction[]
+  favoritedBy   FavoritePost[]
 
   @@index([authorId, createdAt])
   @@index([createdAt])
@@ -360,4 +366,39 @@ model AuditLog {
 
   @@index([action, createdAt])
   @@index([actorId, createdAt])
+}
+
+model FavoriteParking {
+  userId        String
+  parkingSpotId String
+  createdAt     DateTime    @default(now())
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parkingSpot   ParkingSpot @relation(fields: [parkingSpotId], references: [id], onDelete: Cascade)
+
+  @@id([userId, parkingSpotId])
+  @@index([parkingSpotId, createdAt])
+}
+
+model FavoritePost {
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@id([userId, postId])
+  @@index([postId, createdAt])
+}
+
+model ZoneAlert {
+  id             String   @id @default(uuid())
+  userId         String
+  zone           String
+  lastNotifiedAt DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, zone])
+  @@index([zone, lastNotifiedAt])
 }

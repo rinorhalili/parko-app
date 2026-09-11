@@ -4,6 +4,7 @@ import { prisma } from "../../database/prisma.js";
 import { authenticate } from "../../middleware/authenticate.js";
 import { validate } from "../../middleware/validate.js";
 import { ok } from "../../utils/apiResponse.js";
+import { notificationController } from "../../controllers/notification.controller.js";
 
 const idParams = z.object({ id: z.uuid() });
 const deviceSchema = z.object({
@@ -14,13 +15,7 @@ export const notificationRoutes = Router();
 
 notificationRoutes.use(authenticate);
 
-notificationRoutes.get("/", async (req, res, next) => {
-  try {
-    ok(res, await prisma.notification.findMany({ where: { recipientId: req.user!.id }, orderBy: { createdAt: "desc" }, take: 100 }));
-  } catch (error) {
-    next(error);
-  }
-});
+notificationRoutes.get("/", notificationController.list);
 
 notificationRoutes.post("/devices", validate({ body: deviceSchema }), async (req, res, next) => {
   try {
@@ -43,13 +38,7 @@ notificationRoutes.delete("/devices", validate({ body: deviceSchema.pick({ token
   }
 });
 
-notificationRoutes.patch("/:id/read", validate({ params: idParams }), async (req, res, next) => {
-  try {
-    ok(res, await prisma.notification.update({ where: { id: req.params.id as string, recipientId: req.user!.id }, data: { readAt: new Date() } }));
-  } catch (error) {
-    next(error);
-  }
-});
+notificationRoutes.patch("/:id/read", validate({ params: idParams }), notificationController.read);
 
 notificationRoutes.post("/read-all", async (req, res, next) => {
   try {

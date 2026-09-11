@@ -7,6 +7,7 @@ import { ok } from "../../utils/apiResponse.js";
 import { hashPassword, verifyPassword } from "../../utils/password.js";
 import { badRequest } from "../../utils/errors.js";
 import { getUserReputation } from "../reputation/service.js";
+import { userController } from "../../controllers/user.controller.js";
 
 const idParams = z.object({ id: z.uuid() });
 const profileSchema = z.object({ name: z.string().min(2).max(80).optional(), username: z.string().min(3).max(40).optional(), avatar: z.url().optional(), bio: z.string().max(500).optional() });
@@ -14,13 +15,7 @@ const passwordSchema = z.object({ currentPassword: z.string().min(1), newPasswor
 
 export const userRoutes = Router();
 
-userRoutes.get("/me", authenticate, async (req, res, next) => {
-  try {
-    ok(res, await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id }, omit: { passwordHash: true } }));
-  } catch (error) {
-    next(error);
-  }
-});
+userRoutes.get("/me", authenticate, userController.me);
 
 userRoutes.patch("/me", authenticate, validate({ body: profileSchema }), async (req, res, next) => {
   try {
@@ -41,13 +36,7 @@ userRoutes.patch("/me/password", authenticate, validate({ body: passwordSchema }
   }
 });
 
-userRoutes.get("/:id", validate({ params: idParams }), async (req, res, next) => {
-  try {
-    ok(res, await prisma.user.findUniqueOrThrow({ where: { id: req.params.id as string }, select: { id: true, name: true, username: true, avatar: true, bio: true, reputationScore: true, isVerified: true } }));
-  } catch (error) {
-    next(error);
-  }
-});
+userRoutes.get("/:id", validate({ params: idParams }), userController.profile);
 
 userRoutes.get("/:id/reputation", validate({ params: idParams }), async (req, res, next) => {
   try {

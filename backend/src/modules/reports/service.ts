@@ -4,6 +4,8 @@ import { emitRealtime } from "../../websocket/io.js";
 import { badRequest, notFound } from "../../utils/errors.js";
 import { recordEvent } from "../reputation/service.js";
 import { publicParkingWhere } from '../parking/policy.js';
+import { availabilityService } from "../../services/availability.service.js";
+import { favoritesService } from "../../services/favorites.service.js";
 
 export async function createParkingReport(reporterId: string, input: {
   parkingSpotId: string;
@@ -14,6 +16,7 @@ export async function createParkingReport(reporterId: string, input: {
   confidence: number;
   payment?: "FREE" | "PAID";
   policeRisk?: boolean;
+  media?: Array<{ url: string; type: "image" }>;
 }) {
   const spot = await prisma.parkingSpot.findUnique({ where: { id: input.parkingSpotId } });
   if (!spot) throw notFound("Parking spot not found");
@@ -40,6 +43,7 @@ export async function createParkingReport(reporterId: string, input: {
         confidence: Math.min(input.confidence, 75),
         payment: input.payment,
         policeRisk: input.policeRisk,
+        media: input.media,
         expiresAt: new Date(Date.now() + 30 * 60_000)
       }
     });
@@ -59,6 +63,8 @@ export async function createParkingReport(reporterId: string, input: {
   });
 
   await recordEvent({ userId: reporterId, score: 1, reason: "PARKING_REPORT_CREATED", parkingReportId: report.id });
+  await availabilityService.invalidate(input.parkingSpotId);
+  if (input.status === "AVAILABLE") await favoritesService.notifyZoneAvailability(reporterId, spot.zone, { id: spot.id, title: spot.title });
   emitRealtime("parking:reported", report, 'community');
   emitRealtime("parking:updated", { parkingSpotId: input.parkingSpotId, status: input.status }, spot.zone ? `zone:${spot.zone}` : undefined);
   return report;

@@ -85,6 +85,7 @@ export interface ParkingReport {
   confidence: number
   payment: 'FREE' | 'PAID' | null
   policeRisk: boolean | null
+  media: Array<{ url: string; type: 'image' }> | null
   expiresAt: string
   createdAt: string
   parkingSpot?: ParkingSpot
@@ -100,6 +101,7 @@ export interface CreateParkingReportInput {
   confidence?: number
   payment?: 'FREE' | 'PAID'
   policeRisk?: boolean
+  media?: Array<{ url: string; type: 'image' }>
 }
 
 export interface CommunityPost {

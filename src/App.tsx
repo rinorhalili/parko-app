@@ -19,6 +19,8 @@ import { useAuth } from './hooks/useAuth'
 import { changePassword, updateProfile } from './api/userService'
 import { listParkedHistory, type ParkedHistory } from './api/parkingHistoryService'
 import { logout } from './api/authService'
+import { listFavorites, removeParkingFavorite, saveParkingFavorite } from './api/favoritesService'
+import { prepareImageAttachment } from './imageAttachment'
 import type { User } from './api/types'
 import type { DrivingMatrixEntry } from './routingApi'
 import type { Destination, DrivingRoute, Filters, MapSettings, MapVariant, Parking, ParkingLoadStatus, ParkingPalette, ParkingPreference, RankedParking, Screen } from './types'
@@ -78,7 +80,7 @@ function AppIcon({ name, size = 20 }: { name: AppIconName; size?: number }) {
 }
 
 type ParkingReport = CommunityParkingReport
-type ParkingReportPatch = Pick<ParkingReport, 'availability' | 'payment' | 'policeRisk'>
+type ParkingReportPatch = Pick<ParkingReport, 'availability' | 'payment' | 'policeRisk' | 'media'>
 
 function reportAgeLabel(report?: ParkingReport) {
   if (!report) return ''
@@ -387,8 +389,28 @@ function ParkingTypeChooser({ value, counts, onChange }: { value: ParkingTypeFil
   )
 }
 
-function ParkingReportPanel({ parking, report, compact = false, onReport }: { parking: Parking; report?: ParkingReport; compact?: boolean; onReport: (parkingId: string, patch: ParkingReportPatch) => void }) {
+function ParkingReportPanel({ parking, report, compact = false, onReport }: { parking: Parking; report?: ParkingReport; compact?: boolean; onReport: (parkingId: string, patch: ParkingReportPatch) => Promise<void> }) {
+  const [photoError, setPhotoError] = useState('')
+  const [draft, setDraft] = useState<ParkingReportPatch>({})
+  const [submitting, setSubmitting] = useState(false)
+  useEffect(() => { setDraft({}); setPhotoError('') }, [parking.id])
   const reportSource = report ? `Raportuar ${reportAgeLabel(report)}` : parking.availabilitySource ? parking.availabilitySource : 'Pa raport komuniteti'
+  const availability = draft.availability ?? report?.availability
+  const payment = draft.payment ?? report?.payment
+  const policeRisk = draft.policeRisk ?? report?.policeRisk
+  const canSubmit = Boolean(draft.availability || draft.payment || draft.policeRisk !== undefined || draft.media?.length)
+  const attachPhoto = async (file?: File) => {
+    if (!file) return
+    try { const photo = await prepareImageAttachment(file); setPhotoError(''); setDraft((current) => ({ ...current, media: [photo] })) }
+    catch (error) { setPhotoError(error instanceof Error ? error.message : 'Fotoja nuk u përgatit.') }
+  }
+  const submit = async () => {
+    if (!canSubmit) return
+    setSubmitting(true); setPhotoError('')
+    try { await onReport(parking.id, draft); setDraft({}) }
+    catch (error) { setPhotoError(error instanceof Error ? error.message : 'Raportimi nuk u dërgua.') }
+    finally { setSubmitting(false) }
+  }
   return (
     <section className={`parking-report-panel ${compact ? 'parking-report-panel--compact' : ''}`} aria-label="Raportimet live per zonen e zgjedhur">
       <header className="parking-report-panel__header">
@@ -399,29 +421,34 @@ function ParkingReportPanel({ parking, report, compact = false, onReport }: { pa
         <strong>{reportMessage(parking, report)}</strong>
         <span>{reportSource} • {policeRiskLabel(report)}</span>
       </div>
+      {report?.media?.map((item) => <img className="community-post-photo" key={item.url} src={item.url} alt={`Foto e raportit për ${parking.name}`} loading="lazy" />)}
       <div className="quick-report-groups" aria-label="Raporto parkingun">
         <div className="quick-report-group">
           <p>Vendet</p>
           <div className="quick-report-grid">
-            <button className={report?.availability === 'free-spots' ? 'selected' : ''} onClick={() => onReport(parking.id, { availability: 'free-spots' })} aria-pressed={report?.availability === 'free-spots'}><span>+</span>Ka vende</button>
-            <button className={report?.availability === 'full' ? 'selected' : ''} onClick={() => onReport(parking.id, { availability: 'full' })} aria-pressed={report?.availability === 'full'}><span>0</span>S'ka vende</button>
+            <button className={availability === 'free-spots' ? 'selected' : ''} onClick={() => setDraft((current) => ({ ...current, availability: 'free-spots' }))} aria-pressed={availability === 'free-spots'}><span>+</span>Ka vende</button>
+            <button className={availability === 'full' ? 'selected' : ''} onClick={() => setDraft((current) => ({ ...current, availability: 'full' }))} aria-pressed={availability === 'full'}><span>0</span>S'ka vende</button>
           </div>
         </div>
         <div className="quick-report-group">
           <p>Pagesa</p>
           <div className="quick-report-grid">
-            <button className={(report?.payment === 'free' || parking.free) ? 'selected' : ''} onClick={() => onReport(parking.id, { payment: 'free' })} aria-pressed={report?.payment === 'free'}><span>€0</span>Falas</button>
-            <button className={report?.payment === 'paid' ? 'selected' : ''} onClick={() => onReport(parking.id, { payment: 'paid' })} aria-pressed={report?.payment === 'paid'}><span>€</span>Me pagesë</button>
+            <button className={(payment === 'free' || (!payment && parking.free)) ? 'selected' : ''} onClick={() => setDraft((current) => ({ ...current, payment: 'free' }))} aria-pressed={payment === 'free'}><span>€0</span>Falas</button>
+            <button className={payment === 'paid' ? 'selected' : ''} onClick={() => setDraft((current) => ({ ...current, payment: 'paid' }))} aria-pressed={payment === 'paid'}><span>€</span>Me pagesë</button>
           </div>
         </div>
         <div className="quick-report-group">
           <p>Siguria</p>
           <div className="quick-report-grid">
-            <button className={report?.policeRisk === true ? 'selected danger' : ''} onClick={() => onReport(parking.id, { policeRisk: true })} aria-pressed={report?.policeRisk === true}><span>!</span>Polici afër</button>
-            <button className={report?.policeRisk === false ? 'selected safe' : ''} onClick={() => onReport(parking.id, { policeRisk: false })} aria-pressed={report?.policeRisk === false}><span>✓</span>Qetë</button>
+            <button className={policeRisk === true ? 'selected danger' : ''} onClick={() => setDraft((current) => ({ ...current, policeRisk: true }))} aria-pressed={policeRisk === true}><span>!</span>Polici afër</button>
+            <button className={policeRisk === false ? 'selected safe' : ''} onClick={() => setDraft((current) => ({ ...current, policeRisk: false }))} aria-pressed={policeRisk === false}><span>✓</span>Qetë</button>
           </div>
         </div>
       </div>
+      <label className="image-attachment-control">📷 <span>{draft.media?.length ? 'Foto e bashkëngjitur' : 'Shto foto në raport'}</span><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; void attachPhoto(file) }} /></label>
+      {draft.media?.map((item) => <img className="community-post-photo" key={item.url} src={item.url} alt="Pamja paraprake e fotos së raportit" />)}
+      <button className="login-button" type="button" onClick={() => void submit()} disabled={!canSubmit || submitting}>{submitting ? 'Duke dërguar…' : 'Dërgo raportin'}</button>
+      {photoError && <small className="crowd-card__error" role="alert">{photoError}</small>}
     </section>
   )
 }
@@ -1139,7 +1166,7 @@ function SettingsView({ settings, preferredType, walkingMinutes, typeCounts, onC
   )
 }
 
-function DetailsView({ parking, report, onReport, route, routeLoading, routeError, destination, smartMatch, saved, userLocation, userLocationLive, userLocationAccuracy, mapSettings, onToggleSaved, onBack, onNavigate, onStreetView }: { parking: Parking; report?: ParkingReport; onReport: (parkingId: string, patch: ParkingReportPatch) => void; route: DrivingRoute | null; routeLoading: boolean; routeError: string; destination: Destination | null; smartMatch?: RankedParking; saved: boolean; userLocation: Parking['coordinates']; userLocationLive: boolean; userLocationAccuracy: number | null; mapSettings: MapSettings; onToggleSaved: () => void; onBack: () => void; onNavigate: () => void; onStreetView: () => void }) {
+function DetailsView({ parking, report, onReport, route, routeLoading, routeError, destination, smartMatch, saved, userLocation, userLocationLive, userLocationAccuracy, mapSettings, onToggleSaved, onBack, onNavigate, onStreetView }: { parking: Parking; report?: ParkingReport; onReport: (parkingId: string, patch: ParkingReportPatch) => Promise<void>; route: DrivingRoute | null; routeLoading: boolean; routeError: string; destination: Destination | null; smartMatch?: RankedParking; saved: boolean; userLocation: Parking['coordinates']; userLocationLive: boolean; userLocationAccuracy: number | null; mapSettings: MapSettings; onToggleSaved: () => void; onBack: () => void; onNavigate: () => void; onStreetView: () => void }) {
   const [reportOpen, setReportOpen] = useState(false)
   const routeMinutes = route ? Math.max(1, Math.ceil(route.durationSeconds / 60)) : parking.driveMinutes
   const routeDistance = route?.distanceMeters ?? parking.distanceMeters
@@ -1370,6 +1397,15 @@ export default function App() {
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle')
   const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null)
   const [streetViewParking, setStreetViewParking] = useState<Parking | null>(null)
+
+  useEffect(() => {
+    if (!user) return
+    let active = true
+    void listFavorites().then(({ parkingIds }) => {
+      if (active) setSavedParkingIds((current) => new Set([...current, ...parkingIds]))
+    }).catch(() => { /* Local favorites remain available while the API is unreachable. */ })
+    return () => { active = false }
+  }, [user?.id])
   const parkingSelectedByUserRef = useRef(false)
   const parkingDetailsAttemptedRef = useRef(new Set<string>())
   const onlineSearchRequestRef = useRef(0)
@@ -1733,34 +1769,29 @@ export default function App() {
   async function reportParking(parkingId: string, patch: ParkingReportPatch) {
     const parking = parkings.find((item) => item.id === parkingId)
     if (!parking) return
-    if (patch.availability) {
-      try {
-        const report = await submitParkingObservation(parking, { availability: patch.availability === 'free-spots' ? 'AVAILABLE' : 'OCCUPIED' })
-        setParkingReports((current) => {
-          const next = { ...current, [parkingId]: report }
-          saveParkingReports(next)
-          return next
-        })
-      } catch (error) {
-        setRouteNotice(error instanceof Error ? error.message : 'Raportimi nuk u dërgua.')
-        return
-      }
-    }
-    setParkingReports((current: Record<string, ParkingReport>) => {
-      const nextReport = { ...(current[parkingId] ?? { parkingId }), ...patch, updatedAt: Date.now() }
-      const next = { ...current, [parkingId]: nextReport }
-      saveParkingReports(next)
-      return next
-    })
+    const previous = parkingReports[parkingId]
+    try {
+      const report = await submitParkingObservation(parking, {
+        availability: patch.availability === 'free-spots' ? 'AVAILABLE' : patch.availability === 'full' ? 'OCCUPIED' : previous?.availability === 'free-spots' ? 'AVAILABLE' : previous?.availability === 'full' ? 'OCCUPIED' : undefined,
+        payment: patch.payment ?? previous?.payment,
+        policeRisk: patch.policeRisk ?? previous?.policeRisk,
+        media: patch.media,
+      })
+      setParkingReports((current) => { const next = { ...current, [parkingId]: report }; saveParkingReports(next); return next })
+    } catch (error) { setRouteNotice(error instanceof Error ? error.message : 'Raportimi nuk u dërgua.'); throw error }
   }
 
-  function toggleSavedParking() {
+  async function toggleSavedParking() {
+    const wasSaved = savedParkingIds.has(selected.id)
     setSavedParkingIds((current) => {
       const next = new Set(current)
-      if (next.has(selected.id)) next.delete(selected.id)
+      if (wasSaved) next.delete(selected.id)
       else next.add(selected.id)
       return next
     })
+    if (!user || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(selected.id)) return
+    try { if (wasSaved) await removeParkingFavorite(selected.id); else await saveParkingFavorite(selected.id) }
+    catch (error) { setSavedParkingIds((current) => { const next = new Set(current); if (wasSaved) next.add(selected.id); else next.delete(selected.id); return next }); setRouteNotice(error instanceof Error ? error.message : 'Parkingu nuk u ruajt.') }
   }
 
   function requestUserLocation(options: { recenter?: boolean } = {}) {
@@ -1978,7 +2009,7 @@ export default function App() {
         {screen === 'profile' && <ProfileView parkings={locatedParkings.filter((parking) => savedParkingIds.has(parking.id))} showDataSources={mapSettings.showDataSources} userLocation={userLocationInPrishtina ? activeUserLocation : undefined} user={user} onLogin={() => setShowLoginModal(true)} onHome={() => setScreen('home')} onProfile={() => undefined} onSettings={() => setScreen('settings')} onOpen={(parking) => { setSelected(parking); setDestination(null); setScreen('details') }} />}
         {screen === 'settings' && <SettingsView settings={mapSettings} preferredType={filters.type as ParkingTypeFilter} walkingMinutes={walkingMinutes} typeCounts={globalTypeCounts} onChange={(value) => setMapSettings(normalizedMapSettings(value))} onPreferredType={(type) => setFilters((current) => ({ ...current, type }))} onWalkingMinutes={setWalkingMinutes} onReset={() => { setMapSettings(DEFAULT_MAP_SETTINGS); setFilters(initialFilters); setWalkingMinutes(10) }} onLogin={() => setShowLoginModal(true)} onHome={() => setScreen('home')} onProfile={() => setScreen('profile')} onCommunity={() => setScreen('community')} />}
         {screen === 'community' && <Suspense fallback={<div className="app-loading" role="status">Duke hapur komunitetin…</div>}><CommunityView onBack={() => setScreen('settings')} onLogin={() => setShowLoginModal(true)} /></Suspense>}
-          {screen === 'details' && <DetailsView parking={currentSelected} report={parkingReports[currentSelected.id]} onReport={(id, patch) => { void reportParking(id, patch) }} route={route} routeLoading={routeLoading} routeError={routeError} destination={destination} smartMatch={selectedRankedParking} saved={savedParkingIds.has(currentSelected.id)} userLocation={activeUserLocation} userLocationLive={userLocationInPrishtina} userLocationAccuracy={locationAccuracy} mapSettings={mapSettings} onToggleSaved={toggleSavedParking} onBack={() => setScreen('home')} onNavigate={() => {
+          {screen === 'details' && <DetailsView parking={currentSelected} report={parkingReports[currentSelected.id]} onReport={reportParking} route={route} routeLoading={routeLoading} routeError={routeError} destination={destination} smartMatch={selectedRankedParking} saved={savedParkingIds.has(currentSelected.id)} userLocation={activeUserLocation} userLocationLive={userLocationInPrishtina} userLocationAccuracy={locationAccuracy} mapSettings={mapSettings} onToggleSaved={() => { void toggleSavedParking() }} onBack={() => setScreen('home')} onNavigate={() => {
             if (!userLocationInPrishtina) { setRouteNotice('Aktivizo lokacionin për të nisur navigimin.'); requestUserLocation({ recenter: false }); return }
             if (routeLoading) return
             if (!route) { setRouteNotice(''); setRouteRetry((value) => value + 1); return }

@@ -9,7 +9,7 @@ import { ok } from "../../utils/apiResponse.js";
 import { login, logout, me, refresh, register, requestPasswordReset, resetPassword } from "./service.js";
 import { loginSchema, registerSchema, resetPasswordSchema, resetRequestSchema } from "./validation.js";
 
-const cookieOptions = { httpOnly: true, secure: env.NODE_ENV === "production", sameSite: "strict" as const, path: "/api/v1/auth" };
+const cookieOptions = { httpOnly: true, secure: env.NODE_ENV === "production", sameSite: "strict" as const, path: "/api" };
 const isNativeClient = (header: string | undefined) => header === "native";
 
 function sendSession(res: Response, tokens: Awaited<ReturnType<typeof login>>, nativeClient: boolean, status = 200) {

@@ -35,10 +35,12 @@ For native scripts, `.env` needs `DATABASE_URL` pointing to `127.0.0.1:5433` and
 
 ## API
 
-All application endpoints live under `/api/v1`.
+All application endpoints live under `/api/v1`; `/api` is also supported for the documented, version-neutral contract.
 
 - `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`
 - `GET /parking`, `GET /parking/nearby`, `GET /parking/:id`, `POST /parking`
+- `GET /parking/:id/availability` returns calculated capacity, active reservations and current status (cached in Redis for 30 seconds).
+- `GET|PUT|DELETE /favorites` manages database-backed favorite parking/posts and zone availability alerts. When a user reports an available spot, alert subscribers for that zone receive a notification (at most once per 15 minutes per zone).
 - `POST /reports/parking`, `GET /reports/parking`
 - `GET /reservations/me`, `GET /reservations/parking/:parkingSpotId`, `POST /reservations`, `DELETE /reservations/:id`
 - `GET /posts`, `POST /posts`, `GET /posts/:id`, `PATCH /posts/:id`, `DELETE /posts/:id`
@@ -46,6 +48,9 @@ All application endpoints live under `/api/v1`.
 - `POST|DELETE /posts/:id/reactions`, `POST|DELETE /comments/:id/reactions`
 - `GET /notifications`, `PATCH /notifications/:id/read`, `POST /notifications/read-all`, `DELETE /notifications/:id`
 - `POST /moderation/reports`, moderator review endpoints, admin user and analytics endpoints
+- `GET /audit` is admin-only and paginated. `GET /health` reports API, PostgreSQL and Redis status without exposing configuration.
+
+The refactored backend keeps HTTP concerns in `src/controllers`, data queries in `src/repositories`, domain operations in `src/services` and legacy-compatible domain modules in `src/modules`. The OpenAPI document is at `src/docs/openapi.yaml`.
 
 Responses use:
 
@@ -56,7 +61,7 @@ Responses use:
 Errors use:
 
 ```json
-{ "success": false, "error": { "code": "VALIDATION_ERROR", "message": "..." } }
+{ "success": false, "error": { "code": "VALIDATION_ERROR", "message": "...", "requestId": "..." } }
 ```
 
 ## Realtime

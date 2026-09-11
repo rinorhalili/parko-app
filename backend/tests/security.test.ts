@@ -8,6 +8,7 @@ const db = vi.hoisted(() => ({
   user: { findUnique: vi.fn(), findUniqueOrThrow: vi.fn(), update: vi.fn() },
   parkingSpot: { findMany: vi.fn(), count: vi.fn(), update: vi.fn(), findUnique: vi.fn() },
   adminAction: { create: vi.fn() },
+  auditLog: { create: vi.fn(), findMany: vi.fn() },
   $transaction: vi.fn(),
 }));
 vi.mock('../src/database/prisma.js', () => ({ prisma: db }));
@@ -58,7 +59,7 @@ describe('backend access and admin management', () => {
     const response = await request(app).patch('/admin/parking/spot').set('Authorization', auth()).send({ action: 'approve' });
     expect(response.status).toBe(200);
     expect(db.parkingSpot.update.mock.calls[0][0].data).toMatchObject({ status: 'UNKNOWN', reportedAt: null });
-    expect(db.adminAction.create).toHaveBeenCalled();
+    expect(db.auditLog.create).toHaveBeenCalled();
   });
   it('requires a reason before disabling parking', async () => {
     const response = await request(app).patch('/admin/parking/spot').set('Authorization', auth()).send({ action: 'disable' });

@@ -2,6 +2,7 @@ import type { ParkingStatus, ParkingType, Prisma } from "@prisma/client";
 import { prisma } from "../../database/prisma.js";
 import { notFound } from "../../utils/errors.js";
 import { effectiveStatus, publicParkingWhere } from './policy.js';
+import { parkingRepository } from "../../repositories/parking.repository.js";
 
 export type NearbyQuery = {
   lat: number;
@@ -56,12 +57,12 @@ export async function nearbyParking(query: NearbyQuery) {
 }
 
 export async function listParking(page = 0) {
-  const spots = await prisma.parkingSpot.findMany({ where: publicParkingWhere, orderBy: { id: 'asc' }, take: 200, skip: page * 200 });
+  const spots = await parkingRepository.listPublic(page, 200);
   return spots.map((spot) => effectiveStatus(spot));
 }
 
 export async function createParking(ownerId: string, input: Omit<Prisma.ParkingSpotUncheckedCreateInput, "ownerId" | "geoPoint">) {
-  const spot = await prisma.parkingSpot.create({ data: { ...input, ownerId } });
+  const spot = await parkingRepository.create({ ...input, ownerId });
   await prisma.$executeRaw`
     UPDATE "ParkingSpot"
     SET "geoPoint" = ST_SetSRID(ST_MakePoint(${spot.longitude}, ${spot.latitude}), 4326)::geography
@@ -71,7 +72,7 @@ export async function createParking(ownerId: string, input: Omit<Prisma.ParkingS
 }
 
 export async function parkingById(id: string) {
-  const spot = await prisma.parkingSpot.findFirst({ where: { id, ...publicParkingWhere }, include: { reports: { where: { expiresAt: { gt: new Date() } }, orderBy: { createdAt: "desc" }, take: 10 } } });
+  const spot = await parkingRepository.findPublic(id);
   if (!spot) throw notFound("Parking spot not found");
   return effectiveStatus(spot);
 }
