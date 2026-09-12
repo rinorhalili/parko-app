@@ -573,9 +573,11 @@ function HomeView({
   const [longPressLocation, setLongPressLocation] = useState<{ lat: number; lng: number } | null>(null)
   const controlsRef = useRef<HTMLDivElement>(null)
   const sheetRef = useRef<HTMLElement>(null)
+  const previewSheetRef = useRef<HTMLElement>(null)
   const destinationSheetStateRef = useRef<SheetState | null>(null)
   const sheetGestureRef = useRef({ pointerId: -1, startY: 0, startedAt: 0, dragging: false })
   const sheetGestureCleanupRef = useRef<(() => void) | null>(null)
+  const previewSheetGestureRef = useRef({ pointerId: -1, startY: 0, startedAt: 0, dragging: false })
   const suppressSheetClickRef = useRef(false)
   const previewSwipeRef = useRef({ pointerId: -1, startX: 0, startY: 0 })
   const selectedMatch = rankedParkings.find((match) => match.parking.id === selected.id)
@@ -667,6 +669,42 @@ function HomeView({
     document.addEventListener('pointerup', finish)
     document.addEventListener('pointercancel', finish)
     sheetGestureCleanupRef.current = cleanup
+  }
+
+  const handlePreviewSheetPointerDown = (event: React.PointerEvent<HTMLElement>) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    previewSheetGestureRef.current = { pointerId: event.pointerId, startY: event.clientY, startedAt: performance.now(), dragging: false }
+    const move = (pointerEvent: PointerEvent) => {
+      const gesture = previewSheetGestureRef.current
+      if (gesture.pointerId !== pointerEvent.pointerId) return
+      const deltaY = Math.max(0, pointerEvent.clientY - gesture.startY)
+      if (!gesture.dragging && deltaY < 7) return
+      gesture.dragging = true
+      previewSheetRef.current?.style.setProperty('--sheet-drag-y', `${deltaY}px`)
+      if (pointerEvent.cancelable) pointerEvent.preventDefault()
+    }
+    const cleanup = () => {
+      document.removeEventListener('pointermove', move)
+      document.removeEventListener('pointerup', finish)
+      document.removeEventListener('pointercancel', finish)
+    }
+    const finish = (pointerEvent: PointerEvent) => {
+      const gesture = previewSheetGestureRef.current
+      if (gesture.pointerId !== pointerEvent.pointerId) return
+      const deltaY = Math.max(0, pointerEvent.clientY - gesture.startY)
+      const elapsed = Math.max(1, performance.now() - gesture.startedAt)
+      const velocity = deltaY / elapsed
+      previewSheetRef.current?.style.removeProperty('--sheet-drag-y')
+      previewSheetGestureRef.current.pointerId = -1
+      cleanup()
+      if (gesture.dragging && (deltaY >= 90 || velocity >= .5)) {
+        subtleHaptic()
+        onCloseParkingPreview()
+      }
+    }
+    document.addEventListener('pointermove', move, { passive: false })
+    document.addEventListener('pointerup', finish)
+    document.addEventListener('pointercancel', finish)
   }
 
   const startPreviewSwipe = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -891,8 +929,8 @@ function HomeView({
       </div>
 
       {parkingPreviewOpen && !destination && (
-        <section className="parking-preview-sheet" aria-label={`Parkingu i zgjedhur: ${selected.name}`}>
-          <div className="parking-preview-sheet__handle" />
+        <section ref={previewSheetRef} className="parking-preview-sheet" aria-label={`Parkingu i zgjedhur: ${selected.name}`}>
+          <div className="parking-preview-sheet__handle" onPointerDown={handlePreviewSheetPointerDown} />
           <header>
             <span><small>{parkingTypeLabel(selected)}</small><strong>{selected.name}</strong></span>
             <button onClick={onCloseParkingPreview} aria-label="Mbyll parkingun e zgjedhur">×</button>
@@ -1109,7 +1147,7 @@ function SettingsView({ settings, preferredType, walkingMinutes, typeCounts, onC
       <StatusBar />
       <header className="settings-header">
         <div><small>Parko</small><h1>Cilësimet e hartës</h1><p>Personalizo dukshmërinë pa ndryshuar të dhënat.</p></div>
-        <button onClick={onReset}>Rivendos</button>
+        <button className="settings-reset-button" onClick={onReset} aria-label="Rivendos cilësimet e hartës dhe filtrat"><AppIcon name="recenter" size={16} /> Rivendos</button>
       </header>
       <main className="settings-content">
         <section className="settings-section">
@@ -1157,6 +1195,7 @@ function SettingsView({ settings, preferredType, walkingMinutes, typeCounts, onC
           <div className="settings-section__heading"><span><small>Llogaria</small><h2>Profili yt</h2></span></div>
           <button className="settings-login-button" onClick={onCommunity}><span><strong>Komuniteti dhe njoftimet</strong><small>Postime dhe njoftime nga llogaria jote.</small></span><b>›</b></button>
           <button className="settings-login-button" onClick={onLogin}><span><strong>Hyr ose regjistrohu</strong><small>Ruaj preferencat dhe parkingjet e tua.</small></span><b>›</b></button>
+          <a className="settings-login-button settings-login-button--link" href="/privacy"><span><strong>Politika e privatësisë</strong></span><b>›</b></a>
         </section>
 
         <p className="settings-data-note"><b>Pa zona të rreme.</b> Mbushja e plotë përdoret vetëm kur OpenStreetMap ka kufij realë. Parkingjet me vetëm një koordinatë mbeten pika, por mund të shfaqen më të mëdha.</p>
@@ -1242,6 +1281,7 @@ function DetailsView({ parking, report, onReport, route, routeLoading, routeErro
           <SpotVouching parking={parking} />
           <LeavingButton parking={parking} />
           <div className="report-control-row report-control-row--details">
+            <span className="report-control-label">Diçka nuk shkon me këtë parking?</span>
             <button
               className={`report-warning-button ${reportOpen ? 'report-warning-button--active' : ''}`}
               onClick={() => setReportOpen((value) => !value)}

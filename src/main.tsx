@@ -23,8 +23,9 @@ if ('serviceWorker' in navigator) {
   })
 }
 
-type AppMode = 'app' | 'dashboard'
+type AppMode = 'app' | 'dashboard' | 'privacy'
 const AdminDashboard = lazy(() => import('./AdminDashboard'))
+const PrivacyPolicy = lazy(() => import('./PrivacyPolicy'))
 
 declare global {
   interface Window {
@@ -35,7 +36,7 @@ declare global {
 function resolveInitialMode(): AppMode {
   const params = new URLSearchParams(window.location.search)
   const urlMode = params.get('view')
-  if (urlMode === 'app' || urlMode === 'dashboard') {
+  if (urlMode === 'app' || urlMode === 'dashboard' || urlMode === 'privacy') {
     return urlMode
   }
 
@@ -45,6 +46,9 @@ function resolveInitialMode(): AppMode {
   }
 
   const pathname = window.location.pathname.replace(/\/+$/, '')
+  if (pathname.endsWith('/privacy')) {
+    return 'privacy'
+  }
   if (pathname.endsWith('/admin') || pathname.endsWith('/dashboard')) {
     return 'dashboard'
   }
@@ -62,7 +66,7 @@ function AppRouter() {
 
   return (
     <>
-      {mode === 'dashboard' ? <Suspense fallback={<div className="app-loading" role="status">Duke hapur panelin…</div>}><AdminDashboard /></Suspense> : <App />}
+      {mode === 'dashboard' ? <Suspense fallback={<div className="app-loading" role="status">Duke hapur panelin…</div>}><AdminDashboard /></Suspense> : mode === 'privacy' ? <Suspense fallback={<div className="app-loading" role="status">Duke hapur politikën…</div>}><PrivacyPolicy /></Suspense> : <App />}
     </>
   )
 }

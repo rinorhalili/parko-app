@@ -155,6 +155,23 @@ const styles = `
     color: var(--ink);
     font-size: 12px;
     font-weight: 850;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+  }
+
+  .admin-select {
+    min-height: 42px;
+    padding: 0 32px 0 14px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23526277' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center;
+    appearance: none;
+    -webkit-appearance: none;
+    color: var(--ink);
+    font-size: 12px;
+    font-weight: 700;
   }
 
   .admin-button--primary {
@@ -823,6 +840,7 @@ export default function AdminDashboard() {
   const [error, setError] = useState('')
   const [actionInProgress, setActionInProgress] = useState(false)
   const [activeTab, setActiveTab] = useState<NavKey>('queue')
+  const [tabCounts, setTabCounts] = useState<Record<NavKey, number>>({ queue: 0, map: 0, reports: 0, users: 0 })
   const [searchTerm, setSearchTerm] = useState('')
   const [page, setPage] = useState(0)
   const [total, setTotal] = useState(0)
@@ -853,6 +871,14 @@ export default function AdminDashboard() {
       const result = await listAdminParking(page, searchQuery, scopes[activeTab])
       if (version !== requestVersion.current) return
       setSubmissions(result.items.map(submissionFromSpot)); setTotal(result.total); setSelectedIndex(0)
+      const nextCounts: Partial<Record<NavKey, number>> = { [activeTab]: result.total }
+      try {
+        const countEntries = await Promise.all(sidebarItems.filter((item) => item.key !== activeTab).map(async (item) => [item.key, (await listAdminParking(0, '', scopes[item.key])).total] as const))
+        if (version !== requestVersion.current) return
+        countEntries.forEach(([key, count]) => { nextCounts[key] = count })
+      } catch { }
+      if (version !== requestVersion.current) return
+      setTabCounts((current) => ({ ...current, ...nextCounts }))
     } catch (reason) {
       if (version !== requestVersion.current) return
       if (reason instanceof ApiError && [401, 403].includes(reason.status)) { setIsAdmin(false); setNeedsLogin(reason.status === 401) }
@@ -911,7 +937,7 @@ export default function AdminDashboard() {
             <h1>Menaxhimi i parkimeve</h1>
           </div>
           <div className="admin-actions" aria-label="Veprime të adminit">
-            <a className="admin-button" href="?view=app">Harta</a><button className="admin-button" onClick={() => { void logout().finally(() => { setIsAdmin(false); setNeedsLogin(true) }) }}>Dil</button>
+            <a className="admin-button" href="?view=app" target="_blank" rel="noopener noreferrer">Harta</a><button className="admin-button" onClick={() => { void logout().finally(() => { setIsAdmin(false); setNeedsLogin(true) }) }}>Dil</button>
             <button className="admin-button admin-button--primary" type="button" onClick={() => void loadPendingSubmissions()} disabled={isLoading || actionInProgress}>{isLoading ? 'Duke ngarkuar…' : 'Rifresko'}</button>
           </div>
         </header>
@@ -929,7 +955,7 @@ export default function AdminDashboard() {
           <aside className="admin-sidebar">
             <nav className="nav-list" aria-label="Navigimi i adminit">
               {sidebarItems.map((item) => (
-                <SidebarNavItem key={item.key} label={item.label} count={activeTab === item.key ? total : 0} active={activeTab === item.key} onClick={() => { setPage(0); setActiveTab(item.key) }} />
+                <SidebarNavItem key={item.key} label={item.label} count={tabCounts[item.key]} active={activeTab === item.key} onClick={() => { setPage(0); setActiveTab(item.key) }} />
               ))}
             </nav>
 

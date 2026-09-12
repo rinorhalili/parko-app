@@ -13,7 +13,7 @@
   --limited: #ff9f43;
   --danger: #ff5a5f;
   --ink: #0d1b2a;
-  --muted: #65758b;
+  --muted: #5a6b82;
   --line: #e2e8f0;
   --surface: #fff;
   --surface-soft: #f4f7fb;
@@ -33,6 +33,7 @@
 }
 
 * {
+  scrollbar-width: none;
   scroll-behavior: smooth;
   box-sizing: border-box;
 }
@@ -917,7 +918,8 @@ input:focus-visible {
   background: rgba(255, 255, 255, .96);
   box-shadow: 0 6px 18px rgba(13, 27, 42, .08);
   backdrop-filter: blur(10px);
-  max-height: calc(100dvh - 250px);
+  max-height: calc(100dvh - 280px);
+  animation: sheet-rise 220ms ease;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -948,6 +950,7 @@ input:focus-visible {
   font-size: 10px;
   font-weight: 900;
   white-space: nowrap;
+  transition: transform 140ms ease;
 }
 
 .map-action-button span {
@@ -1046,15 +1049,20 @@ input:focus-visible {
 
 .filter-section-label { margin: 11px 2px 0; color: #7a889a; font-size: 9px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
 .filter-chip-grid { margin-top: 6px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-.filter-chip-grid button { min-height: 44px; padding: 0 9px; border: 1px solid #e2e8f0; border-radius: 12px; background: #f7f9fc; color: #526277; font-size: 9px; font-weight: 850; }
+.filter-chip-grid button { min-height: 44px; padding: 0 9px; border: 1px solid #e2e8f0; border-radius: 12px; background: #f7f9fc; color: #526277; font-size: 9px; font-weight: 850; transition: transform 140ms ease; }
 .filter-chip-grid button.selected { border-color: #8db4ff; background: #edf4ff; color: #1749b6; }
 .clear-filters-button { width: 100%; min-height: 44px; margin-top: 7px; background: transparent; color: var(--primary); font-size: 10px; font-weight: 900; }
 
 .report-control-row {
-  margin-top: 8px;
-  display: flex;
-  justify-content: flex-end;
+     margin: 15px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    flex-direction: column;
 }
+
+.report-control-label { font-size: 11px; font-weight: 700; color: var(--muted); }
 
 .report-warning-button {
   min-width: 104px;
@@ -1210,17 +1218,22 @@ input:focus-visible {
 .screen--parking-preview .map-canvas--home .leaflet-bottom { bottom: 352px; }
 
 .parking-preview-sheet {
+  --sheet-drag-y: 0px;
   position: absolute;
   z-index: var(--z-sheet);
   left: 0;
   right: 0;
-  bottom: 78px;
+  bottom: 70px;
   height: 360px;
   max-height: calc(100% - 132px);
   padding: 9px 20px 14px;
   border-radius: 28px 28px 0 0;
   background: #fff;
   box-shadow: var(--shadow-sheet);
+  transform: translate3d(0, var(--sheet-drag-y), 0);
+  transition: transform 190ms ease;
+  animation: sheet-rise 220ms ease;
+  will-change: transform;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
@@ -1517,6 +1530,7 @@ input:focus-visible {
   gap: 5px;
   font-size: 11px;
   font-weight: 700;
+  transition: transform 140ms ease;
 }
 
 .bottom-nav__item span { font-size: 19px; }
@@ -1547,6 +1561,7 @@ input:focus-visible {
 .settings-header h1 { margin: 3px 0 4px; font-size: 22px; }
 .settings-header p { margin: 0; color: var(--muted); font-size: 9px; font-weight: 700; }
 .settings-header > button { min-width: 72px; min-height: 44px; padding: 0 10px; border-radius: 14px; background: var(--primary-soft); color: var(--primary); font-size: 10px; font-weight: 900; }
+.settings-reset-button { display: inline-flex; align-items: center; gap: 6px; }
 .settings-content { position: absolute; top: 154px; right: 0; bottom: 78px; left: 0; padding: 14px 14px 28px; overflow-y: auto; overscroll-behavior: contain; }
 .settings-section { margin-bottom: 12px; padding: 13px; border: 1px solid #dde5ef; border-radius: 19px; background: #fff; box-shadow: 0 5px 16px rgba(13, 27, 42, .045); }
 .settings-section__heading { min-height: 38px; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
@@ -2001,7 +2016,7 @@ input:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+  *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }
 
 .parking-report-panel {
@@ -2460,9 +2475,14 @@ input:focus-visible {
 .modal-loading { position: fixed; z-index: 3000; inset: 0; background: rgba(238,243,248,.88); }
 
 /* Native-web mobile interactions */
+@keyframes sheet-rise {
+  from { transform: translate3d(0, 24px, 0); opacity: 0; }
+  to { transform: translate3d(0, 0, 0); opacity: 1; }
+}
+
 html,
 body,
-#root { min-height: 100%; overflow-x: hidden; overscroll-behavior-x: none; }
+#root { position: relative; min-height: 100%; overflow-x: hidden; overscroll-behavior-x: none; }
 
 .home-sheet {
   --sheet-drag-y: 0px;
@@ -2524,8 +2544,9 @@ body,
 .stop-confirmation button { min-height: 46px; border-radius: 14px; background: #edf2f7; color: #536276; font-size: 10px; font-weight: 900; }
 .stop-confirmation button.danger { background: #ffebec; color: #bd3137; }
 
-.settings-section--account { padding-bottom: 12px; }
+.settings-section--account { display: flex; flex-direction: column; gap: 8px; padding-bottom: 12px; }
 .settings-login-button { width: 100%; min-height: 58px; padding: 8px 12px; border-radius: 14px; background: #eef4ff; color: #214cad; display: flex; align-items: center; justify-content: space-between; text-align: left; }
+.settings-login-button--link { text-decoration: none; background: #f4f7fb; color: var(--ink); }
 .settings-login-button > span { display: grid; gap: 3px; }
 .settings-login-button strong { font-size: 11px; }
 .settings-login-button small { color: #607492; font-size: 8px; font-weight: 700; }
@@ -2590,7 +2611,7 @@ body,
   .search-sheet-header strong { font-size: 12px; }
   .search-sheet-header button { width: 44px; height: 44px; border-radius: 50%; background: #eef2f7; color: #607086; font-size: 20px; }
   .screen--top-panel-open .map-action-row { visibility: hidden; }
-  .smart-planner { max-height: calc(100dvh - 190px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow-y: auto; overscroll-behavior: contain; }
+  .smart-planner { max-height: calc(100dvh - 190px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); animation: sheet-rise 220ms ease; overflow-y: auto; overscroll-behavior: contain; }
 }
 
 @media (max-width: 340px) {
@@ -2611,7 +2632,7 @@ body,
   --available: #16a66c;
   --available-soft: #e8f7f0;
   --ink: #102033;
-  --muted: #6d7b8d;
+  --muted: #62748c;
   --line: #e7ebf0;
   --surface-soft: #f5f7fa;
   --radius-sm: 10px;
@@ -2845,14 +2866,16 @@ body { background: #edf1f5; }
   .map-context-menu { bottom: calc(86px + env(safe-area-inset-bottom)); }
   .screen--top-panel-open .map-action-row { visibility: hidden; }
   .smart-planner {
-    position: fixed;
+    position: absolute;
     z-index: 45;
     left: 0;
     right: 0;
     bottom: calc(72px + env(safe-area-inset-bottom));
     max-height: calc(100dvh - 118px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     margin: 0;
-    padding: 16px 16px 18px;
+    padding: 16px 16px 32px;
     border-radius: 24px 24px 0 0;
   }
   .smart-planner::before { content: ''; width: 46px; height: 5px; margin: -8px auto 10px; border-radius: 999px; background: #cbd4df; display: block; }
@@ -2867,7 +2890,7 @@ body { background: #edf1f5; }
   .sheet-primary-actions .button,
   .parking-preview-actions .button { font-size: 8px; }
 }
-.app-feedback { position: fixed; z-index: 1600; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(92vw, 500px); display: flex; align-items: center; gap: 8px; padding: 12px; border-radius: 16px; background: #102033; color: white; box-shadow: 0 4px 18px #10203330; font-size: 14px; }
+.app-feedback { position: absolute; z-index: 1600; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(92vw, 500px); display: flex; align-items: center; gap: 8px; padding: 12px; border-radius: 16px; background: #102033; color: white; box-shadow: 0 4px 18px #10203330; font-size: 14px; }
 .app-feedback button { min-width: 44px; min-height: 44px; border: 0; border-radius: 10px; background: #fff; color: #102033; padding: 8px; }
 /* Community media and saved-content controls. */
 .community-post-photo {
