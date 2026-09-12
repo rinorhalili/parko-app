@@ -1,67 +1,80 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import L from 'leaflet'
-import Login from './Login'
-import { getAccessToken, restoreSession, ApiError } from './api/client'
-import { me, logout } from './api/authService'
-import { listAdminParking, updateAdminParkingStatus } from './api/adminService'
+import { useCallback, useEffect, useRef, useState } from "react";
+import L from "leaflet";
+import Login from "./Login";
+import { getAccessToken, restoreSession, ApiError } from "./api/client";
+import { me, logout } from "./api/authService";
+import { listAdminParking, updateAdminParkingStatus } from "./api/adminService";
 
-type ParkingCategory = 'public' | 'street' | 'prishtina' | 'private'
-type NavKey = 'queue' | 'map' | 'reports' | 'users'
-type RiskLevel = 'low' | 'medium' | 'high'
+type ParkingCategory = "public" | "street" | "prishtina" | "private";
+type NavKey = "queue" | "map" | "reports" | "users";
+type RiskLevel = "low" | "medium" | "high";
 
 type SpotSubmission = {
-  id: string
-  anonymousId: string
-  submittedAt: string
-  city: string
-  address: string
-  category: ParkingCategory
-  proposedPrice: number | null
-  lat: number
-  lng: number
-  notes: string
-  riskLevel: RiskLevel
-  communityVotes: number | null
-  duplicateSignals: number
-  reviewState: string
-}
+  id: string;
+  anonymousId: string;
+  submittedAt: string;
+  city: string;
+  address: string;
+  category: ParkingCategory;
+  proposedPrice: number | null;
+  lat: number;
+  lng: number;
+  notes: string;
+  riskLevel: RiskLevel;
+  communityVotes: number | null;
+  duplicateSignals: number;
+  reviewState: string;
+};
 
 type ParkingSpotRow = {
-  id: string
-  ownerId: string | null
-  title: string
-  description: string | null
-  address: string | null
-  zone: string | null
-  type: 'STREET' | 'GARAGE' | 'LOT' | 'PRIVATE' | 'ACCESSIBLE'
-  capacity: number | null
-  latitude: number
-  longitude: number
-  status: string
-  createdAt: string
-  verifiedAt: string | null
-}
+  id: string;
+  ownerId: string | null;
+  title: string;
+  description: string | null;
+  address: string | null;
+  zone: string | null;
+  type: "STREET" | "GARAGE" | "LOT" | "PRIVATE" | "ACCESSIBLE";
+  capacity: number | null;
+  latitude: number;
+  longitude: number;
+  status: string;
+  createdAt: string;
+  verifiedAt: string | null;
+};
 
 const sidebarItems: Array<{ key: NavKey; label: string }> = [
-  { key: 'queue', label: 'Në pritje' },
-  { key: 'map', label: 'Të gjitha parkimet' },
-  { key: 'reports', label: 'Të çaktivizuara' },
-]
-const scopes: Record<NavKey, string> = { queue: 'pending', map: 'all', reports: 'disabled', users: 'all' }
+  { key: "queue", label: "Në pritje" },
+  { key: "map", label: "Të gjitha parkimet" },
+  { key: "reports", label: "Të çaktivizuara" },
+];
+const scopes: Record<NavKey, string> = {
+  queue: "pending",
+  map: "all",
+  reports: "disabled",
+  users: "all",
+};
 const rejectionReasons = [
-  'Lokacion i dyfishuar',
-  'Nuk verifikohet në hartë',
-  'Çmimi nuk duket realist',
-  'Qasje private pa leje',
-  'Rrugë e rrezikshme',
-]
+  "Lokacion i dyfishuar",
+  "Nuk verifikohet në hartë",
+  "Çmimi nuk duket realist",
+  "Qasje private pa leje",
+  "Rrugë e rrezikshme",
+];
 
-const categoryMeta: Record<ParkingCategory, { label: string; short: string; color: string; soft: string }> = {
-  public: { label: 'Publik', short: 'PUB', color: '#16a66c', soft: '#e8f7f0' },
-  street: { label: 'Në rrugë', short: 'RR', color: '#f59e0b', soft: '#fff5df' },
-  prishtina: { label: 'Prishtina Parking', short: 'PP', color: '#246bfd', soft: '#eef4ff' },
-  private: { label: 'Privat', short: 'PRI', color: '#7c3aed', soft: '#f2edff' },
-}
+const categoryMeta: Record<
+  ParkingCategory,
+  { label: string; short: string; color: string; soft: string }
+> = {
+  public: { label: "Publik", short: "PUB", color: "#16a66c", soft: "#e8f7f0" },
+  street: { label: "Në rrugë", short: "RR", color: "#f59e0b", soft: "#fff5df" },
+  prishtina: {
+    label: "Prishtina Parking",
+    short: "PP",
+    color: "#246bfd",
+    soft: "#eef4ff",
+  },
+  private: { label: "Privat", short: "PRI", color: "#7c3aed", soft: "#f2edff" },
+};
 
 const styles = `
   .admin-dashboard {
@@ -691,67 +704,142 @@ const styles = `
     .action-bar { display: grid; grid-template-columns: 1fr; }
     .reject-select { min-width: 0; }
   }
-`
+`;
 
 function formatPrice(price: number | null) {
-  if (price === null) return 'Çmimi i panjohur'
-  return price === 0 ? 'Falas' : `${price.toFixed(2)} €/orë`
+  if (price === null) return "Çmimi i panjohur";
+  return price === 0 ? "Falas" : `${price.toFixed(2)} €/orë`;
 }
 
 function submissionFromSpot(spot: ParkingSpotRow): SpotSubmission {
-  const category: ParkingCategory = spot.type === 'PRIVATE' ? 'private' : spot.type === 'STREET' ? 'street' : spot.zone?.toLowerCase().includes('prishtina parking') ? 'prishtina' : 'public'
-  const riskLevel: RiskLevel = spot.status === 'TEMPORARILY_UNAVAILABLE' ? 'high' : spot.type === 'PRIVATE' ? 'medium' : 'low'
+  const category: ParkingCategory =
+    spot.type === "PRIVATE"
+      ? "private"
+      : spot.type === "STREET"
+        ? "street"
+        : spot.zone?.toLowerCase().includes("prishtina parking")
+          ? "prishtina"
+          : "public";
+  const riskLevel: RiskLevel =
+    spot.status === "TEMPORARILY_UNAVAILABLE"
+      ? "high"
+      : spot.type === "PRIVATE"
+        ? "medium"
+        : "low";
   return {
     id: spot.id,
-    anonymousId: spot.ownerId ? `Përdorues ${spot.ownerId.slice(0, 8)}` : 'Dataset Parko',
-    submittedAt: new Intl.DateTimeFormat('sq-AL', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(spot.createdAt)),
-    city: 'Prishtina',
+    anonymousId: spot.ownerId
+      ? `Përdorues ${spot.ownerId.slice(0, 8)}`
+      : "Dataset Parko",
+    submittedAt: new Intl.DateTimeFormat("sq-AL", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(spot.createdAt)),
+    city: "Prishtina",
     address: spot.address ?? spot.title,
     category,
     proposedPrice: null,
     lat: spot.latitude,
     lng: spot.longitude,
-    notes: spot.description ?? 'Pa shënim nga raportuesi.',
+    notes: spot.description ?? "Pa shënim nga raportuesi.",
     riskLevel,
     communityVotes: spot.capacity,
-    reviewState: spot.status === 'TEMPORARILY_UNAVAILABLE' ? 'I çaktivizuar' : spot.ownerId && !spot.verifiedAt ? 'Në pritje' : 'I publikuar',
+    reviewState:
+      spot.status === "TEMPORARILY_UNAVAILABLE"
+        ? "I çaktivizuar"
+        : spot.ownerId && !spot.verifiedAt
+          ? "Në pritje"
+          : "I publikuar",
     duplicateSignals: 0,
-  }
+  };
 }
 
-function MetricCard({ label, value, meta, color }: { label: string; value: string; meta: string; color: string }) {
+function MetricCard({
+  label,
+  value,
+  meta,
+  color,
+}: {
+  label: string;
+  value: string;
+  meta: string;
+  color: string;
+}) {
   return (
-    <article className="metric-card" style={{ '--metric-color': color } as React.CSSProperties}>
-      <span>{label}<i /></span>
+    <article
+      className="metric-card"
+      style={{ "--metric-color": color } as React.CSSProperties}
+    >
+      <span>
+        {label}
+        <i />
+      </span>
       <strong>{value}</strong>
       <small>{meta}</small>
     </article>
-  )
+  );
 }
 
 function CategoryPill({ category }: { category: ParkingCategory }) {
-  const meta = categoryMeta[category]
+  const meta = categoryMeta[category];
   return (
-    <span className="category-pill" style={{ '--pill-color': meta.color, '--pill-soft': meta.soft } as React.CSSProperties}>
+    <span
+      className="category-pill"
+      style={
+        {
+          "--pill-color": meta.color,
+          "--pill-soft": meta.soft,
+        } as React.CSSProperties
+      }
+    >
       <i className="queue-dot" style={{ background: meta.color }} />
       {meta.label}
     </span>
-  )
+  );
 }
 
-function SidebarNavItem({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
+function SidebarNavItem({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
-    <button type="button" className={`nav-item ${active ? 'active' : ''}`} onClick={onClick}>
-      <span><span className="queue-dot" />{label}</span>
+    <button
+      type="button"
+      className={`nav-item ${active ? "active" : ""}`}
+      onClick={onClick}
+    >
+      <span>
+        <span className="queue-dot" />
+        {label}
+      </span>
       <span className="nav-count">{count}</span>
     </button>
-  )
+  );
 }
 
-function SubmissionCard({ submission, active, onSelect }: { submission: SpotSubmission; active: boolean; onSelect: () => void }) {
-  const meta = categoryMeta[submission.category]
+function SubmissionCard({
+  submission,
+  active,
+  onSelect,
+}: {
+  submission: SpotSubmission;
+  active: boolean;
+  onSelect: () => void;
+}) {
+  const meta = categoryMeta[submission.category];
   return (
-    <button type="button" className={`queue-card ${active ? 'active' : ''}`} onClick={onSelect}>
+    <button
+      type="button"
+      className={`queue-card ${active ? "active" : ""}`}
+      onClick={onSelect}
+    >
       <span className="queue-card__top">
         <span className="queue-card__identity">
           <span className="queue-avatar">{meta.short}</span>
@@ -769,162 +857,271 @@ function SubmissionCard({ submission, active, onSelect }: { submission: SpotSubm
         <span>{submission.id}</span>
       </span>
     </button>
-  )
+  );
 }
 
-function CommunityMapPreview({ items, selectedId, onSelect }: { items: SpotSubmission[]; selectedId: string; onSelect: (id: string) => void }) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const mapRef = useRef<L.Map | null>(null)
-  const layerRef = useRef<L.LayerGroup | null>(null)
-  const onSelectRef = useRef(onSelect)
-  onSelectRef.current = onSelect
+function CommunityMapPreview({
+  items,
+  selectedId,
+  onSelect,
+}: {
+  items: SpotSubmission[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const layerRef = useRef<L.LayerGroup | null>(null);
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
 
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return
+    if (!containerRef.current || mapRef.current) return;
     const map = L.map(containerRef.current, {
       center: [42.6629, 21.1655],
       zoom: 13,
       minZoom: 8,
       zoomControl: false,
       attributionControl: false,
-    })
-    L.control.zoom({ position: 'topright' }).addTo(map)
-    L.control.attribution({ position: 'bottomright', prefix: false }).addTo(map)
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    });
+    L.control.zoom({ position: "topright" }).addTo(map);
+    L.control
+      .attribution({ position: "bottomright", prefix: false })
+      .addTo(map);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
-      attribution: 'Harta: OpenStreetMap',
-    }).addTo(map)
-    layerRef.current = L.layerGroup().addTo(map)
-    mapRef.current = map
-    window.setTimeout(() => map.invalidateSize(), 0)
+      attribution: "Harta: OpenStreetMap",
+    }).addTo(map);
+    layerRef.current = L.layerGroup().addTo(map);
+    mapRef.current = map;
+    window.setTimeout(() => map.invalidateSize(), 0);
     return () => {
-      map.remove()
-      mapRef.current = null
-      layerRef.current = null
-    }
-  }, [])
+      map.remove();
+      mapRef.current = null;
+      layerRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
-    const map = mapRef.current
-    const layer = layerRef.current
-    if (!map || !layer) return
-    layer.clearLayers()
-    const bounds: L.LatLngTuple[] = []
+    const map = mapRef.current;
+    const layer = layerRef.current;
+    if (!map || !layer) return;
+    layer.clearLayers();
+    const bounds: L.LatLngTuple[] = [];
     items.forEach((item) => {
-      const meta = categoryMeta[item.category]
-      const active = item.id === selectedId
+      const meta = categoryMeta[item.category];
+      const active = item.id === selectedId;
       const icon = L.divIcon({
-        className: '',
-        html: `<span class="map-marker${active ? ' map-marker--active' : ''}" style="background:${meta.color}"></span>`,
+        className: "",
+        html: `<span class="map-marker${active ? " map-marker--active" : ""}" style="background:${meta.color}"></span>`,
         iconSize: active ? [34, 34] : [28, 28],
         iconAnchor: active ? [17, 17] : [14, 14],
-      })
-      const marker = L.marker([item.lat, item.lng], { icon, title: `${item.id} · ${meta.label}` })
-      marker.on('click', () => onSelectRef.current(item.id))
-      marker.bindTooltip(Object.assign(document.createElement('span'), { textContent: `${item.id} · ${meta.label}` }), { direction: 'top' })
-      marker.addTo(layer)
-      bounds.push([item.lat, item.lng])
-    })
-    if (bounds.length === 1) map.setView(bounds[0], 15, { animate: false })
-    if (bounds.length > 1) map.fitBounds(bounds, { padding: [28, 28], maxZoom: 14, animate: false })
-  }, [items, selectedId])
+      });
+      const marker = L.marker([item.lat, item.lng], {
+        icon,
+        title: `${item.id} · ${meta.label}`,
+      });
+      marker.on("click", () => onSelectRef.current(item.id));
+      marker.bindTooltip(
+        Object.assign(document.createElement("span"), {
+          textContent: `${item.id} · ${meta.label}`,
+        }),
+        { direction: "top" },
+      );
+      marker.addTo(layer);
+      bounds.push([item.lat, item.lng]);
+    });
+    if (bounds.length === 1) map.setView(bounds[0], 15, { animate: false });
+    if (bounds.length > 1)
+      map.fitBounds(bounds, { padding: [28, 28], maxZoom: 14, animate: false });
+  }, [items, selectedId]);
 
-  return <div ref={containerRef} className="community-map" aria-label="Harta e komunitetit me parkingje të raportuara" />
+  return (
+    <div
+      ref={containerRef}
+      className="community-map"
+      aria-label="Harta e komunitetit me parkingje të raportuara"
+    />
+  );
 }
 
 export default function AdminDashboard() {
-  const [submissions, setSubmissions] = useState<SpotSubmission[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [needsLogin, setNeedsLogin] = useState(false)
-  const [error, setError] = useState('')
-  const [actionInProgress, setActionInProgress] = useState(false)
-  const [activeTab, setActiveTab] = useState<NavKey>('queue')
-  const [tabCounts, setTabCounts] = useState<Record<NavKey, number>>({ queue: 0, map: 0, reports: 0, users: 0 })
-  const [searchTerm, setSearchTerm] = useState('')
-  const [page, setPage] = useState(0)
-  const [total, setTotal] = useState(0)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [success, setSuccess] = useState('')
-  const requestVersion = useRef(0)
-  useEffect(() => { const timer = setTimeout(() => { setSearchQuery(searchTerm.trim()); setPage(0) }, 250); return () => clearTimeout(timer) }, [searchTerm])
-  const [selectedIndex, setSelectedIndex] = useState(0)
-  const [rejectReason, setRejectReason] = useState(rejectionReasons[0])
+  const [submissions, setSubmissions] = useState<SpotSubmission[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [needsLogin, setNeedsLogin] = useState(false);
+  const [error, setError] = useState("");
+  const [actionInProgress, setActionInProgress] = useState(false);
+  const [activeTab, setActiveTab] = useState<NavKey>("queue");
+  const [tabCounts, setTabCounts] = useState<Record<NavKey, number>>({
+    queue: 0,
+    map: 0,
+    reports: 0,
+    users: 0,
+  });
+  const [searchTerm, setSearchTerm] = useState("");
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [success, setSuccess] = useState("");
+  const requestVersion = useRef(0);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchQuery(searchTerm.trim());
+      setPage(0);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [rejectReason, setRejectReason] = useState(rejectionReasons[0]);
 
   const loadPendingSubmissions = useCallback(async () => {
-    const version = ++requestVersion.current
-    setIsLoading(true)
-    setError('')
+    const version = ++requestVersion.current;
+    setIsLoading(true);
+    setError("");
     try {
-      if (!getAccessToken()) await restoreSession()
-      if (version !== requestVersion.current) return
+      if (!getAccessToken()) await restoreSession();
+      if (version !== requestVersion.current) return;
       if (!getAccessToken()) {
-        setNeedsLogin(true)
-        setIsAdmin(false)
-        return
+        setNeedsLogin(true);
+        setIsAdmin(false);
+        return;
       }
-      setNeedsLogin(false)
-      const user = await me()
-      if (version !== requestVersion.current) return
-      if (user.role !== 'ADMIN') throw new ApiError(403, 'Nuk ke leje administratori.')
-      setIsAdmin(true)
-      const result = await listAdminParking(page, searchQuery, scopes[activeTab])
-      if (version !== requestVersion.current) return
-      setSubmissions(result.items.map(submissionFromSpot)); setTotal(result.total); setSelectedIndex(0)
-      const nextCounts: Partial<Record<NavKey, number>> = { [activeTab]: result.total }
+      setNeedsLogin(false);
+      const user = await me();
+      if (version !== requestVersion.current) return;
+      if (user.role !== "ADMIN")
+        throw new ApiError(403, "Nuk ke leje administratori.");
+      setIsAdmin(true);
+      const result = await listAdminParking(
+        page,
+        searchQuery,
+        scopes[activeTab],
+      );
+      if (version !== requestVersion.current) return;
+      setSubmissions(result.items.map(submissionFromSpot));
+      setTotal(result.total);
+      setSelectedIndex(0);
+      const nextCounts: Partial<Record<NavKey, number>> = {
+        [activeTab]: result.total,
+      };
       try {
-        const countEntries = await Promise.all(sidebarItems.filter((item) => item.key !== activeTab).map(async (item) => [item.key, (await listAdminParking(0, '', scopes[item.key])).total] as const))
-        if (version !== requestVersion.current) return
-        countEntries.forEach(([key, count]) => { nextCounts[key] = count })
-      } catch { }
-      if (version !== requestVersion.current) return
-      setTabCounts((current) => ({ ...current, ...nextCounts }))
+        const countEntries = await Promise.all(
+          sidebarItems
+            .filter((item) => item.key !== activeTab)
+            .map(
+              async (item) =>
+                [
+                  item.key,
+                  (await listAdminParking(0, "", scopes[item.key])).total,
+                ] as const,
+            ),
+        );
+        if (version !== requestVersion.current) return;
+        countEntries.forEach(([key, count]) => {
+          nextCounts[key] = count;
+        });
+      } catch {}
+      if (version !== requestVersion.current) return;
+      setTabCounts((current) => ({ ...current, ...nextCounts }));
     } catch (reason) {
-      if (version !== requestVersion.current) return
-      if (reason instanceof ApiError && [401, 403].includes(reason.status)) { setIsAdmin(false); setNeedsLogin(reason.status === 401) }
-      setError(reason instanceof ApiError ? reason.message : reason instanceof Error ? reason.message : 'Paneli nuk u ngarkua.')
+      if (version !== requestVersion.current) return;
+      if (reason instanceof ApiError && [401, 403].includes(reason.status)) {
+        setIsAdmin(false);
+        setNeedsLogin(reason.status === 401);
+      }
+      setError(
+        reason instanceof ApiError
+          ? reason.message
+          : reason instanceof Error
+            ? reason.message
+            : "Paneli nuk u ngarkua.",
+      );
     } finally {
-      if (version === requestVersion.current) setIsLoading(false)
+      if (version === requestVersion.current) setIsLoading(false);
     }
-  }, [page, searchQuery, activeTab])
+  }, [page, searchQuery, activeTab]);
 
   useEffect(() => {
-    void loadPendingSubmissions()
-    return () => { requestVersion.current++ }
-  }, [loadPendingSubmissions])
+    void loadPendingSubmissions();
+    return () => {
+      requestVersion.current++;
+    };
+  }, [loadPendingSubmissions]);
 
-  const filteredSubmissions = submissions
+  const filteredSubmissions = submissions;
 
   useEffect(() => {
     if (selectedIndex > filteredSubmissions.length - 1) {
-      setSelectedIndex(Math.max(filteredSubmissions.length - 1, 0))
+      setSelectedIndex(Math.max(filteredSubmissions.length - 1, 0));
     }
-  }, [filteredSubmissions.length, selectedIndex])
+  }, [filteredSubmissions.length, selectedIndex]);
 
-  const selectedSubmission = filteredSubmissions[selectedIndex] ?? filteredSubmissions[0]
+  const selectedSubmission =
+    filteredSubmissions[selectedIndex] ?? filteredSubmissions[0];
 
   const selectById = (id: string) => {
-    const index = filteredSubmissions.findIndex((item) => item.id === id)
-    if (index >= 0) setSelectedIndex(index)
-  }
+    const index = filteredSubmissions.findIndex((item) => item.id === id);
+    if (index >= 0) setSelectedIndex(index);
+  };
 
-  const updateStatus = async (action: 'approve' | 'disable') => {
-    if (!selectedSubmission || !isAdmin || actionInProgress) return
-    if (action === 'disable' && !window.confirm(`Çaktivizo ${selectedSubmission.address}? Parkingu nuk do të rekomandohet. Arsyeja: ${rejectReason}`)) return
-    setActionInProgress(true)
-    setError('')
+  const updateStatus = async (action: "approve" | "disable") => {
+    if (!selectedSubmission || !isAdmin || actionInProgress) return;
+    if (
+      action === "disable" &&
+      !window.confirm(
+        `Çaktivizo ${selectedSubmission.address}? Parkingu nuk do të rekomandohet. Arsyeja: ${rejectReason}`,
+      )
+    )
+      return;
+    setActionInProgress(true);
+    setError("");
     try {
-      await updateAdminParkingStatus(selectedSubmission.id, action, action === 'disable' ? rejectReason : undefined)
-      setSuccess(action === 'approve' ? 'Parkingu u publikua. Disponueshmëria mbetet e panjohur.' : 'Parkingu u çaktivizua.')
-      await loadPendingSubmissions()
+      await updateAdminParkingStatus(
+        selectedSubmission.id,
+        action,
+        action === "disable" ? rejectReason : undefined,
+      );
+      setSuccess(
+        action === "approve"
+          ? "Parkingu u publikua. Disponueshmëria mbetet e panjohur."
+          : "Parkingu u çaktivizua.",
+      );
+      await loadPendingSubmissions();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Përditësimi dështoi.')
-    } finally { setActionInProgress(false) }
-  }
+      setError(
+        reason instanceof Error ? reason.message : "Përditësimi dështoi.",
+      );
+    } finally {
+      setActionInProgress(false);
+    }
+  };
 
-  if (isLoading && !isAdmin) return <div className="app-loading" role="status">Duke ngarkuar panelin…</div>
-  if (needsLogin) return <Login onClose={() => { setNeedsLogin(false); void loadPendingSubmissions() }} />
-  if (!isAdmin) return <div className="app-loading" role="alert">{error || 'Nuk ke leje administratori.'}<button onClick={() => void loadPendingSubmissions()}>Provo përsëri</button><a href="?view=app">Kthehu te harta</a></div>
+  if (isLoading && !isAdmin)
+    return (
+      <div className="app-loading" role="status">
+        Duke ngarkuar panelin…
+      </div>
+    );
+  if (needsLogin)
+    return (
+      <Login
+        onClose={() => {
+          setNeedsLogin(false);
+          void loadPendingSubmissions();
+        }}
+      />
+    );
+  if (!isAdmin)
+    return (
+      <div className="app-loading" role="alert">
+        {error || "Nuk ke leje administratori."}
+        <button onClick={() => void loadPendingSubmissions()}>
+          Provo përsëri
+        </button>
+        <a href="?view=app">Kthehu te harta</a>
+      </div>
+    );
 
   return (
     <div className="admin-dashboard">
@@ -937,25 +1134,92 @@ export default function AdminDashboard() {
             <h1>Menaxhimi i parkimeve</h1>
           </div>
           <div className="admin-actions" aria-label="Veprime të adminit">
-            <a className="admin-button" href="?view=app" target="_blank" rel="noopener noreferrer">Harta</a><button className="admin-button" onClick={() => { void logout().finally(() => { setIsAdmin(false); setNeedsLogin(true) }) }}>Dil</button>
-            <button className="admin-button admin-button--primary" type="button" onClick={() => void loadPendingSubmissions()} disabled={isLoading || actionInProgress}>{isLoading ? 'Duke ngarkuar…' : 'Rifresko'}</button>
+            <a
+              className="admin-button"
+              href="?view=app"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Harta
+            </a>
+            <button
+              className="admin-button"
+              onClick={() => {
+                void logout().finally(() => {
+                  setIsAdmin(false);
+                  setNeedsLogin(true);
+                });
+              }}
+            >
+              Dil
+            </button>
+            <button
+              className="admin-button admin-button--primary"
+              type="button"
+              onClick={() => void loadPendingSubmissions()}
+              disabled={isLoading || actionInProgress}
+            >
+              {isLoading ? "Duke ngarkuar…" : "Rifresko"}
+            </button>
           </div>
         </header>
-        {error && <div className="error-message" role="alert">{error}</div>}
+        {error && (
+          <div className="error-message" role="alert">
+            {error}
+          </div>
+        )}
         {success && <div role="status">{success}</div>}
 
         <section className="metrics-grid" aria-label="Statistikat kryesore">
-          <MetricCard label="Publike" value={String(submissions.filter((item) => item.category === 'public').length)} meta="Në këtë faqe" color={categoryMeta.public.color} />
-          <MetricCard label="Në rrugë" value={String(submissions.filter((item) => item.category === 'street').length)} meta="Në këtë faqe" color={categoryMeta.street.color} />
-          <MetricCard label="Prishtina Parking" value={String(submissions.filter((item) => item.category === 'prishtina').length)} meta="Zona zyrtare ose komunale" color={categoryMeta.prishtina.color} />
-          <MetricCard label="Private" value={String(submissions.filter((item) => item.category === 'private').length)} meta="Shfaqen me qasje të kufizuar" color={categoryMeta.private.color} />
+          <MetricCard
+            label="Publike"
+            value={String(
+              submissions.filter((item) => item.category === "public").length,
+            )}
+            meta="Në këtë faqe"
+            color={categoryMeta.public.color}
+          />
+          <MetricCard
+            label="Në rrugë"
+            value={String(
+              submissions.filter((item) => item.category === "street").length,
+            )}
+            meta="Në këtë faqe"
+            color={categoryMeta.street.color}
+          />
+          <MetricCard
+            label="Prishtina Parking"
+            value={String(
+              submissions.filter((item) => item.category === "prishtina")
+                .length,
+            )}
+            meta="Zona zyrtare ose komunale"
+            color={categoryMeta.prishtina.color}
+          />
+          <MetricCard
+            label="Private"
+            value={String(
+              submissions.filter((item) => item.category === "private").length,
+            )}
+            meta="Shfaqen me qasje të kufizuar"
+            color={categoryMeta.private.color}
+          />
         </section>
 
         <div className="admin-layout">
           <aside className="admin-sidebar">
             <nav className="nav-list" aria-label="Navigimi i adminit">
               {sidebarItems.map((item) => (
-                <SidebarNavItem key={item.key} label={item.label} count={tabCounts[item.key]} active={activeTab === item.key} onClick={() => { setPage(0); setActiveTab(item.key) }} />
+                <SidebarNavItem
+                  key={item.key}
+                  label={item.label}
+                  count={tabCounts[item.key]}
+                  active={activeTab === item.key}
+                  onClick={() => {
+                    setPage(0);
+                    setActiveTab(item.key);
+                  }}
+                />
               ))}
             </nav>
 
@@ -967,7 +1231,6 @@ export default function AdminDashboard() {
                 placeholder="Kërko lokacion ose ID"
                 aria-label="Kërko raportimet"
               />
-
             </div>
 
             <section className="queue-panel" aria-label="Radha e raportimeve">
@@ -977,88 +1240,160 @@ export default function AdminDashboard() {
               </div>
               <div className="queue-list">
                 {filteredSubmissions.length === 0 ? (
-                  <div className="queue-card"><b>{isLoading ? 'Duke ngarkuar…' : 'Nuk ka rezultate'}</b><small>{searchTerm ? 'Provo një emër ose rrugë tjetër.' : 'Nuk ka parkime në këtë kategori.'}</small></div>
-                ) : filteredSubmissions.map((submission, index) => (
-                  <SubmissionCard
-                    key={submission.id}
-                    submission={submission}
-                    active={index === selectedIndex}
-                    onSelect={() => setSelectedIndex(index)}
-                  />
-                ))}
+                  <div className="queue-card">
+                    <b>{isLoading ? "Duke ngarkuar…" : "Nuk ka rezultate"}</b>
+                    <small>
+                      {searchTerm
+                        ? "Provo një emër ose rrugë tjetër."
+                        : "Nuk ka parkime në këtë kategori."}
+                    </small>
+                  </div>
+                ) : (
+                  filteredSubmissions.map((submission, index) => (
+                    <SubmissionCard
+                      key={submission.id}
+                      submission={submission}
+                      active={index === selectedIndex}
+                      onSelect={() => setSelectedIndex(index)}
+                    />
+                  ))
+                )}
               </div>
               <div className="admin-actions">
-                <button className="admin-button" disabled={page === 0 || isLoading || actionInProgress} onClick={() => setPage((value) => value - 1)}>Para</button>
+                <button
+                  className="admin-button"
+                  disabled={page === 0 || isLoading || actionInProgress}
+                  onClick={() => setPage((value) => value - 1)}
+                >
+                  Para
+                </button>
                 <span>Faqja {page + 1}</span>
-                <button className="admin-button" disabled={(page + 1) * 50 >= total || isLoading || actionInProgress} onClick={() => setPage((value) => value + 1)}>Tjetër</button>
+                <button
+                  className="admin-button"
+                  disabled={
+                    (page + 1) * 50 >= total || isLoading || actionInProgress
+                  }
+                  onClick={() => setPage((value) => value + 1)}
+                >
+                  Tjetër
+                </button>
               </div>
             </section>
           </aside>
 
           <main className="admin-main">
             <div className="main-grid">
-              <section className="review-panel" aria-label="Detajet e raportimit">
-                {selectedSubmission && <span className="panel-kicker"><span className="queue-dot" />{selectedSubmission.id} · {selectedSubmission.reviewState}</span>}
-                {!selectedSubmission && <span className="panel-kicker">Nuk ka raportime në pritje</span>}
-                {selectedSubmission && <>
-                <div className="detail-title">
-                  <h2>{selectedSubmission.address}</h2>
-                  <span className="price-tag">{formatPrice(selectedSubmission.proposedPrice)}</span>
-                </div>
-                <div className="detail-meta">
-                  <CategoryPill category={selectedSubmission.category} />
-                  
-                </div>
+              <section
+                className="review-panel"
+                aria-label="Detajet e raportimit"
+              >
+                {selectedSubmission && (
+                  <span className="panel-kicker">
+                    <span className="queue-dot" />
+                    {selectedSubmission.id} · {selectedSubmission.reviewState}
+                  </span>
+                )}
+                {!selectedSubmission && (
+                  <span className="panel-kicker">
+                    Nuk ka raportime në pritje
+                  </span>
+                )}
+                {selectedSubmission && (
+                  <>
+                    <div className="detail-title">
+                      <h2>{selectedSubmission.address}</h2>
+                      <span className="price-tag">
+                        {formatPrice(selectedSubmission.proposedPrice)}
+                      </span>
+                    </div>
+                    <div className="detail-meta">
+                      <CategoryPill category={selectedSubmission.category} />
+                    </div>
 
-                <div className="detail-grid">
-                  <div className="detail-item">
-                    <small>Raportuesi</small>
-                    <strong>{selectedSubmission.anonymousId}</strong>
-                  </div>
-                  <div className="detail-item">
-                    <small>Koha</small>
-                    <strong>{selectedSubmission.submittedAt}</strong>
-                  </div>
-                  <div className="detail-item">
-                    <small>Kapaciteti</small>
-                    <strong>{selectedSubmission.communityVotes ?? 'I panjohur'}</strong>
-                  </div>
-                </div>
+                    <div className="detail-grid">
+                      <div className="detail-item">
+                        <small>Raportuesi</small>
+                        <strong>{selectedSubmission.anonymousId}</strong>
+                      </div>
+                      <div className="detail-item">
+                        <small>Koha</small>
+                        <strong>{selectedSubmission.submittedAt}</strong>
+                      </div>
+                      <div className="detail-item">
+                        <small>Kapaciteti</small>
+                        <strong>
+                          {selectedSubmission.communityVotes ?? "I panjohur"}
+                        </strong>
+                      </div>
+                    </div>
 
-                <section className="notes-panel">
-                  <h3>Shënim moderimi</h3>
-                  <p>{selectedSubmission.notes}</p>
-                </section>
-                </>}
-
-
+                    <section className="notes-panel">
+                      <h3>Shënim moderimi</h3>
+                      <p>{selectedSubmission.notes}</p>
+                    </section>
+                  </>
+                )}
               </section>
 
-              <section className="verification-panel" aria-label="Verifikimi në hartë">
+              <section
+                className="verification-panel"
+                aria-label="Verifikimi në hartë"
+              >
                 <section className="map-panel">
                   <div className="panel-header">
                     <h3>Harta Parko</h3>
-                    {selectedSubmission && <CategoryPill category={selectedSubmission.category} />}
+                    {selectedSubmission && (
+                      <CategoryPill category={selectedSubmission.category} />
+                    )}
                   </div>
-                  {selectedSubmission && <CommunityMapPreview items={filteredSubmissions} selectedId={selectedSubmission.id} onSelect={selectById} />}
+                  {selectedSubmission && (
+                    <CommunityMapPreview
+                      items={filteredSubmissions}
+                      selectedId={selectedSubmission.id}
+                      onSelect={selectById}
+                    />
+                  )}
                   <div className="map-caption">
-                    Kontrollo lokacionin dhe qasjen para publikimit. Miratimi nuk konfirmon vende të lira.
+                    Kontrollo lokacionin dhe qasjen para publikimit. Miratimi
+                    nuk konfirmon vende të lira.
                   </div>
                 </section>
               </section>
             </div>
 
             <div className="action-bar" aria-label="Vendimi i adminit">
-              <button className="admin-button admin-button--primary" type="button" onClick={() => void updateStatus('approve')} disabled={!selectedSubmission || actionInProgress || isLoading}>Mirato / aktivizo</button>
-              <select className="admin-select reject-select" value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} aria-label="Arsyeja e refuzimit">
-                {rejectionReasons.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
+              <button
+                className="admin-button admin-button--primary"
+                type="button"
+                onClick={() => void updateStatus("approve")}
+                disabled={!selectedSubmission || actionInProgress || isLoading}
+              >
+                Mirato / aktivizo
+              </button>
+              <select
+                className="admin-select reject-select"
+                value={rejectReason}
+                onChange={(event) => setRejectReason(event.target.value)}
+                aria-label="Arsyeja e refuzimit"
+              >
+                {rejectionReasons.map((reason) => (
+                  <option key={reason} value={reason}>
+                    {reason}
+                  </option>
+                ))}
               </select>
-              <button className="admin-button admin-button--danger" type="button" onClick={() => void updateStatus('disable')} disabled={!selectedSubmission || actionInProgress || isLoading}>Çaktivizo përkohësisht</button>
-              
+              <button
+                className="admin-button admin-button--danger"
+                type="button"
+                onClick={() => void updateStatus("disable")}
+                disabled={!selectedSubmission || actionInProgress || isLoading}
+              >
+                Çaktivizo përkohësisht
+              </button>
             </div>
           </main>
         </div>
       </div>
     </div>
-  )
+  );
 }

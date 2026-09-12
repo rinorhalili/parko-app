@@ -59,7 +59,7 @@ self.addEventListener('push', (event) => {
   event.waitUntil(self.registration.showNotification(payload.title ?? 'Parko', {
     body: payload.body ?? 'Kontrollo kohën e parkingut.',
     tag: payload.tag ?? 'parking-timer',
-    data: { url: payload.url ?? self.registration.scope },
+    data: { ...(payload.data ?? {}), url: payload.data?.url ?? payload.url ?? self.registration.scope },
   }))
 })
 

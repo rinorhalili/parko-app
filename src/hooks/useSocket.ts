@@ -9,6 +9,8 @@ type SocketOptions = {
   zone?: string
   onParkingUpdate?: (event: SocketEventMap['parking:updated']) => void
   onParkingReport?: (event: SocketEventMap['parking:reported']) => void
+  onReservationCreated?: (event: SocketEventMap['reservation:created']) => void
+  onReservationCancelled?: (event: SocketEventMap['reservation:cancelled']) => void
   onCommunityEvent?: (event: { type: 'post:new' | 'comment:new' | 'moderation:update'; payload: unknown }) => void
 }
 
@@ -45,6 +47,8 @@ export function useSocket(options: SocketOptions = {}) {
     socket.on('connect_error', () => setStatus('disconnected'))
     socket.on('parking:updated', (event: SocketEventMap['parking:updated']) => handlers.current.onParkingUpdate?.(event))
     socket.on('parking:reported', (event: SocketEventMap['parking:reported']) => handlers.current.onParkingReport?.(event))
+    socket.on('reservation:created', (event: SocketEventMap['reservation:created']) => handlers.current.onReservationCreated?.(event))
+    socket.on('reservation:cancelled', (event: SocketEventMap['reservation:cancelled']) => handlers.current.onReservationCancelled?.(event))
     for (const event of ['post:new', 'comment:new', 'moderation:update'] as const) {
       socket.on(event, (payload: unknown) => handlers.current.onCommunityEvent?.({ type: event, payload }))
     }

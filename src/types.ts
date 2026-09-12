@@ -4,6 +4,7 @@ export type MunicipalParkingCategory = 'residential' | 'commercial' | 'combined'
 export type MapCoordinate = { lat: number; lng: number }
 export type MapVariant = 'standard' | 'minimal'
 export type ParkingPalette = 'green' | 'price' | 'operator'
+export type MapMarkerFilter = 'all' | 'free' | 'paid' | 'municipal'
 
 export type MapSettings = {
   variant: MapVariant
@@ -113,6 +114,7 @@ export type Filters = {
   paidOnly: boolean
   evCharging: boolean
   accessible: boolean
+  mapMarkerFilter: MapMarkerFilter
 }
 
-export type Screen = 'home' | 'profile' | 'settings' | 'community' | 'details' | 'navigation' | 'walking'
+export type Screen = 'home' | 'profile' | 'settings' | 'community' | 'community-spots' | 'details' | 'navigation' | 'walking'

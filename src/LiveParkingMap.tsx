@@ -5,7 +5,7 @@ import 'leaflet.markercluster/dist/MarkerCluster.css'
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 import { PRISHTINA_CENTER, PRISHTINA_MAP_BOUNDS, USER_LOCATION, isWithinPrishtinaMap } from './parkingApi'
 import { accessPointIsEstimated, parkingAccessPoint } from './parkingGeometry'
-import type { Destination, DrivingRoute, MapSettings, MapVariant, Parking, ParkingLoadStatus, ParkingPalette } from './types'
+import type { Destination, DrivingRoute, MapMarkerFilter, MapSettings, MapVariant, Parking, ParkingLoadStatus, ParkingPalette } from './types'
 
 
 type MapMode = 'home' | 'details' | 'navigation' | 'walking'
@@ -117,6 +117,7 @@ export default function LiveParkingMap({
   userLocationLive = false,
   userLocationAccuracy = null,
   mapSettings = DEFAULT_MAP_SETTINGS,
+  markerFilter = 'all',
 }: {
   parkings: Parking[]
   selected: Parking
@@ -136,6 +137,7 @@ export default function LiveParkingMap({
   userLocationLive?: boolean
   userLocationAccuracy?: number | null
   mapSettings?: MapSettings
+  markerFilter?: MapMarkerFilter
 }) {
   // Availability is reflected on the parking cards; no locally fabricated
   // "leaving" pins are drawn on the map.
@@ -165,10 +167,13 @@ export default function LiveParkingMap({
   onManualMoveRef.current = onManualMove
   pickingDestinationRef.current = pickingDestination
   modeRef.current = mode
-  const visibleParkings = useMemo(
-    () => mode === 'navigation' || mode === 'walking' ? [selected] : parkings,
-    [mode, parkings, selected],
-  )
+  const visibleParkings = useMemo(() => {
+    const candidates = mode === 'navigation' || mode === 'walking' ? [selected] : parkings
+    if (markerFilter === 'free') return candidates.filter((parking) => parking.pricePerHour === 0)
+    if (markerFilter === 'paid') return candidates.filter((parking) => (parking.pricePerHour ?? 0) > 0)
+    if (markerFilter === 'municipal') return candidates.filter((parking) => parking.municipalManaged)
+    return candidates
+  }, [markerFilter, mode, parkings, selected])
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return

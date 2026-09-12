@@ -1,19 +1,19 @@
-import type { Parking } from './types'
+import type { Parking } from "./types";
 
 export const defaultParking: Parking = {
-  id: 'test-parking',
-  name: 'Test Parking',
-  zone: 'Prishtine',
-  address: 'Test address',
+  id: "test-parking",
+  name: "Test Parking",
+  zone: "Prishtine",
+  address: "Test address",
   capacity: 100,
   spaces: null,
-  status: 'unknown',
+  status: "unknown",
   pricePerHour: null,
   distanceMeters: 0,
   driveMinutes: 1,
-  confidence: 'high',
+  confidence: "high",
   updatedMinutesAgo: 0,
-  type: 'public',
+  type: "public",
   open24h: true,
   covered: false,
   cardPayment: false,
@@ -21,6 +21,6 @@ export const defaultParking: Parking = {
   accessible: false,
   free: false,
   coordinates: { lat: 42.66, lng: 21.16 },
-  access: 'public',
-  source: 'community',
-}
+  access: "public",
+  source: "community",
+};

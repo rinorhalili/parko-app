@@ -1,15 +1,19 @@
 import { z } from "zod";
 
+const turnstileTokenSchema = z.string().min(1).max(2048).optional();
+
 export const registerSchema = z.object({
   name: z.string().min(2).max(80),
   username: z.string().min(3).max(40).regex(/^[a-zA-Z0-9_]+$/),
   email: z.email(),
-  password: z.string().min(12).max(128)
+  password: z.string().min(12).max(128),
+  turnstileToken: turnstileTokenSchema
 });
 
 export const loginSchema = z.object({
   email: z.email(),
-  password: z.string().min(1)
+  password: z.string().min(1),
+  turnstileToken: turnstileTokenSchema
 });
 
 export const refreshSchema = z.object({

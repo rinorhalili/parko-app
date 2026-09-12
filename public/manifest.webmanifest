@@ -10,6 +10,8 @@
   "lang": "sq",
   "icons": [
     { "src": "icons/apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any" },
-    { "src": "icons/parko.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    { "src": "icons/parko.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" },
+    { "src": "icons/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
   ]
 }
