@@ -26,6 +26,7 @@ import { reportRoutes } from "./routes/report.routes.js";
 import { reservationRoutes } from "./routes/reservation.routes.js";
 import { userRoutes } from "./routes/user.routes.js";
 import { favoritesRoutes } from "./routes/favorites.routes.js";
+import { pushSubscriptionRoutes } from "./routes/push-subscription.routes.js";
 
 export function createApp() {
   const app = express();
@@ -71,6 +72,7 @@ export function createApp() {
   api.use(commentRoutes);
   api.use(reactionRoutes);
   api.use("/notifications", notificationRoutes);
+  api.use("/push-subscription", pushSubscriptionRoutes);
   api.use("/moderation", moderationRoutes);
   api.use("/admin", adminRoutes);
   api.use("/audit", auditRoutes);

@@ -1,6 +1,25 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ApiError } from './api/client'
 import { login, register } from './api/authService'
+
+type TurnstileWidgetId = string | number
+
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (container: HTMLElement, options: {
+        sitekey: string
+        callback: (token: string) => void
+        'expired-callback': () => void
+        'error-callback': () => void
+      }) => TurnstileWidgetId
+      reset: (widgetId?: TurnstileWidgetId) => void
+      remove: (widgetId: TurnstileWidgetId) => void
+    }
+  }
+}
+
+const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim()
 
 type AuthMode = 'login' | 'register'
 
@@ -19,6 +38,9 @@ export default function Login({ onClose }: LoginProps) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [turnstileToken, setTurnstileToken] = useState('')
+  const turnstileContainerRef = useRef<HTMLDivElement>(null)
+  const turnstileWidgetRef = useRef<TurnstileWidgetId | null>(null)
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -28,12 +50,61 @@ export default function Login({ onClose }: LoginProps) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [onClose])
 
+  useEffect(() => {
+    if (!turnstileSiteKey || !turnstileContainerRef.current) return
+
+    let cancelled = false
+    let retryTimer: number | undefined
+    let attempts = 0
+    const renderWidget = () => {
+      if (cancelled || !turnstileContainerRef.current) return
+      if (!window.turnstile) {
+        attempts += 1
+        if (attempts >= 100) {
+          setError('Verifikimi i sigurisë nuk u ngarkua. Rifresko faqen dhe provo përsëri.')
+          return
+        }
+        retryTimer = window.setTimeout(renderWidget, 50)
+        return
+      }
+      turnstileWidgetRef.current = window.turnstile.render(turnstileContainerRef.current, {
+        sitekey: turnstileSiteKey,
+        callback: (token) => setTurnstileToken(token),
+        'expired-callback': () => setTurnstileToken(''),
+        'error-callback': () => setTurnstileToken(''),
+      })
+    }
+
+    renderWidget()
+    return () => {
+      cancelled = true
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer)
+      if (turnstileWidgetRef.current !== null) window.turnstile?.remove(turnstileWidgetRef.current)
+      turnstileWidgetRef.current = null
+    }
+  }, [])
+
+  const resetTurnstile = () => {
+    setTurnstileToken('')
+    if (turnstileWidgetRef.current !== null) window.turnstile?.reset(turnstileWidgetRef.current)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
     if (!email || !password) {
       setError('Please fill in all fields')
+      return
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError('Ju lutem vendosni një adresë emaili të vlefshme.')
+      return
+    }
+
+    if (turnstileSiteKey && !turnstileToken) {
+      setError('Përfundo verifikimin e sigurisë para se të vazhdosh.')
       return
     }
 
@@ -54,7 +125,7 @@ export default function Login({ onClose }: LoginProps) {
     setIsLoading(true)
     try {
       if (mode === 'login') {
-        const tokens = await login({ email: email.trim(), password })
+        const tokens = await login({ email: email.trim(), password, ...(turnstileSiteKey ? { turnstileToken } : {}) })
         if (tokens.user.role === 'ADMIN') {
           const url = new URL(window.location.href)
           url.searchParams.set('view', 'dashboard')
@@ -67,13 +138,14 @@ export default function Login({ onClose }: LoginProps) {
           setError('Please add your name and username')
           return
         }
-        await register({ name: name.trim(), username: username.trim(), email: email.trim(), password })
+        await register({ name: name.trim(), username: username.trim(), email: email.trim(), password, ...(turnstileSiteKey ? { turnstileToken } : {}) })
         onClose()
       }
     } catch (authError) {
       setError(authError instanceof ApiError ? authError.message : 'Unable to reach the Parko server. Please try again.')
     } finally {
       setIsLoading(false)
+      if (turnstileSiteKey) resetTurnstile()
     }
   }
 
@@ -331,6 +403,8 @@ export default function Login({ onClose }: LoginProps) {
               required
             />
           </div>
+
+          {turnstileSiteKey && <div ref={turnstileContainerRef} aria-label="Verifikimi i sigurisë" />}
 
           <div className="form-group">
             <label className="form-label" htmlFor="password">Password</label>

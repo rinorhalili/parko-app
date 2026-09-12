@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /dashboard
+Sitemap: https://PARKO_DOMAIN/sitemap.xml

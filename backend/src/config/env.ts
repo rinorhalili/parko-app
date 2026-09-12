@@ -19,7 +19,11 @@ const envSchema = z.object({
   PASSWORD_RESET_DELIVERY_TOKEN: z.string().min(16).optional(),
   RESEND_API_KEY: z.string().min(16).optional(),
   EMAIL_FROM: z.string().email().optional(),
-  EXPO_PUSH_ENABLED: z.coerce.boolean().default(false)
+  EXPO_PUSH_ENABLED: z.coerce.boolean().default(false),
+  VAPID_PUBLIC_KEY: z.string().min(1).optional(),
+  VAPID_PRIVATE_KEY: z.string().min(1).optional(),
+  VAPID_SUBJECT: z.string().min(1).default("mailto:support@parko.app"),
+  TURNSTILE_SECRET_KEY: z.string().min(1).optional()
 }).superRefine((value, context) => {
   if (value.NODE_ENV !== "production") return;
   for (const [key, secret] of [["JWT_ACCESS_SECRET", value.JWT_ACCESS_SECRET], ["JWT_REFRESH_SECRET", value.JWT_REFRESH_SECRET]] as const) {
@@ -33,8 +37,15 @@ const envSchema = z.object({
   if (value.CORS_ORIGIN.split(",").some((origin) => origin.trim() === "*")) {
     context.addIssue({ code: "custom", path: ["CORS_ORIGIN"], message: "cannot include wildcard origins in production" });
   }
+  if (!value.TURNSTILE_SECRET_KEY) {
+    context.addIssue({ code: "custom", path: ["TURNSTILE_SECRET_KEY"], message: "is required in production" });
+  }
 });
 
 export const env = envSchema.parse(process.env);
 export const corsOrigins = env.CORS_ORIGIN.split(",").map((origin) => origin.trim()).filter(Boolean);
 export const isTrustedOrigin = (origin: string) => corsOrigins.includes(origin);
+/** Web Push is only usable when both halves of the VAPID keypair are configured. */
+export const WEB_PUSH_ENABLED = Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY);
+/** Turnstile remains off for local development unless a secret has been configured. */
+export const TURNSTILE_ENABLED = Boolean(env.TURNSTILE_SECRET_KEY);

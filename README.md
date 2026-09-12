@@ -112,9 +112,7 @@ Expected occupancy feed:
 {
   "source": "Prishtina Parking",
   "updatedAt": "2026-08-26T12:00:00Z",
-  "parkings": [
-    { "id": "osm-way-852523325", "spaces": 42, "capacity": 705 }
-  ]
+  "parkings": [{ "id": "osm-way-852523325", "spaces": 42, "capacity": 705 }]
 }
 ```
 

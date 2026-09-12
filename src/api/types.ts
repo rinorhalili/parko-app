@@ -34,6 +34,7 @@ export interface AuthTokens {
 export interface LoginInput {
   email: string
   password: string
+  turnstileToken?: string
 }
 
 export interface RegisterInput extends LoginInput {
@@ -146,8 +147,20 @@ export interface ParkingUpdatedEvent {
   status: ParkingStatus
 }
 
+export interface ReservationEvent {
+  id: string
+  parkingSpotId: string
+  userId: string
+  startsAt: string
+  expiresAt: string
+  cancelledAt: string | null
+  createdAt: string
+}
+
 export type SocketEventMap = {
   'parking:updated': ParkingUpdatedEvent
+  'reservation:created': ReservationEvent
+  'reservation:cancelled': { reservationId: string }
   'parking:reported': ParkingReport
   'post:new': CommunityPost
   'comment:new': CommunityComment

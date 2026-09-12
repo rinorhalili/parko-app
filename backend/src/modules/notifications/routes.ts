@@ -17,6 +17,7 @@ notificationRoutes.use(authenticate);
 
 notificationRoutes.get("/", notificationController.list);
 
+
 notificationRoutes.post("/devices", validate({ body: deviceSchema }), async (req, res, next) => {
   try {
     ok(res, await prisma.pushDevice.upsert({

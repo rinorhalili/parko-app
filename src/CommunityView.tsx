@@ -53,6 +53,10 @@ export default function CommunityView({ onBack, onLogin }: Props) {
   const publish = async (event: FormEvent) => {
     event.preventDefault()
     if (!authenticated) { onLogin(); return }
+    if (!title.trim() || !content.trim()) {
+      setError('Titulli dhe përmbajtja nuk mund të jenë vetëm hapësira.')
+      return
+    }
     setSubmitting(true); setError('')
     try {
       const media = photoUrl.trim() ? [{ url: photoUrl.trim(), type: 'image' as const }] : undefined
@@ -81,7 +85,10 @@ export default function CommunityView({ onBack, onLogin }: Props) {
 
   const addZoneAlert = async (event: FormEvent) => {
     event.preventDefault(); if (!authenticated) { onLogin(); return }
-    try { const alert = await subscribeZoneAlert(zone.trim()); setZoneAlerts((current) => [...current.filter((item) => item.zone !== alert.zone), alert]); setZone('') }
+    const normalizedZone = zone.trim()
+    if (!normalizedZone) { setError('Zona nuk mund të përmbajë vetëm hapësira.'); return }
+    setError('')
+    try { const alert = await subscribeZoneAlert(normalizedZone); setZoneAlerts((current) => [...current.filter((item) => item.zone !== alert.zone), alert]); setZone('') }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Alerti nuk u ruajt.') }
   }
 
