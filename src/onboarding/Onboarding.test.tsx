@@ -50,7 +50,7 @@ it('completes first run without location and bypasses onboarding on a returning 
   await act(async () => { choices[0].click(); choices[3].click() })
   await click('Vazhdo')
   expect(loadOnboarding().completed).toBe(false)
-  expect(host.textContent).toContain("You're ready to park.")
+  expect(host.textContent).toContain('Je gati të parkosh.')
   await click('Gjej parking')
   expect(host.textContent).toContain('Parking map')
   expect(loadOnboarding().preferences).toEqual(['closest', 'covered'])
@@ -65,8 +65,8 @@ it.each(['ready', 'outside'] as const)('requests location only on explicit actio
   expect(requestLocation).not.toHaveBeenCalled()
   await click('Lejo lokacionin')
   expect(requestLocation).toHaveBeenCalledTimes(1)
-  expect(host.textContent).toContain('What matters most to you?')
-  expect(document.activeElement?.textContent).toBe('What matters most to you?')
+  expect(host.textContent).toContain('Çfarë ka më shumë rëndësi për ty?')
+  expect(document.activeElement?.textContent).toBe('Çfarë ka më shumë rëndësi për ty?')
 })
 
 it.each(['denied', 'unavailable', 'locating'] as const)('allows continuing when location is %s', async result => {
