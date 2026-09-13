@@ -4,6 +4,7 @@ import App from './App'
 import { CrowdSourcingProvider } from './crowdsourcing'
 import 'leaflet/dist/leaflet.css'
 import './styles.css'
+import './product-ui.css'
 import { initTelemetry } from './telemetry'
 import { restoreSession } from './api/client'
 

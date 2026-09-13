@@ -1,4 +1,6 @@
 import { useRoutingOrigin } from "./hooks/useRoutingOrigin";
+import Onboarding from "./onboarding/Onboarding";
+import { useOnboarding } from "./onboarding/useOnboarding";
 import { LeavingButton, SpotVouching, useCrowdSourcing } from "./crowdsourcing";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -585,11 +587,13 @@ function ParkingCard({
   parking,
   smartMatch,
   showSource = true,
+  showDriving = false,
   onOpen,
 }: {
   parking: Parking;
   smartMatch?: RankedParking;
   showSource?: boolean;
+  showDriving?: boolean;
   onOpen: () => void;
 }) {
   const verifiedPrice = verifiedPriceLabel(parking);
@@ -600,12 +604,10 @@ function ParkingCard({
   const sourceLabel = parkingSourceLabel(parking);
   const showInlineSource =
     showSource && sourceLabel !== parkingTypeLabel(parking);
-  const journey = smartMatch
-    ? [
-        `${smartMatch.walkMinutes} min ecje`,
-        `${smartMatch.driveMinutes} min vozitje`,
-      ]
-    : [`${parking.driveMinutes} min vozitje`];
+  const journey = [
+    ...(smartMatch ? [`≈ ${smartMatch.walkMinutes} min ecje`] : []),
+    ...(showDriving ? [`≈ ${smartMatch?.driveMinutes ?? parking.driveMinutes} min vozitje`] : []),
+  ];
   return (
     <article
       className="parking-card"
@@ -1072,7 +1074,6 @@ function HomeView({
   onSettings,
   mapSettings,
   mapMarkerFilter,
-  mapMarkerCounts,
   onMapMarkerFilter,
   loadStatus,
 }: {
@@ -1146,6 +1147,7 @@ function HomeView({
     dragging: false,
   });
   const sheetGestureCleanupRef = useRef<(() => void) | null>(null);
+  const previewGestureCleanupRef = useRef<(() => void) | null>(null);
   const previewSheetGestureRef = useRef({
     pointerId: -1,
     startY: 0,
@@ -1281,7 +1283,7 @@ function HomeView({
       sheetRef.current?.style.removeProperty("--sheet-drag-y");
       sheetGestureRef.current.pointerId = -1;
       cleanup();
-      if (gesture.dragging && (Math.abs(deltaY) >= 44 || velocity >= 0.45))
+      if (pointerEvent.type !== "pointercancel" && gesture.dragging && (Math.abs(deltaY) >= 44 || velocity >= 0.45))
         moveSheet(deltaY < 0 ? "up" : "down");
       window.setTimeout(() => {
         suppressSheetClickRef.current = false;
@@ -1297,6 +1299,7 @@ function HomeView({
     event: React.PointerEvent<HTMLElement>,
   ) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
+    previewGestureCleanupRef.current?.();
     previewSheetGestureRef.current = {
       pointerId: event.pointerId,
       startY: event.clientY,
@@ -1329,7 +1332,7 @@ function HomeView({
       previewSheetRef.current?.style.removeProperty("--sheet-drag-y");
       previewSheetGestureRef.current.pointerId = -1;
       cleanup();
-      if (gesture.dragging && (deltaY >= 90 || velocity >= 0.5)) {
+      if (pointerEvent.type !== "pointercancel" && gesture.dragging && (deltaY >= 90 || velocity >= 0.5)) {
         subtleHaptic();
         onCloseParkingPreview();
       }
@@ -1337,6 +1340,7 @@ function HomeView({
     document.addEventListener("pointermove", move, { passive: false });
     document.addEventListener("pointerup", finish);
     document.addEventListener("pointercancel", finish);
+    previewGestureCleanupRef.current = cleanup;
   };
 
   const startPreviewSwipe = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -1357,6 +1361,7 @@ function HomeView({
     if (event.currentTarget.hasPointerCapture(event.pointerId))
       event.currentTarget.releasePointerCapture(event.pointerId);
     previewSwipeRef.current.pointerId = -1;
+    if (event.type === "pointercancel") return;
     if (Math.abs(deltaX) < 46 || Math.abs(deltaX) <= Math.abs(deltaY)) return;
     const candidates = rankedParkings.slice(0, 3);
     const currentIndex = Math.max(
@@ -1415,7 +1420,10 @@ function HomeView({
     return () => document.removeEventListener("pointerdown", closeMenu);
   }, [longPressLocation]);
 
-  useEffect(() => () => sheetGestureCleanupRef.current?.(), []);
+  useEffect(() => () => {
+    sheetGestureCleanupRef.current?.();
+    previewGestureCleanupRef.current?.();
+  }, []);
 
   return (
     <div
@@ -1679,7 +1687,7 @@ function HomeView({
             </b>
           </button>
         </div>
-        {locationStatus !== "idle" && locationStatus !== "ready" && (
+        {!pickingDestination && locationStatus !== "idle" && locationStatus !== "ready" && (
           <p
             className={`location-inline-status location-inline-status--${locationStatus}`}
             role="status"
@@ -1687,25 +1695,6 @@ function HomeView({
             {locationLabel}
           </p>
         )}
-        <div className="quick-filters" aria-label="Filtrat e shpejtë të hartës">
-          {(
-            [
-              ["all", "Të gjitha"],
-              ["free", "Falas"],
-              ["paid", "Me pagesë"],
-              ["municipal", "Komunale"],
-            ] as Array<[MapMarkerFilter, string]>
-          ).map(([filter, label]) => (
-            <button
-              key={filter}
-              className={`chip ${mapMarkerFilter === filter ? "selected" : ""}`}
-              onClick={() => onMapMarkerFilter(filter)}
-              aria-pressed={mapMarkerFilter === filter}
-            >
-              {label} <small>{mapMarkerCounts[filter]}</small>
-            </button>
-          ))}
-        </div>
 
         {plannerOpen ? (
           <section className="smart-planner" aria-label="Filtrat e parkingjeve">
@@ -1764,6 +1753,7 @@ function HomeView({
               </div>
             )}
             <p className="filter-section-label">Lloji dhe operatori</p>
+            {mapMarkerFilter !== "all" && <button className="clear-filters-button" onClick={() => onMapMarkerFilter("all")}>Hiq filtrin e mëparshëm të hartës</button>}
             <ParkingTypeChooser
               value={selectedParkingType}
               counts={typeCounts}
@@ -1852,7 +1842,7 @@ function HomeView({
                 Ka vende live <small>{featureCounts.live}</small>
               </button>
             </div>
-            {activeFilterCount > 0 && (
+            {(activeFilterCount > 0 || mapMarkerFilter !== "all") && (
               <button
                 className="clear-filters-button"
                 onClick={() => onFiltersChange(initialFilters)}
@@ -1895,12 +1885,12 @@ function HomeView({
           <div className="parking-route-summary">
             <span>
               <small>Me veturë</small>
-              <strong>{routeMinutes} min</strong>
+              <strong>{route ? `${routeMinutes} min` : "—"}</strong>
             </span>
             <span>
               <small>Largësia</small>
               <strong>
-                {routeDistance >= 1000
+                {!route ? "—" : routeDistance >= 1000
                   ? `${(routeDistance / 1000).toFixed(1)} km`
                   : `${routeDistance} m`}
               </strong>
@@ -2048,6 +2038,7 @@ function HomeView({
                   parking={selected}
                   smartMatch={selectedMatch}
                   showSource={mapSettings.showDataSources}
+                  showDriving={locationStatus === "ready"}
                   onOpen={onDetails}
                 />
                 <div className="sheet-primary-actions">
@@ -2065,7 +2056,7 @@ function HomeView({
                   <button
                     className="button button--secondary"
                     onClick={onStreetView}
-                    aria-label={`Hap KartaView për ${selected.name}`}
+                    aria-label={`Hap Street View për ${selected.name}`}
                   >
                     <AppIcon name="street" size={17} />
                     Street View
@@ -2114,6 +2105,7 @@ function HomeView({
                           (match) => match.parking.id === parking.id,
                         )}
                         showSource={mapSettings.showDataSources}
+                        showDriving={locationStatus === "ready"}
                         onOpen={() => {
                           onSelect(parking);
                           onDetails();
@@ -2179,6 +2171,8 @@ function ProfileView({
   const [deleteStatus, setDeleteStatus] = useState("");
   const [history, setHistory] = useState<ParkedHistory[]>([]);
   const [historyStatus, setHistoryStatus] = useState("");
+  const [historyAttempt, setHistoryAttempt] = useState(0);
+  const [historyFailed, setHistoryFailed] = useState(false);
   const [reservationScope, setReservationScope] = useState<
     "active" | "history"
   >("active");
@@ -2243,6 +2237,7 @@ function ProfileView({
       return;
     }
     let cancelled = false;
+    setHistoryFailed(false);
     setHistoryStatus("Duke ngarkuar…");
     void listParkedHistory()
       .then((items) => {
@@ -2252,12 +2247,15 @@ function ProfileView({
         }
       })
       .catch(() => {
-        if (!cancelled) setHistoryStatus("Historiku nuk mund të ngarkohet.");
+        if (!cancelled) {
+          setHistoryFailed(true);
+          setHistoryStatus("Historiku nuk mund të ngarkohet.");
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [user, historyAttempt]);
 
   async function saveProfile(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -2313,8 +2311,6 @@ function ProfileView({
         </div>
       </header>
       <main className="saved-list">
-        <SaveMyParkedLocationCard initialLocation={userLocation} />
-        <SmsTariffHelper />
         {!user ? (
           <section className="empty-state">
             <strong>Hyr në llogari për të parë profilin</strong>
@@ -2338,11 +2334,13 @@ function ProfileView({
                 {user.bio && <p>{user.bio}</p>}
               </div>
             </section>
+            <details className="account-disclosure">
+              <summary>Ndrysho profilin</summary>
             <form
               onSubmit={saveProfile}
               className="settings-section profile-form"
             >
-              <h2>Ndrysho profilin</h2>
+
               <label>
                 Emri
                 <input
@@ -2383,11 +2381,14 @@ function ProfileView({
               <button type="submit">Ruaj ndryshimet</button>
               {profileStatus && <p role="status">{profileStatus}</p>}
             </form>
+            </details>
+            <details className="account-disclosure">
+              <summary>Siguria e llogarisë</summary>
             <form
               onSubmit={savePassword}
               className="settings-section profile-form"
             >
-              <h2>Ndrysho fjalëkalimin</h2>
+
               <label>
                 Fjalëkalimi aktual
                 <input
@@ -2432,9 +2433,15 @@ function ProfileView({
               <button type="submit">Ndrysho fjalëkalimin</button>
               {passwordStatus && <p role="status">{passwordStatus}</p>}
             </form>
+            </details>
             <section className="settings-section">
               <h2>Vendet ku kam parkuar</h2>
               {historyStatus && <p role="status">{historyStatus}</p>}
+              {historyFailed && (
+                <button type="button" className="button button--secondary" onClick={() => setHistoryAttempt((attempt) => attempt + 1)}>
+                  Provo përsëri
+                </button>
+              )}
               {!historyStatus &&
                 (history.length ? (
                   <ul>
@@ -2471,7 +2478,7 @@ function ProfileView({
                 </button>
               </div>
               {reservationStatus && <p role="status">{reservationStatus}</p>}
-              {!reservationStatus &&
+              {(!reservationStatus || reservationStatus === "Rezervimi u anulua.") &&
                 (reservations.length ? (
                   <ul>
                     {reservations.map((item) => (
@@ -2550,6 +2557,11 @@ function ProfileView({
             )}
           </>
         )}
+        <details className="account-disclosure">
+          <summary>Vetura ime dhe pagesa SMS</summary>
+          <SaveMyParkedLocationCard initialLocation={userLocation} />
+          <SmsTariffHelper />
+        </details>
         <section>
           <h2>Parkingjet e ruajtura</h2>
         </section>
@@ -2559,6 +2571,7 @@ function ProfileView({
               key={parking.id}
               parking={parking}
               showSource={showDataSources}
+              showDriving={Boolean(userLocation)}
               onOpen={() => onOpen(parking)}
             />
           ))
@@ -2588,13 +2601,13 @@ const mapVariantOptions: Array<{
   {
     value: "standard",
     label: "Standard",
-    description: "Harta aktuale OpenStreetMap",
+    description: "Rrugë dhe vende · OpenStreetMap",
     badge: "Aktuale",
   },
   {
     value: "minimal",
-    label: "Minimal",
-    description: "Varianti i mëparshëm CARTO",
+    label: "E thjeshtë",
+    description: "Më pak hollësi · CARTO",
     badge: "E mëparshme",
   },
 ];
@@ -2628,6 +2641,8 @@ function SettingsView({
   onProfile,
   onCommunity,
   onCommunitySpots,
+  onRestartOnboarding,
+  onEditOnboardingPreferences,
 }: {
   user: User | null;
   settings: MapSettings;
@@ -2643,6 +2658,8 @@ function SettingsView({
   onProfile: () => void;
   onCommunity: () => void;
   onCommunitySpots: () => void;
+  onRestartOnboarding: () => void;
+  onEditOnboardingPreferences: () => void;
 }) {
   const toggle = (
     key:
@@ -2658,8 +2675,8 @@ function SettingsView({
       <header className="settings-header">
         <div>
           <small>Parko</small>
-          <h1>Cilësimet e hartës</h1>
-          <p>Personalizo dukshmërinë pa ndryshuar të dhënat.</p>
+          <h1>Cilësimet</h1>
+          <p>Harta dhe preferencat e tua.</p>
         </div>
         <button
           className="settings-reset-button"
@@ -2676,7 +2693,7 @@ function SettingsView({
               <small>Stili</small>
               <h2>Varianti i hartës</h2>
             </span>
-            <b>2 variante</b>
+
           </div>
           <div className="map-variant-grid">
             {mapVariantOptions.map((option) => (
@@ -2686,19 +2703,12 @@ function SettingsView({
                 onClick={() => onChange({ ...settings, variant: option.value })}
                 aria-pressed={settings.variant === option.value}
               >
-                <span
-                  className={`map-variant-preview map-variant-preview--${option.value}`}
-                >
-                  <i />
-                  <i />
-                  <i />
-                  <b>P</b>
-                </span>
+
                 <span>
                   <strong>{option.label}</strong>
                   <small>{option.description}</small>
                 </span>
-                <em>{option.badge}</em>
+                <span className="selection-check" aria-hidden="true">{settings.variant === option.value ? "✓" : ""}</span>
               </button>
             ))}
           </div>
@@ -2854,10 +2864,17 @@ function SettingsView({
         <section className="settings-section settings-section--account">
           <div className="settings-section__heading">
             <span>
-              <small>Llogaria</small>
-              <h2>Profili yt</h2>
+              <h2>Komuniteti dhe informacioni</h2>
             </span>
           </div>
+          <button className="settings-login-button" onClick={onEditOnboardingPreferences}>
+            <span><strong>Preferencat e parkingut</strong><small>Zgjedhjet e ruajtura gjatë prezantimit.</small></span>
+            <b>›</b>
+          </button>
+          <button className="settings-login-button" onClick={onRestartOnboarding}>
+            <span><strong>Shfaq prezantimin</strong><small>Njihu përsëri me Parko.</small></span>
+            <b>›</b>
+          </button>
           <button className="settings-login-button" onClick={onCommunity}>
             <span>
               <strong>Komuniteti dhe njoftimet</strong>
@@ -2904,9 +2921,7 @@ function SettingsView({
         </section>
 
         <p className="settings-data-note">
-          <b>Pa zona të rreme.</b> Mbushja e plotë përdoret vetëm kur
-          OpenStreetMap ka kufij realë. Parkingjet me vetëm një koordinatë
-          mbeten pika, por mund të shfaqen më të mëdha.
+          Zonat tregojnë kufijtë e hartuar. Pikat tregojnë parkingje pa kontur të disponueshëm.
         </p>
       </main>
       <BottomNav
@@ -2966,6 +2981,7 @@ function DetailsView({
     dragging: boolean;
   } | null>(null);
   const gestureCleanupRef = useRef<(() => void) | null>(null);
+  const suppressDetailsClickRef = useRef(false);
   const [sheetDragging, setSheetDragging] = useState(false);
   const routeMinutes = route
     ? Math.max(1, Math.ceil(route.durationSeconds / 60))
@@ -2989,6 +3005,7 @@ function DetailsView({
     if (event.pointerType === "mouse" && event.button !== 0) return;
     if (gestureRef.current?.pointerId === event.pointerId) return;
     const target = event.target as Element;
+    if (!target.closest(".details-sheet-toggle") && target.closest("button, a, input, select, textarea, summary")) return;
     const header = target.closest(".details-sheet__header");
     if (!header && !(sheetState === "full" && sheetRef.current?.scrollTop === 0))
       return;
@@ -3005,6 +3022,7 @@ function DetailsView({
       const deltaY = pointerEvent.clientY - gesture.startY;
       if (!gesture.dragging && Math.abs(deltaY) < 7) return;
       gesture.dragging = true;
+      suppressDetailsClickRef.current = true;
       setSheetDragging(true);
       const limitedDelta =
         sheetState === "peek"
@@ -3034,7 +3052,10 @@ function DetailsView({
       sheetRef.current?.style.removeProperty("--sheet-drag-y");
       gestureRef.current = null;
       cleanup();
+      window.setTimeout(() => { suppressDetailsClickRef.current = false; }, 0);
+      if (pointerEvent.type === "pointercancel") return;
       if (!gesture.dragging) {
+        if (target.closest(".details-sheet-toggle")) return;
         setSheetState((current) =>
           current === "peek" ? "half" : current === "half" ? "full" : "half",
         );
@@ -3095,7 +3116,7 @@ function DetailsView({
           className="details-sheet__header"
           onPointerDown={handleDetailsSheetPointerDown}
         >
-          <div className="drag-handle" />
+          <button type="button" className="details-sheet-toggle" aria-label={sheetState === "full" ? "Zvogëlo detajet" : "Zgjero detajet"} aria-expanded={sheetState === "full"} onClick={() => { if (!suppressDetailsClickRef.current) setSheetState(current => current === "full" ? "half" : "full"); }}><span className="drag-handle" /></button>
           <h1>{parking.name}</h1>
         <span
           className={`availability-badge availability-badge--${parking.status}`}
@@ -3122,14 +3143,14 @@ function DetailsView({
           <div>
             <span>Largësia</span>
             <strong>
-              {routeDistance >= 1000
+              {!route ? "—" : routeDistance >= 1000
                 ? `${(routeDistance / 1000).toFixed(1)} km`
                 : `${routeDistance} m`}
             </strong>
           </div>
           <div>
             <span>Koha</span>
-            <strong>{routeMinutes} min</strong>
+            <strong>{route ? `${routeMinutes} min` : "—"}</strong>
           </div>
           {verifiedPriceLabel(parking) && (
             <div>
@@ -3156,7 +3177,9 @@ function DetailsView({
               <strong>
                 {parking.accessPoint
                   ? "Hyrja e parkingut është e hartuar"
-                  : "Hyrja është llogaritur nga konturi më i afërt"}
+                  : parking.geometry?.length
+                    ? "Hyrje e përafërt nga konturi"
+                    : "Hyrja nuk është hartuar"}
               </strong>
               <small>{parking.address}</small>
             </span>
@@ -3191,7 +3214,7 @@ function DetailsView({
         <button
           className="street-view-inline street-view-inline--details"
           onClick={onStreetView}
-          aria-label={`Hap KartaView për ${parking.name}`}
+          aria-label={`Hap Street View për ${parking.name}`}
         >
           ◎ Hap Street View 360°
         </button>
@@ -3273,8 +3296,8 @@ function DetailsView({
           </p>
         )}
 
-        <section className="details-community">
-          <h2>Komuniteti</h2>
+        <details className="details-community account-disclosure">
+          <summary>Raportime nga komuniteti</summary>
           <SpotVouching parking={parking} />
           <LeavingButton parking={parking} />
           <div className="report-control-row report-control-row--details">
@@ -3298,7 +3321,7 @@ function DetailsView({
               onReport={onReport}
             />
           )}
-        </section>
+        </details>
 
         {parking.osmUrl ? (
           <a
@@ -3635,6 +3658,7 @@ function WalkingView({
 }
 
 export default function App() {
+  const onboarding = useOnboarding();
   const { user, isLoading: authLoading } = useAuth();
   const persistedPreferences = useRef(loadPreferences()).current;
   const [screen, setScreen] = useState<Screen>("home");
@@ -3919,14 +3943,17 @@ export default function App() {
   }, [locationStatus]);
 
   useEffect(() => {
-    if (!navigator.geolocation) return;
-    // Get the initial GPS fix without moving the map. Automatic camera following
-    // starts only after the user enters navigation; "Ku jam" remains explicit.
-    const timer = setTimeout(() => {
-      requestUserLocation({ recenter: false });
-    }, 500);
-    return () => clearTimeout(timer);
-  }, []);
+    if (onboarding.mode || !navigator.geolocation || !navigator.permissions) return;
+    let cancelled = false;
+    // Resume only an already-granted permission. First-time and "Not now" users
+    // must never see an automatic browser prompt, even after reloading the map.
+    void navigator.permissions.query({ name: "geolocation" }).then((permission) => {
+      if (!cancelled && permission.state === "granted" && locationStatus === "idle") {
+        requestUserLocation({ recenter: false });
+      }
+    }).catch(() => { /* Browsers without permission queries retain the explicit location button. */ });
+    return () => { cancelled = true; };
+  }, [onboarding.mode]);
 
   const reportedParkings = useMemo(
     () =>
@@ -4462,6 +4489,25 @@ export default function App() {
     }
   }, [destination, filteredParkings, rankedParkings, selected.id]);
 
+  if (onboarding.mode) {
+    return <div className="app-shell"><div className="phone-frame">
+      <Onboarding
+        key={onboarding.mode}
+        mode={onboarding.mode}
+        preferences={onboarding.preferences}
+        storageAvailable={onboarding.storageAvailable}
+        locationStatus={locationStatus}
+        onRequestLocation={() => requestUserLocation({ recenter: false })}
+        onCancel={onboarding.cancelEdit}
+        onFinish={(preferences) => {
+          const wasIntro = onboarding.mode === "intro";
+          onboarding.finish(preferences);
+          if (wasIntro) setScreen("home");
+        }}
+      />
+    </div></div>;
+  }
+
   return (
     <div className="app-shell">
       <style>{`
@@ -4579,7 +4625,7 @@ export default function App() {
           className="login-auth-button"
           onClick={() => setShowLoginModal(true)}
         >
-          Log In / Register
+          Hyr në llogari
         </button>
       )}
       {routeNotice && (
@@ -4755,6 +4801,8 @@ export default function App() {
             onProfile={() => setScreen("profile")}
             onCommunity={() => setScreen("community")}
             onCommunitySpots={() => setScreen("community-spots")}
+            onRestartOnboarding={onboarding.restart}
+            onEditOnboardingPreferences={onboarding.editPreferences}
           />
         )}
         {screen === "community" && (

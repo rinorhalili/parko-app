@@ -252,14 +252,25 @@ export default function LiveParkingMap({
     mapContainer.addEventListener('dblclick', markManualViewport, { passive: true })
     map.on('zoomend', () => setMapZoom(map.getZoom()))
     mapRef.current = map
-    map.fitBounds(cityBounds, { padding: [14, 14], animate: false })
-    window.setTimeout(() => {
+    // Start at a useful city scale; fitting the entire service boundary hid
+    // individual parking areas on phones. Subsequent view changes stay user-led.
+    map.setView([PRISHTINA_CENTER.lat, PRISHTINA_CENTER.lng], 14, { animate: false })
+    const readyTimer = window.setTimeout(() => {
       map.invalidateSize()
       automaticViewportRef.current = null
       setMapReadyToken((value) => value + 1)
     }, 0)
 
+    // Rotation, the on-screen keyboard and the desktop phone preview can resize
+    // the container without a window resize. Redraw tiles without panning.
+    const resizeObserver = new ResizeObserver(() => {
+      map.invalidateSize({ pan: false, debounceMoveend: true })
+    })
+    resizeObserver.observe(mapContainer)
+
     return () => {
+      window.clearTimeout(readyTimer)
+      resizeObserver.disconnect()
       mapContainer.removeEventListener('pointerdown', trackPointerDown)
       mapContainer.removeEventListener('pointerup', trackPointerEnd)
       mapContainer.removeEventListener('pointercancel', trackPointerEnd)

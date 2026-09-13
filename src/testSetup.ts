@@ -1,4 +1,5 @@
 const values = new Map<string, string>();
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 const memoryStorage: Storage = {
   get length() {
     return values.size;

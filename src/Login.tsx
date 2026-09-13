@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ApiError } from './api/client'
 import { login, register } from './api/authService'
+import { useDialogFocus } from './hooks/useDialogFocus'
 
 type TurnstileWidgetId = string | number
 
@@ -28,6 +29,8 @@ interface LoginProps {
 }
 
 export default function Login({ onClose }: LoginProps) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useDialogFocus(dialogRef)
   const [mode, setMode] = useState<AuthMode>('login')
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
@@ -94,7 +97,7 @@ export default function Login({ onClose }: LoginProps) {
     setError('')
 
     if (!email || !password) {
-      setError('Please fill in all fields')
+      setError('Plotëso emailin dhe fjalëkalimin.')
       return
     }
 
@@ -109,7 +112,7 @@ export default function Login({ onClose }: LoginProps) {
     }
 
     if (mode === 'register' && password !== confirmPassword) {
-      setError('Passwords do not match')
+      setError('Fjalëkalimet nuk përputhen.')
       return
     }
 
@@ -135,14 +138,14 @@ export default function Login({ onClose }: LoginProps) {
         onClose()
       } else {
         if (!name.trim() || !username.trim()) {
-          setError('Please add your name and username')
+          setError('Plotëso emrin dhe emrin e përdoruesit.')
           return
         }
         await register({ name: name.trim(), username: username.trim(), email: email.trim(), password, ...(turnstileSiteKey ? { turnstileToken } : {}) })
         onClose()
       }
     } catch (authError) {
-      setError(authError instanceof ApiError ? authError.message : 'Unable to reach the Parko server. Please try again.')
+      setError(authError instanceof ApiError ? authError.message : 'Nuk mund të lidhemi me serverin. Provo përsëri.')
     } finally {
       setIsLoading(false)
       if (turnstileSiteKey) resetTurnstile()
@@ -352,11 +355,11 @@ export default function Login({ onClose }: LoginProps) {
         .password-toggle { position: absolute; top: 50%; right: 12px; display: grid; width: 24px; height: 24px; padding: 0; border: 0; background: transparent; color: var(--muted); cursor: pointer; transform: translateY(-50%); place-items: center; }
       `}</style>
 
-      <div className="login-modal" onClick={(e) => e.stopPropagation()}>
-        <button className="login-close-btn" onClick={onClose}>×</button>
+      <div className="login-modal" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="login-title" tabIndex={-1} onClick={(e) => e.stopPropagation()}>
+        <button className="login-close-btn" onClick={onClose} aria-label="Mbyll hyrjen">×</button>
 
         <div className="login-header">
-          <h2 className="login-title">Parko</h2>
+          <h2 className="login-title" id="login-title">{mode === 'login' ? 'Hyr në Parko' : 'Krijo llogari'}</h2>
         </div>
 
         <div className="login-tabs">
@@ -364,26 +367,26 @@ export default function Login({ onClose }: LoginProps) {
             className={`login-tab ${mode === 'login' ? 'active' : ''}`}
             onClick={() => { setMode('login'); setError('') }}
           >
-            Log In
+            Hyr
           </button>
           <button
             className={`login-tab ${mode === 'register' ? 'active' : ''}`}
             onClick={() => { setMode('register'); setError('') }}
           >
-            Register
+            Regjistrohu
           </button>
         </div>
 
         <form className="login-form" onSubmit={handleSubmit}>
-          {error && <div className="error-message">{error}</div>}
+          {error && <div className="error-message" role="alert">{error}</div>}
 
           {mode === 'register' && <>
             <div className="form-group">
-              <label className="form-label" htmlFor="name">Name</label>
+              <label className="form-label" htmlFor="name">Emri</label>
               <input id="name" className="form-input" value={name} onChange={(e) => setName(e.target.value)} disabled={isLoading} autoComplete="name" required />
             </div>
             <div className="form-group">
-              <label className="form-label" htmlFor="username">Username</label>
+              <label className="form-label" htmlFor="username">Emri i përdoruesit</label>
               <input id="username" className="form-input" value={username} onChange={(e) => setUsername(e.target.value.replace(/\s/g, ''))} disabled={isLoading} autoComplete="username" required />
             </div>
           </>}
@@ -399,7 +402,6 @@ export default function Login({ onClose }: LoginProps) {
               onChange={(e) => setEmail(e.target.value)}
               disabled={isLoading}
               autoComplete="email"
-              autoFocus
               required
             />
           </div>
@@ -407,7 +409,7 @@ export default function Login({ onClose }: LoginProps) {
           {turnstileSiteKey && <div ref={turnstileContainerRef} aria-label="Verifikimi i sigurisë" />}
 
           <div className="form-group">
-            <label className="form-label" htmlFor="password">Password</label>
+            <label className="form-label" htmlFor="password">Fjalëkalimi</label>
             <div className="password-input-wrap">
               <input
                 id="password"
@@ -428,7 +430,7 @@ export default function Login({ onClose }: LoginProps) {
 
           {mode === 'register' && (
             <div className="form-group">
-              <label className="form-label" htmlFor="confirmPassword">Confirm Password</label>
+              <label className="form-label" htmlFor="confirmPassword">Konfirmo fjalëkalimin</label>
               <div className="password-input-wrap">
                 <input
                   id="confirmPassword"
@@ -452,7 +454,7 @@ export default function Login({ onClose }: LoginProps) {
             className="login-button"
             disabled={isLoading}
           >
-            {isLoading ? 'Loading...' : mode === 'login' ? 'Log In' : 'Register'}
+            {isLoading ? 'Duke pritur…' : mode === 'login' ? 'Hyr' : 'Krijo llogari'}
           </button>
         </form>
       </div>
