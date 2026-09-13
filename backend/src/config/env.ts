@@ -15,15 +15,25 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().min(1).default("http://localhost:5173"),
   LOG_LEVEL: z.string().default("info"),
   PASSWORD_RESET_WEB_URL: z.string().url().optional(),
+  EMAIL_VERIFICATION_WEB_URL: z.string().url().optional(),
   PASSWORD_RESET_DELIVERY_URL: z.string().url().optional(),
   PASSWORD_RESET_DELIVERY_TOKEN: z.string().min(16).optional(),
   RESEND_API_KEY: z.string().min(16).optional(),
-  EMAIL_FROM: z.string().email().optional(),
+  // Resend supports both `name@domain.tld` and `Name <name@domain.tld>`.
+  EMAIL_FROM: z.string().min(3).max(320).optional(),
   EXPO_PUSH_ENABLED: z.coerce.boolean().default(false),
   VAPID_PUBLIC_KEY: z.string().min(1).optional(),
   VAPID_PRIVATE_KEY: z.string().min(1).optional(),
   VAPID_SUBJECT: z.string().min(1).default("mailto:support@parko.app"),
   TURNSTILE_SECRET_KEY: z.string().min(1).optional()
+  ,S3_ENDPOINT: z.string().url().optional()
+  ,S3_REGION: z.string().min(1).default("us-east-1")
+  ,S3_BUCKET: z.string().min(3).max(63).default("parko-media")
+  ,S3_ACCESS_KEY_ID: z.string().min(3).optional()
+  ,S3_SECRET_ACCESS_KEY: z.string().min(8).optional()
+  ,CLAMAV_HOST: z.string().min(1).optional()
+  ,CLAMAV_PORT: z.coerce.number().int().positive().default(3310)
+  ,SENTRY_DSN: z.string().url().optional()
 }).superRefine((value, context) => {
   if (value.NODE_ENV !== "production") return;
   for (const [key, secret] of [["JWT_ACCESS_SECRET", value.JWT_ACCESS_SECRET], ["JWT_REFRESH_SECRET", value.JWT_REFRESH_SECRET]] as const) {
@@ -39,6 +49,9 @@ const envSchema = z.object({
   }
   if (!value.TURNSTILE_SECRET_KEY) {
     context.addIssue({ code: "custom", path: ["TURNSTILE_SECRET_KEY"], message: "is required in production" });
+  }
+  for (const key of ["S3_ENDPOINT", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY", "CLAMAV_HOST"] as const) {
+    if (!value[key]) context.addIssue({ code: "custom", path: [key], message: "is required in production" });
   }
 });
 

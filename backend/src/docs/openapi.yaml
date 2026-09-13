@@ -14,6 +14,26 @@ paths:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/Login' } } }
       responses: { '200': { description: Session created }, '401': { $ref: '#/components/responses/Error' } }
+  /auth/verify-email/request:
+    post: { summary: Send a one-use email verification link to the current user, security: [{ bearerAuth: [] }], responses: { '202': { description: Verification requested } } }
+  /auth/verify-email:
+    post: { summary: Consume a one-use email verification token, responses: { '200': { description: Email verified }, '401': { $ref: '#/components/responses/Error' } } }
+  /users/me/sessions:
+    get: { summary: List current user's active and revoked sessions, security: [{ bearerAuth: [] }], responses: { '200': { description: Sessions } } }
+  /users/me/sessions/{sessionId}:
+    delete: { summary: Revoke one session, security: [{ bearerAuth: [] }], parameters: [{ name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Session revoked } } }
+  /users/me/export:
+    get: { summary: Download the authenticated user's personal data as JSON, security: [{ bearerAuth: [] }], responses: { '200': { description: JSON export } } }
+  /users/{id}/activity:
+    get: { summary: List public activity history for a user, parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Activity timeline } } }
+  /users/leaderboard/top:
+    get: { summary: List the top community contributors by reputation, responses: { '200': { description: Leaderboard } }
+  /reports/parking/{id}/vote:
+    put: { summary: Confirm or disagree with a parking report, security: [{ bearerAuth: [] }], parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }], responses: { '200': { description: Vote recorded } } }
+  /media:
+    post: { summary: Upload scanned JPEG, PNG, WebP, MP4 or WebM media, security: [{ bearerAuth: [] }], responses: { '201': { description: Private S3 media object created } } }
+  /media/{key}:
+    get: { summary: Stream an uploaded media object, parameters: [{ name: key, in: path, required: true, schema: { type: string } }], responses: { '200': { description: Media stream } } }
   /parking:
     get: { summary: List public parking locations, responses: { '200': { description: Parking list } } }
     post: { summary: Create a parking location, security: [{ bearerAuth: [] }], responses: { '201': { description: Created } } }

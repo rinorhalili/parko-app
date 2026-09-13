@@ -7,8 +7,8 @@ import { authRateLimit, sessionRateLimit } from "../../middleware/rateLimit.js";
 import { validate } from "../../middleware/validate.js";
 import { ok } from "../../utils/apiResponse.js";
 import { badRequest } from "../../utils/errors.js";
-import { login, logout, me, refresh, register, requestPasswordReset, resetPassword } from "./service.js";
-import { loginSchema, registerSchema, resetPasswordSchema, resetRequestSchema } from "./validation.js";
+import { login, logout, me, refresh, register, requestEmailVerification, requestPasswordReset, resetPassword, verifyEmail } from "./service.js";
+import { loginSchema, registerSchema, resetPasswordSchema, resetRequestSchema, verifyEmailSchema } from "./validation.js";
 
 const cookieOptions = { httpOnly: true, secure: env.NODE_ENV === "production", sameSite: "strict" as const, path: "/api" };
 const isNativeClient = (header: string | undefined) => header === "native";
@@ -101,6 +101,14 @@ authRoutes.post("/reset-password", authRateLimit, validate({ body: resetPassword
   } catch (error) {
     next(error);
   }
+});
+
+authRoutes.post("/verify-email/request", authenticate, authRateLimit, async (req, res, next) => {
+  try { ok(res, await requestEmailVerification(req.user!.id), undefined, 202); } catch (error) { next(error); }
+});
+
+authRoutes.post("/verify-email", authRateLimit, validate({ body: verifyEmailSchema }), async (req, res, next) => {
+  try { ok(res, await verifyEmail(req.body.token)); } catch (error) { next(error); }
 });
 
 authRoutes.get("/me", authenticate, async (req, res, next) => {

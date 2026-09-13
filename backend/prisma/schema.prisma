@@ -83,9 +83,12 @@ model User {
   updatedAt       DateTime           @updatedAt
   sessions        RefreshToken[]
   resetTokens     PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
   parkingSpots    ParkingSpot[]
   reservations    ParkingReservation[]
   parkingReports  ParkingReport[]
+  reportVotes     ParkingReportVote[]
+  badges         UserBadge[]
   posts           Post[]
   comments        Comment[]
   reactions       Reaction[]
@@ -122,6 +125,19 @@ model RefreshToken {
 }
 
 model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+}
+
+model EmailVerificationToken {
   id        String   @id @default(uuid())
   userId    String
   tokenHash String   @unique
@@ -180,10 +196,26 @@ model ParkingReport {
   parkingSpot   ParkingSpot   @relation(fields: [parkingSpotId], references: [id], onDelete: Cascade)
   reputation    Reputation[]
   media         Json?
+  votes         ParkingReportVote[]
 
   @@index([parkingSpotId, createdAt])
   @@index([reporterId, createdAt])
   @@index([expiresAt])
+}
+
+model ParkingReportVote {
+  id              String        @id @default(uuid())
+  parkingReportId String
+  userId          String
+  vote            Boolean
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  parkingReport   ParkingReport @relation(fields: [parkingReportId], references: [id], onDelete: Cascade)
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([parkingReportId, userId])
+  @@index([parkingReportId, vote])
+  @@index([userId, createdAt])
 }
 
 model ParkingReservation {
@@ -282,6 +314,17 @@ model Reputation {
   parkingReport   ParkingReport? @relation(fields: [parkingReportId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
+}
+
+model UserBadge {
+  id        String   @id @default(uuid())
+  userId    String
+  code      String
+  awardedAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, code])
+  @@index([userId, awardedAt])
 }
 
 model Notification {

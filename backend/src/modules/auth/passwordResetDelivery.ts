@@ -59,3 +59,20 @@ export async function deliverPasswordReset(payload: PasswordResetDelivery) {
 
   if (!response.ok) throw serviceUnavailable("Password reset delivery is unavailable");
 }
+
+export async function deliverEmailVerification(payload: { email: string; name: string; verificationUrl: string; expiresAt: Date }) {
+  if (env.RESEND_API_KEY && env.EMAIL_FROM) {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST", headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: env.EMAIL_FROM, to: [payload.email], subject: "Verify your Parko email", text: `Hello ${payload.name}, verify your email: ${payload.verificationUrl}. This link expires at ${payload.expiresAt.toISOString()}.` }), signal: AbortSignal.timeout(10_000)
+    }).catch(() => null);
+    if (!response?.ok) throw serviceUnavailable("Email verification delivery is unavailable");
+    return;
+  }
+  if (!env.PASSWORD_RESET_DELIVERY_URL) throw serviceUnavailable("Email verification delivery is not configured");
+  const response = await fetch(env.PASSWORD_RESET_DELIVERY_URL, {
+    method: "POST", headers: { "Content-Type": "application/json", ...(env.PASSWORD_RESET_DELIVERY_TOKEN ? { Authorization: `Bearer ${env.PASSWORD_RESET_DELIVERY_TOKEN}` } : {}) },
+    body: JSON.stringify({ type: "email-verification", ...payload }), signal: AbortSignal.timeout(10_000)
+  }).catch(() => null);
+  if (!response?.ok) throw serviceUnavailable("Email verification delivery is unavailable");
+}

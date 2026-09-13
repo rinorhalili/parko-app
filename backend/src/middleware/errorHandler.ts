@@ -3,6 +3,11 @@ import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
 import { AppError } from "../utils/errors.js";
 
+function reportUnexpectedError(error: unknown, requestId: string) {
+  if (!env.SENTRY_DSN) return;
+  void fetch(env.SENTRY_DSN, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event_id: requestId, level: "error", platform: "node", exception: { values: [{ type: error instanceof Error ? error.name : "Error", value: error instanceof Error ? error.message : "Unknown error" }] } }), signal: AbortSignal.timeout(2_000) }).catch(() => undefined);
+}
+
 export function errorHandler(error: unknown, req: Request, res: Response, _next: NextFunction) {
   if (error instanceof AppError) {
     return res.status(error.status).json({ success: false, error: { code: error.code, message: error.message, requestId: req.id } });
@@ -17,6 +22,7 @@ export function errorHandler(error: unknown, req: Request, res: Response, _next:
   }
 
   logger.error({ err: error, requestId: req.id }, "Unhandled API error");
+  reportUnexpectedError(error, String(req.id));
   return res.status(500).json({
     success: false,
     error: {

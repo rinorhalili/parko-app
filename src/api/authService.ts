@@ -15,6 +15,14 @@ export async function register(input: RegisterInput) {
 
 export function me() { return apiRequest<User>('/auth/me') }
 
+export function requestEmailVerification() {
+  return apiRequest<{ accepted: boolean; alreadyVerified: boolean }>('/auth/verify-email/request', { method: 'POST', body: JSON.stringify({}) })
+}
+
+export function verifyEmail(token: string) {
+  return apiRequest<{ verified: boolean }>('/auth/verify-email', { method: 'POST', body: JSON.stringify({ token }) })
+}
+
 export async function logout() {
   try {
     await apiRequest('/auth/logout', { method: 'POST', body: JSON.stringify({}) }, false)

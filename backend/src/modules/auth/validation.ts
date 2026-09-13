@@ -22,3 +22,4 @@ export const refreshSchema = z.object({
 
 export const resetRequestSchema = z.object({ email: z.email() });
 export const resetPasswordSchema = z.object({ token: z.string().min(20), password: z.string().min(12).max(128) });
+export const verifyEmailSchema = z.object({ token: z.string().min(20) });

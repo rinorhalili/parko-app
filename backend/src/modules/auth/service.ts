@@ -5,11 +5,12 @@ import { prisma } from "../../database/prisma.js";
 import { conflict, serviceUnavailable, unauthorized } from "../../utils/errors.js";
 import { hashPassword, verifyPassword } from "../../utils/password.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../utils/tokens.js";
-import { deliverPasswordReset, passwordResetDeliveryConfigured } from "./passwordResetDelivery.js";
+import { deliverEmailVerification, deliverPasswordReset, passwordResetDeliveryConfigured } from "./passwordResetDelivery.js";
 
 const hashToken = (token: string) => crypto.createHash("sha256").update(token).digest("hex");
 const refreshDays = 30;
 const passwordResetLifetimeMs = 60 * 60 * 1000;
+const emailVerificationLifetimeMs = 24 * 60 * 60 * 1000;
 
 function publicUser(user: { id: string; name: string; username: string; email: string; role: Role; reputationScore: number; avatar: string | null; bio: string | null; isVerified: boolean }) {
   return {
@@ -116,6 +117,35 @@ export async function resetPassword(resetToken: string, password: string) {
     await tx.refreshToken.updateMany({ where: { userId: record.userId, revokedAt: null }, data: { revokedAt: new Date() } });
     await tx.auditLog.create({ data: { actorId: record.userId, action: "auth.password.reset" } });
     return { reset: true };
+  });
+}
+
+export async function requestEmailVerification(userId: string) {
+  if (!env.EMAIL_VERIFICATION_WEB_URL || (!(env.RESEND_API_KEY && env.EMAIL_FROM) && !env.PASSWORD_RESET_DELIVERY_URL)) throw serviceUnavailable("Email verification delivery is not configured");
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+  if (user.isVerified) return { accepted: true, alreadyVerified: true };
+  const rawToken = crypto.randomBytes(32).toString("base64url");
+  const expiresAt = new Date(Date.now() + emailVerificationLifetimeMs);
+  const verificationUrl = new URL(env.EMAIL_VERIFICATION_WEB_URL);
+  verificationUrl.searchParams.set("token", rawToken);
+  const record = await prisma.$transaction(async (tx) => {
+    await tx.emailVerificationToken.updateMany({ where: { userId, usedAt: null }, data: { usedAt: new Date() } });
+    return tx.emailVerificationToken.create({ data: { userId, tokenHash: hashToken(rawToken), expiresAt } });
+  });
+  try { await deliverEmailVerification({ email: user.email, name: user.name, verificationUrl: verificationUrl.toString(), expiresAt }); }
+  catch (error) { await prisma.emailVerificationToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }); throw error; }
+  return { accepted: true, alreadyVerified: false };
+}
+
+export async function verifyEmail(token: string) {
+  return prisma.$transaction(async (tx) => {
+    const record = await tx.emailVerificationToken.findUnique({ where: { tokenHash: hashToken(token) } });
+    if (!record || record.usedAt || record.expiresAt <= new Date()) throw unauthorized("Invalid or expired verification token");
+    const consumed = await tx.emailVerificationToken.updateMany({ where: { id: record.id, usedAt: null }, data: { usedAt: new Date() } });
+    if (consumed.count !== 1) throw unauthorized("Invalid or expired verification token");
+    await tx.user.update({ where: { id: record.userId }, data: { isVerified: true } });
+    await tx.auditLog.create({ data: { actorId: record.userId, action: "auth.email.verified" } });
+    return { verified: true };
   });
 }
 

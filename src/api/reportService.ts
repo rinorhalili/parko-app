@@ -15,3 +15,7 @@ export function listParkingReports(params: { page?: number; pageSize?: number; p
 export function createParkingReport(input: CreateParkingReportInput) {
   return apiRequest<ParkingReport>('/reports/parking', { method: 'POST', body: JSON.stringify(input) })
 }
+
+export function voteOnParkingReport(id: string, vote: boolean) {
+  return apiRequest<{ reportId: string; vote: boolean; confirmations: number; disagreements: number }>(`/reports/parking/${encodeURIComponent(id)}/vote`, { method: 'PUT', body: JSON.stringify({ vote }) })
+}

@@ -82,3 +82,19 @@ export async function listParkingReports({ page = 0, pageSize = 100, parkingSpot
   ]);
   return { items, total, page, pageSize };
 }
+
+export async function voteOnParkingReport(userId: string, reportId: string, vote: boolean) {
+  const report = await prisma.parkingReport.findFirst({ where: { id: reportId, expiresAt: { gt: new Date() } } });
+  if (!report) throw notFound("Parking report not found or expired");
+  if (report.reporterId === userId) throw badRequest("You cannot vote on your own report");
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.parkingReportVote.upsert({ where: { parkingReportId_userId: { parkingReportId: reportId, userId } }, create: { parkingReportId: reportId, userId, vote }, update: { vote } });
+    const [confirmations, disagreements] = await Promise.all([
+      tx.parkingReportVote.count({ where: { parkingReportId: reportId, vote: true } }),
+      tx.parkingReportVote.count({ where: { parkingReportId: reportId, vote: false } })
+    ]);
+    return { confirmations, disagreements };
+  });
+  emitRealtime("parking:report-voted", { reportId, ...result }, "community");
+  return { reportId, vote, ...result };
+}
