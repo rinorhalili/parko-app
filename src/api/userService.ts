@@ -11,3 +11,7 @@ export function updateProfile(input: UpdateProfileInput) {
 export function changePassword(input: ChangePasswordInput) {
   return apiRequest<{ changed: boolean }>('/users/me/password', { method: 'PATCH', body: JSON.stringify(input) })
 }
+
+export function deleteAccount(input: { currentPassword: string }) {
+  return apiRequest<{ deleted: boolean }>('/users/me', { method: 'DELETE', body: JSON.stringify(input) })
+}
