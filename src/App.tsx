@@ -40,7 +40,7 @@ import {
 } from "./communityApi";
 import { SaveMyParkedLocationCard, SmsTariffHelper } from "./DriverTools";
 import { useAuth } from "./hooks/useAuth";
-import { changePassword, updateProfile } from "./api/userService";
+import { changePassword, deleteAccount, updateProfile } from "./api/userService";
 import {
   listParkedHistory,
   type ParkedHistory,
@@ -2172,6 +2172,11 @@ function ProfileView({
     confirm: "",
   });
   const [passwordStatus, setPasswordStatus] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState({
+    currentPassword: "",
+    open: false,
+  });
+  const [deleteStatus, setDeleteStatus] = useState("");
   const [history, setHistory] = useState<ParkedHistory[]>([]);
   const [historyStatus, setHistoryStatus] = useState("");
   const [reservationScope, setReservationScope] = useState<
@@ -2286,6 +2291,15 @@ function ProfileView({
       setPasswordStatus("Fjalëkalimi u ndryshua.");
     } catch {
       setPasswordStatus("Fjalëkalimi nuk u ndryshua. Provo përsëri.");
+    }
+  }
+
+  async function handleDeleteAccount() {
+    try {
+      await deleteAccount({ currentPassword: deleteConfirm.currentPassword });
+      void logout().finally(onHome);
+    } catch {
+      setDeleteStatus("Fshirja dështoi. Kontrollo fjalëkalimin dhe provo përsëri.");
     }
   }
 
@@ -2498,6 +2512,42 @@ function ProfileView({
             >
               Dil nga llogaria
             </button>
+            <button
+              type="button"
+              className="danger"
+              onClick={() => {
+                setDeleteStatus("");
+                setDeleteConfirm({ ...deleteConfirm, open: true });
+              }}
+            >
+              Fshi llogarinë
+            </button>
+            {deleteConfirm.open && (
+              <div className="settings-section">
+                <p>Kjo do të fshijë përgjithmonë llogarinë tënde. Ky veprim nuk mund të kthehet mbrapsht.</p>
+                <input
+                  type="password"
+                  placeholder="Fjalëkalimi aktual"
+                  value={deleteConfirm.currentPassword}
+                  onChange={(event) =>
+                    setDeleteConfirm({
+                      ...deleteConfirm,
+                      currentPassword: event.target.value,
+                    })
+                  }
+                />
+                <button type="button" className="danger" onClick={() => void handleDeleteAccount()}>
+                  Fshi llogarinë
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirm({ currentPassword: "", open: false })}
+                >
+                  Anulo
+                </button>
+                {deleteStatus && <p role="status">{deleteStatus}</p>}
+              </div>
+            )}
           </>
         )}
         <section>
@@ -2564,6 +2614,7 @@ const parkingPaletteOptions: Array<{
 ];
 
 function SettingsView({
+  user,
   settings,
   preferredType,
   walkingMinutes,
@@ -2578,6 +2629,7 @@ function SettingsView({
   onCommunity,
   onCommunitySpots,
 }: {
+  user: User | null;
   settings: MapSettings;
   preferredType: ParkingTypeFilter;
   walkingMinutes: 5 | 10 | 15;
@@ -2822,13 +2874,15 @@ function SettingsView({
             </span>
             <b>›</b>
           </button>
-          <button className="settings-login-button" onClick={onLogin}>
-            <span>
-              <strong>Hyr ose regjistrohu</strong>
-              <small>Ruaj preferencat dhe parkingjet e tua.</small>
-            </span>
-            <b>›</b>
-          </button>
+          {!user && (
+            <button className="settings-login-button" onClick={onLogin}>
+              <span>
+                <strong>Hyr ose regjistrohu</strong>
+                <small>Ruaj preferencat dhe parkingjet e tua.</small>
+              </span>
+              <b>›</b>
+            </button>
+          )}
           <a
             className="settings-login-button settings-login-button--link"
             href="/privacy"
@@ -2903,6 +2957,16 @@ function DetailsView({
   onStreetView: () => void;
 }) {
   const [reportOpen, setReportOpen] = useState(false);
+  const [sheetState, setSheetState] = useState<"peek" | "half" | "full">("half");
+  const sheetRef = useRef<HTMLElement>(null);
+  const gestureRef = useRef<{
+    pointerId: number;
+    startY: number;
+    startedAt: number;
+    dragging: boolean;
+  } | null>(null);
+  const gestureCleanupRef = useRef<(() => void) | null>(null);
+  const [sheetDragging, setSheetDragging] = useState(false);
   const routeMinutes = route
     ? Math.max(1, Math.ceil(route.durationSeconds / 60))
     : parking.driveMinutes;
@@ -2918,6 +2982,82 @@ function DetailsView({
       : routeLoading
         ? "Duke llogaritur rutën…"
         : "Rruga nuk është e disponueshme";
+
+  const handleDetailsSheetPointerDown = (
+    event: React.PointerEvent<HTMLElement>,
+  ) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (gestureRef.current?.pointerId === event.pointerId) return;
+    const target = event.target as Element;
+    const header = target.closest(".details-sheet__header");
+    if (!header && !(sheetState === "full" && sheetRef.current?.scrollTop === 0))
+      return;
+    gestureCleanupRef.current?.();
+    gestureRef.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      startedAt: performance.now(),
+      dragging: false,
+    };
+    const move = (pointerEvent: PointerEvent) => {
+      const gesture = gestureRef.current;
+      if (!gesture || gesture.pointerId !== pointerEvent.pointerId) return;
+      const deltaY = pointerEvent.clientY - gesture.startY;
+      if (!gesture.dragging && Math.abs(deltaY) < 7) return;
+      gesture.dragging = true;
+      setSheetDragging(true);
+      const limitedDelta =
+        sheetState === "peek"
+          ? Math.max(-220, Math.min(60, deltaY))
+          : sheetState === "full"
+            ? Math.max(-20, Math.min(260, deltaY))
+            : Math.max(-180, Math.min(220, deltaY));
+      sheetRef.current?.style.setProperty(
+        "--sheet-drag-y",
+        `${limitedDelta}px`,
+      );
+      if (pointerEvent.cancelable) pointerEvent.preventDefault();
+    };
+    const cleanup = () => {
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", finish);
+      document.removeEventListener("pointercancel", finish);
+      gestureCleanupRef.current = null;
+      setSheetDragging(false);
+    };
+    const finish = (pointerEvent: PointerEvent) => {
+      const gesture = gestureRef.current;
+      if (!gesture || gesture.pointerId !== pointerEvent.pointerId) return;
+      const deltaY = pointerEvent.clientY - gesture.startY;
+      const elapsed = Math.max(1, performance.now() - gesture.startedAt);
+      const velocity = Math.abs(deltaY) / elapsed;
+      sheetRef.current?.style.removeProperty("--sheet-drag-y");
+      gestureRef.current = null;
+      cleanup();
+      if (!gesture.dragging) {
+        setSheetState((current) =>
+          current === "peek" ? "half" : current === "half" ? "full" : "half",
+        );
+        return;
+      }
+      if (sheetState === "peek" && deltaY > 0 && (deltaY >= 90 || velocity >= 0.5)) {
+        onBack();
+        return;
+      }
+      if (Math.abs(deltaY) < 44 && velocity < 0.45) return;
+      setSheetState((current) => {
+        if (deltaY < 0) return current === "peek" ? "half" : "full";
+        return current === "full" ? "half" : "peek";
+      });
+    };
+    document.addEventListener("pointermove", move, { passive: false });
+    document.addEventListener("pointerup", finish);
+    document.addEventListener("pointercancel", finish);
+    gestureCleanupRef.current = cleanup;
+  };
+
+  useEffect(() => () => gestureCleanupRef.current?.(), []);
+
   return (
     <div className="screen screen--map">
       <StatusBar />
@@ -2946,14 +3086,23 @@ function DetailsView({
         {saved ? "♥" : "♡"}
       </button>
 
-      <section className="details-sheet">
-        <div className="drag-handle" />
-        <h1>{parking.name}</h1>
+      <section
+        ref={sheetRef}
+        className={`details-sheet details-sheet--${sheetState}${sheetDragging ? " details-sheet--dragging" : ""}`}
+        onPointerDown={handleDetailsSheetPointerDown}
+      >
+        <div
+          className="details-sheet__header"
+          onPointerDown={handleDetailsSheetPointerDown}
+        >
+          <div className="drag-handle" />
+          <h1>{parking.name}</h1>
         <span
           className={`availability-badge availability-badge--${parking.status}`}
         >
           ● {availabilityLabel(parking)}
         </span>
+        </div>
         {mapSettings.showDataSources && (
           <DataTrustBadge parking={parking} detailed />
         )}
@@ -4586,6 +4735,7 @@ export default function App() {
         )}
         {screen === "settings" && (
           <SettingsView
+            user={user}
             settings={mapSettings}
             preferredType={filters.type as ParkingTypeFilter}
             walkingMinutes={walkingMinutes}

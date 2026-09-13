@@ -13,12 +13,13 @@ const reportSchema = z.object({
 });
 const reviewSchema = z.object({ status: z.enum(["REVIEWING", "RESOLVED", "DISMISSED"]), action: z.string().max(500).optional() });
 const actionSchema = z.object({ targetType: z.string().min(1), targetId: z.string().min(1), action: z.string().min(2), reason: z.string().min(5) });
+const listQuerySchema = z.object({ status: z.enum(["OPEN", "REVIEWING", "RESOLVED", "DISMISSED"]).optional(), page: z.coerce.number().int().min(0).default(0) });
 
 export const moderationRoutes = Router();
 
 moderationRoutes.post("/reports", authenticate, validate({ body: reportSchema }), moderationController.createReport);
 
-moderationRoutes.get("/reports", authenticate, authorize("MODERATOR"), moderationController.listReports);
+moderationRoutes.get("/reports", authenticate, authorize("MODERATOR"), validate({ query: listQuerySchema }), moderationController.listReports);
 
 moderationRoutes.get("/reports/:id", authenticate, authorize("MODERATOR"), validate({ params: idParams }), moderationController.getReport);
 

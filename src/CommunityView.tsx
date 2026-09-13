@@ -101,7 +101,7 @@ export default function CommunityView({ onBack, onLogin }: Props) {
 
   return <div className="screen settings-screen">
     <StatusBarLike />
-    <header className="settings-header"><div><small>Parko</small><h1>Komuniteti</h1><p>Raportime dhe njoftime nga API-ja Parko.</p></div><button onClick={onBack}>Harta</button></header>
+    <header className="settings-header"><button className="floating-back community-back" onClick={onBack} aria-label="Kthehu">‹</button><div><small>Parko</small><h1>Komuniteti</h1><p>Raportime dhe njoftime nga API-ja Parko.</p></div></header>
     <main className="settings-content">
       {error && <div className="app-feedback" role="alert"><span>{error}</span><button onClick={() => void load()}>Provo përsëri</button></div>}
       <section className="settings-section">
