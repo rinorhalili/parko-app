@@ -12,8 +12,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Prepare compose build environment
+        working-directory: backend
+        run: cp .env.docker.example .env
       - name: Build production images
         working-directory: backend
+        env:
+          POSTGRES_PASSWORD: ci-build-placeholder
         run: docker compose -f docker-compose.production.yml build
       - name: Deployment handoff
         run: echo "Push images or run remote compose deploy using your hosting secrets."
