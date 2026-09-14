@@ -1,9 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
-import { prisma } from "../../database/prisma.js";
 import { authenticate } from "../../middleware/authenticate.js";
 import { validate } from "../../middleware/validate.js";
-import { ok } from "../../utils/apiResponse.js";
 import { notificationController } from "../../controllers/notification.controller.js";
 
 const idParams = z.object({ id: z.uuid() });
@@ -18,43 +16,12 @@ notificationRoutes.use(authenticate);
 notificationRoutes.get("/", notificationController.list);
 
 
-notificationRoutes.post("/devices", validate({ body: deviceSchema }), async (req, res, next) => {
-  try {
-    ok(res, await prisma.pushDevice.upsert({
-      where: { token: req.body.token },
-      create: { userId: req.user!.id, token: req.body.token, platform: req.body.platform },
-      update: { userId: req.user!.id, platform: req.body.platform, enabled: true }
-    }), undefined, 201);
-  } catch (error) {
-    next(error);
-  }
-});
+notificationRoutes.post("/devices", validate({ body: deviceSchema }), notificationController.registerDevice);
 
-notificationRoutes.delete("/devices", validate({ body: deviceSchema.pick({ token: true }) }), async (req, res, next) => {
-  try {
-    await prisma.pushDevice.deleteMany({ where: { userId: req.user!.id, token: req.body.token } });
-    ok(res, { deleted: true });
-  } catch (error) {
-    next(error);
-  }
-});
+notificationRoutes.delete("/devices", validate({ body: deviceSchema.pick({ token: true }) }), notificationController.unregisterDevice);
 
 notificationRoutes.patch("/:id/read", validate({ params: idParams }), notificationController.read);
 
-notificationRoutes.post("/read-all", async (req, res, next) => {
-  try {
-    await prisma.notification.updateMany({ where: { recipientId: req.user!.id, readAt: null }, data: { readAt: new Date() } });
-    ok(res, { readAll: true });
-  } catch (error) {
-    next(error);
-  }
-});
+notificationRoutes.post("/read-all", notificationController.markAllRead);
 
-notificationRoutes.delete("/:id", validate({ params: idParams }), async (req, res, next) => {
-  try {
-    await prisma.notification.deleteMany({ where: { id: req.params.id as string, recipientId: req.user!.id } });
-    ok(res, { deleted: true });
-  } catch (error) {
-    next(error);
-  }
-});
+notificationRoutes.delete("/:id", validate({ params: idParams }), notificationController.deleteOne);

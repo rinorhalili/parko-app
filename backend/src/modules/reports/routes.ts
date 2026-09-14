@@ -3,9 +3,7 @@ import { z } from "zod";
 import { authenticate } from "../../middleware/authenticate.js";
 import { parkingReportRateLimit } from "../../middleware/rateLimit.js";
 import { validate } from "../../middleware/validate.js";
-import { createReport, listReports } from "../../controllers/report.controller.js";
-import { voteOnParkingReport } from "./service.js";
-import { ok } from "../../utils/apiResponse.js";
+import { createReport, listReports, voteOnReport } from "../../controllers/report.controller.js";
 import { parkingReportSchema } from "./validation.js";
 
 export const reportRoutes = Router();
@@ -18,6 +16,4 @@ reportRoutes.get("/parking", validate({ query: z.object({
   parkingSpotId: z.string().min(1).max(120).optional()
 }) }), listReports);
 
-reportRoutes.put("/parking/:id/vote", authenticate, validate({ params: z.object({ id: z.uuid() }), body: z.object({ vote: z.boolean() }) }), async (req, res, next) => {
-  try { ok(res, await voteOnParkingReport(req.user!.id, req.params.id as string, req.body.vote)); } catch (error) { next(error); }
-});
+reportRoutes.put("/parking/:id/vote", authenticate, validate({ params: z.object({ id: z.uuid() }), body: z.object({ vote: z.boolean() }) }), voteOnReport);
