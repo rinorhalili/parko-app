@@ -40,13 +40,8 @@ import {
   submitParkingObservation,
   type CommunityParkingReport,
 } from "./communityApi";
-import { SaveMyParkedLocationCard, SmsTariffHelper } from "./DriverTools";
 import { useAuth } from "./hooks/useAuth";
 import { changePassword, deleteAccount, updateProfile } from "./api/userService";
-import {
-  listParkedHistory,
-  type ParkedHistory,
-} from "./api/parkingHistoryService";
 import { logout } from "./api/authService";
 import {
   listFavorites,
@@ -2131,22 +2126,14 @@ function HomeView({
 }
 
 function ProfileView({
-  parkings,
-  showDataSources,
-  userLocation,
   user,
   onHome,
-  onOpen,
   onSettings,
   onLogin,
   onProfile,
 }: {
-  parkings: Parking[];
-  showDataSources: boolean;
-  userLocation?: Parking["coordinates"];
   user: User | null;
   onHome: () => void;
-  onOpen: (parking: Parking) => void;
   onSettings: () => void;
   onLogin: () => void;
   onProfile: () => void;
@@ -2169,10 +2156,6 @@ function ProfileView({
     open: false,
   });
   const [deleteStatus, setDeleteStatus] = useState("");
-  const [history, setHistory] = useState<ParkedHistory[]>([]);
-  const [historyStatus, setHistoryStatus] = useState("");
-  const [historyAttempt, setHistoryAttempt] = useState(0);
-  const [historyFailed, setHistoryFailed] = useState(false);
   const [reservationScope, setReservationScope] = useState<
     "active" | "history"
   >("active");
@@ -2230,32 +2213,6 @@ function ProfileView({
       setReservationStatus("Rezervimi nuk u anulua. Provo përsëri.");
     }
   }
-
-  useEffect(() => {
-    if (!user) {
-      setHistory([]);
-      return;
-    }
-    let cancelled = false;
-    setHistoryFailed(false);
-    setHistoryStatus("Duke ngarkuar…");
-    void listParkedHistory()
-      .then((items) => {
-        if (!cancelled) {
-          setHistory(items);
-          setHistoryStatus("");
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setHistoryFailed(true);
-          setHistoryStatus("Historiku nuk mund të ngarkohet.");
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [user, historyAttempt]);
 
   async function saveProfile(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -2434,33 +2391,6 @@ function ProfileView({
               {passwordStatus && <p role="status">{passwordStatus}</p>}
             </form>
             </details>
-            <section className="settings-section">
-              <h2>Vendet ku kam parkuar</h2>
-              {historyStatus && <p role="status">{historyStatus}</p>}
-              {historyFailed && (
-                <button type="button" className="button button--secondary" onClick={() => setHistoryAttempt((attempt) => attempt + 1)}>
-                  Provo përsëri
-                </button>
-              )}
-              {!historyStatus &&
-                (history.length ? (
-                  <ul>
-                    {history.map((entry) => (
-                      <li key={entry.id}>
-                        {entry.latitude.toFixed(5)},{" "}
-                        {entry.longitude.toFixed(5)}
-                        {entry.note && ` — ${entry.note}`}
-                        <br />
-                        <small>
-                          {new Date(entry.parkedAt).toLocaleString("sq-AL")}
-                        </small>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p>Nuk ka vende të ruajtura ende.</p>
-                ))}
-            </section>
             <section className="settings-section reservation-list">
               <h2>Rezervimet e mia</h2>
               <div className="reservation-tabs">
@@ -2556,30 +2486,6 @@ function ProfileView({
               </div>
             )}
           </>
-        )}
-        <details className="account-disclosure">
-          <summary>Vetura ime dhe pagesa SMS</summary>
-          <SaveMyParkedLocationCard initialLocation={userLocation} />
-          <SmsTariffHelper />
-        </details>
-        <section>
-          <h2>Parkingjet e ruajtura</h2>
-        </section>
-        {parkings.length ? (
-          parkings.map((parking) => (
-            <ParkingCard
-              key={parking.id}
-              parking={parking}
-              showSource={showDataSources}
-              showDriving={Boolean(userLocation)}
-              onOpen={() => onOpen(parking)}
-            />
-          ))
-        ) : (
-          <div className="empty-state">
-            <strong>Nuk ke parkingje të ruajtura</strong>
-            <span>Prek ＋ te detajet e një parkingu për ta ruajtur.</span>
-          </div>
         )}
       </main>
       <BottomNav
@@ -4760,23 +4666,11 @@ export default function App() {
         )}
         {screen === "profile" && (
           <ProfileView
-            parkings={locatedParkings.filter((parking) =>
-              savedParkingIds.has(parking.id),
-            )}
-            showDataSources={mapSettings.showDataSources}
-            userLocation={
-              userLocationInPrishtina ? activeUserLocation : undefined
-            }
             user={user}
             onLogin={() => setShowLoginModal(true)}
             onHome={() => setScreen("home")}
             onProfile={() => undefined}
             onSettings={() => setScreen("settings")}
-            onOpen={(parking) => {
-              setSelected(parking);
-              setDestination(null);
-              setScreen("details");
-            }}
           />
         )}
         {screen === "settings" && (
