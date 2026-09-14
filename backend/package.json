@@ -38,7 +38,7 @@
     "pino-http": "^11.0.0",
     "socket.io": "^4.8.1",
     "web-push": "^3.6.7",
-    "zod": "^4.1.13"
+    "zod": "^4.6.2"
   },
   "devDependencies": {
     "@types/compression": "^1.8.1",
