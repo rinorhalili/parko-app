@@ -2,7 +2,7 @@ export type Availability = 'available' | 'limited' | 'full' | 'unknown'
 export type ParkingAccess = 'public' | 'permissive' | 'customers' | 'private' | 'permit' | 'no' | 'unknown'
 export type MunicipalParkingCategory = 'residential' | 'commercial' | 'combined' | 'barrier'
 export type MapCoordinate = { lat: number; lng: number }
-export type MapVariant = 'standard' | 'minimal'
+export type MapVariant = 'standard' | 'minimal' | 'dark' | 'satellite'
 export type ParkingPalette = 'green' | 'price' | 'operator'
 export type MapMarkerFilter = 'all' | 'free' | 'paid' | 'municipal'
 

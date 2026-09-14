@@ -24,10 +24,12 @@
     "backend:prisma:generate": "npm run prisma:generate --prefix backend"
   },
   "dependencies": {
+    "@maplibre/maplibre-gl-leaflet": "^0.1.4",
     "@supabase/supabase-js": "2.112.4",
     "@vitejs/plugin-react": "latest",
     "leaflet": "^1.9.4",
     "leaflet.markercluster": "^1.5.3",
+    "maplibre-gl": "^6.9.0",
     "react": "latest",
     "react-dom": "latest",
     "socket.io-client": "^4.8.3",

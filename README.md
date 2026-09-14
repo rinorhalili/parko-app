@@ -11,6 +11,15 @@ npm run dev
 
 Open `http://127.0.0.1:5173/`.
 
+Set `VITE_MAPTILER_KEY` in a `.env` file in the project root (beside
+`package.json`), then restart `npm run dev`. The default map uses MapLibre GL
+with MapTiler Streets, centered on Prishtina. The existing parking overlays,
+routes, and controls remain available. Settings offers Streets, Light, Dark,
+and Satellite (with street labels), all powered by MapTiler. Your selected style
+is saved on this device. Without a key, the
+existing OpenStreetMap basemap remains available and a setup message is shown.
+The `.env` file is ignored by Git; do not put the key in source code.
+
 ## Desktop app
 
 ```bash

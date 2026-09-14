@@ -227,13 +227,21 @@ input:focus-visible {
   background: #f5f7f8;
 }
 
-.map-canvas--theme-standard .leaflet-tile-pane {
-  filter: saturate(0.72) contrast(0.97) brightness(1.025);
+.map-basemap-status {
+  position: absolute;
+  z-index: 450;
+  top: 220px;
+  left: 12px;
+  right: 64px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff;
+  color: #334155;
+  box-shadow: 0 2px 8px #0002;
+  font-size: 12px;
+  pointer-events: none;
 }
-.map-canvas--theme-minimal .leaflet-tile-pane,
-.map-canvas--theme-minimal .leaflet-mapLabels-pane {
-  filter: saturate(0.78) contrast(0.98) brightness(1.02);
-}
+
 
 .leaflet-map .leaflet-control-zoom {
   overflow: hidden;

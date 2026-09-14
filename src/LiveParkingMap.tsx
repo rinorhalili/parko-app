@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
+import { maplibreGL } from '@maplibre/maplibre-gl-leaflet'
+import { setWorkerUrl } from 'maplibre-gl'
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
+import 'maplibre-gl/dist/maplibre-gl.css'
 import 'leaflet.markercluster'
 import 'leaflet.markercluster/dist/MarkerCluster.css'
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
@@ -9,6 +13,9 @@ import type { Destination, DrivingRoute, MapMarkerFilter, MapSettings, MapVarian
 
 
 type MapMode = 'home' | 'details' | 'navigation' | 'walking'
+// Bundle the worker and its shared module for both Vite dev and production.
+setWorkerUrl(maplibreWorkerUrl)
+const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_KEY?.trim()
 const PRISHTINA_LEAFLET_BOUNDS: [L.LatLngTuple, L.LatLngTuple] = [
   [PRISHTINA_MAP_BOUNDS.south, PRISHTINA_MAP_BOUNDS.west],
   [PRISHTINA_MAP_BOUNDS.north, PRISHTINA_MAP_BOUNDS.east],
@@ -24,26 +31,19 @@ export const DEFAULT_MAP_SETTINGS: MapSettings = {
   showDataSources: true,
 }
 
-const MAP_TILES: Record<MapVariant, {
-  url: string
-  labelsUrl?: string
-  subdomains: string
-  maxZoom: number
-  attribution: string
-}> = {
-  standard: {
+// Retain the original stored IDs so existing preferences still work.
+const MAPTILER_STYLES: Record<MapVariant, string> = {
+  standard: 'streets-v4',
+  minimal: 'dataviz-v4-light',
+  dark: 'streets-v4-dark',
+  satellite: 'hybrid-v4',
+}
+
+const FALLBACK_TILES = {
     url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
     subdomains: 'abc',
     maxZoom: 19,
     attribution: 'Harta: <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>',
-  },
-  minimal: {
-    url: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png',
-    labelsUrl: 'https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png',
-    subdomains: 'abcd',
-    maxZoom: 20,
-    attribution: 'Harta: <a href="https://www.openstreetmap.org/copyright" target="_blank">OSM</a> · <a href="https://carto.com/attributions" target="_blank">CARTO</a>',
-  },
 }
 
 function priceClass(price: number | null) {
@@ -52,6 +52,16 @@ function priceClass(price: number | null) {
   if (price <= 0.5) return 'low'
   if (price <= 1) return 'medium'
   return 'high'
+}
+
+function navigationPadding(map: L.Map) {
+  const size = map.getSize()
+  const wide = size.x >= 650 || (size.x > size.y && size.y <= 540)
+  if (wide) return { paddingTopLeft: L.point(size.x >= 650 ? 410 : 330, 30), paddingBottomRight: L.point(55, 30) }
+  const screen = map.getContainer().closest('.navigation-screen')
+  const headerHeight = screen?.querySelector('.trip-header')?.getBoundingClientRect().height ?? 130
+  const panelHeight = screen?.querySelector('.trip-panel')?.getBoundingClientRect().height ?? size.y * .52
+  return { paddingTopLeft: L.point(35, headerHeight + 35), paddingBottomRight: L.point(55, panelHeight + 35) }
 }
 
 function priceLabel(price: number | null) {
@@ -143,8 +153,7 @@ export default function LiveParkingMap({
   // "leaving" pins are drawn on the map.
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
-  const baseTileLayerRef = useRef<L.TileLayer | null>(null)
-  const labelTileLayerRef = useRef<L.TileLayer | null>(null)
+  const baseTileLayerRef = useRef<L.Layer | null>(null)
   const parkingLayerRef = useRef<L.LayerGroup | null>(null)
   const clusterGroupRef = useRef<L.MarkerClusterGroup | null>(null)
   const routeLayerRef = useRef<L.LayerGroup | null>(null)
@@ -161,6 +170,7 @@ export default function LiveParkingMap({
   recenterPositionRef.current = userLocation
   const [mapZoom, setMapZoom] = useState(14)
   const [mapReadyToken, setMapReadyToken] = useState(0)
+  const [basemapError, setBasemapError] = useState<string | null>(null)
   onSelectRef.current = onSelect
   onPickDestinationRef.current = onPickDestination
   onLongPressRef.current = onLongPress
@@ -279,7 +289,6 @@ export default function LiveParkingMap({
       map.remove()
       mapRef.current = null
       baseTileLayerRef.current = null
-      labelTileLayerRef.current = null
       clusterGroupRef.current = null
     }
   }, [])
@@ -288,23 +297,41 @@ export default function LiveParkingMap({
     const map = mapRef.current
     if (!map) return
     if (baseTileLayerRef.current) map.removeLayer(baseTileLayerRef.current)
-    if (labelTileLayerRef.current) map.removeLayer(labelTileLayerRef.current)
-    const tiles = MAP_TILES[mapSettings.variant]
+    baseTileLayerRef.current = null
+    setBasemapError(null)
+    if (MAPTILER_KEY) {
+      // Keep Leaflet's parking layers and interactions above the GL basemap.
+      const layer = maplibreGL({
+        style: `https://api.maptiler.com/maps/${MAPTILER_STYLES[mapSettings.variant]}/style.json?key=${encodeURIComponent(MAPTILER_KEY)}`,
+        attributionControl: {
+          customAttribution: '&copy; <a href="https://www.maptiler.com/" target="_blank" rel="noopener noreferrer">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>',
+        },
+      })
+      try {
+        layer.addTo(map)
+        baseTileLayerRef.current = layer
+        const glMap = layer.getMaplibreMap()
+        const onError = () => setBasemapError('Harta MapTiler nuk u ngarkua. Kontrollo lidhjen dhe çelësin API.')
+        const onIdle = () => setBasemapError(null)
+        glMap.on('error', onError)
+        glMap.on('idle', onIdle)
+        return () => {
+          glMap.off('error', onError)
+          glMap.off('idle', onIdle)
+        }
+      } catch {
+        if (map.hasLayer(layer)) map.removeLayer(layer)
+        setBasemapError('MapLibre nuk mund të hapet. Po shfaqet harta rezervë.')
+      }
+    } else {
+      setBasemapError('Për hartën MapTiler, vendos VITE_MAPTILER_KEY në .env dhe rinis aplikacionin.')
+    }
+    const tiles = FALLBACK_TILES
     baseTileLayerRef.current = L.tileLayer(tiles.url, {
       subdomains: tiles.subdomains,
       maxZoom: tiles.maxZoom,
       attribution: tiles.attribution,
     }).addTo(map)
-    labelTileLayerRef.current = tiles.labelsUrl
-      ? L.tileLayer(tiles.labelsUrl, {
-        pane: 'mapLabels',
-        subdomains: tiles.subdomains,
-        minZoom: 11,
-        maxZoom: tiles.maxZoom,
-        opacity: .9,
-        attribution: tiles.attribution,
-      }).addTo(map)
-      : null
   }, [mapSettings.variant])
 
   useEffect(() => {
@@ -315,7 +342,10 @@ export default function LiveParkingMap({
       mapRef.current.flyTo([PRISHTINA_CENTER.lat, PRISHTINA_CENTER.lng], 13, { duration: .45 })
       return
     }
-    mapRef.current.flyTo([userLocation.lat, userLocation.lng], mode === 'navigation' ? 17 : 16, { duration: .45 })
+    if (mode === 'navigation') {
+      const point = L.latLng(userLocation.lat, userLocation.lng)
+      mapRef.current.fitBounds(L.latLngBounds(point, point), { ...navigationPadding(mapRef.current), maxZoom: 17, animate: false })
+    } else mapRef.current.flyTo([userLocation.lat, userLocation.lng], 16, { duration: .45 })
   }, [recenterToken])
 
   useEffect(() => {
@@ -418,6 +448,13 @@ export default function LiveParkingMap({
     const routeLayer = routeLayerRef.current
     if (!map || !routeLayer) return
     routeLayer.clearLayers()
+    if (mode === 'navigation') {
+      const entrance = parkingAccessPoint(selected, userLocation)
+      L.marker([entrance.lat, entrance.lng], {
+        icon: L.divIcon({ className: '', html: '<span class="trip-map-destination">P</span>', iconSize: [36, 36], iconAnchor: [18, 18] }),
+        title: selected.name, interactive: false, zIndexOffset: 1000,
+      }).addTo(routeLayer)
+    }
     if (userLocationLive && isWithinPrishtinaMap(userLocation)) {
       if (userLocationAccuracy) {
         L.circle([userLocation.lat, userLocation.lng], {
@@ -517,11 +554,13 @@ export default function LiveParkingMap({
       if (!shouldFocusSelectedParking && !manualViewportRef.current && automaticViewportRef.current !== routeViewportKey) {
         automaticViewportRef.current = routeViewportKey
         if (followsLiveLocation) {
-          map.setView([userLocation.lat, userLocation.lng], Math.max(17, Math.min(18, map.getZoom())), { animate: false })
+          const point = L.latLng(userLocation.lat, userLocation.lng)
+          map.fitBounds(L.latLngBounds(point, point), { ...navigationPadding(map), maxZoom: Math.max(17, Math.min(18, map.getZoom())), animate: false })
         } else if (mode === 'navigation' || mode === 'walking') {
           map.fitBounds(L.latLngBounds(routePoints), {
             paddingTopLeft: [44, 120],
             paddingBottomRight: [44, 205],
+            ...(mode === 'navigation' ? navigationPadding(map) : {}),
             animate: false,
           })
         } else if (mode === 'home' && (!destination || destination.source === 'map')) {
@@ -572,10 +611,12 @@ export default function LiveParkingMap({
       if (automaticViewportRef.current !== navigationViewportKey) {
         automaticViewportRef.current = navigationViewportKey
         if (userLocationLive && isWithinPrishtinaMap(userLocation)) {
-          map.setView([userLocation.lat, userLocation.lng], 17, { animate: false })
+          const point = L.latLng(userLocation.lat, userLocation.lng)
+          map.fitBounds(L.latLngBounds(point, point), { ...navigationPadding(map), maxZoom: 17, animate: false })
         } else {
           const entrance = parkingAccessPoint(selected, userLocation)
-          map.fitBounds([[userLocation.lat, userLocation.lng], [entrance.lat, entrance.lng]], { padding: [70, 70], animate: false })
+          const point = L.latLng(entrance.lat, entrance.lng)
+          map.fitBounds(L.latLngBounds(point, point), { ...navigationPadding(map), maxZoom: 16, animate: false })
         }
       }
     } else if (!shouldFocusSelectedParking && mode === 'details' && !route) {
@@ -595,6 +636,7 @@ export default function LiveParkingMap({
         .parking-point { display: block; box-sizing: border-box; width: var(--parking-point-size); height: var(--parking-point-size); border: var(--parking-point-border-width) solid var(--parking-point-border); border-radius: 50%; background: var(--parking-point-color); opacity: var(--parking-point-opacity); cursor: pointer; }
       `}</style>
       <div ref={containerRef} className="leaflet-map" />
+      {basemapError && <div className="map-basemap-status" role="status">{basemapError}</div>}
       {mode === 'home' && pickingDestination && <div className="map-pick-banner">Prek hartën për të vendosur destinacionin</div>}
       {mode === 'home' && destination && mapSettings.parkingPalette !== 'green' && (
         <div className="price-legend" aria-label="Kategoritë e çmimeve">

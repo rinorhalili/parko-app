@@ -1,3 +1,4 @@
+import NavigationView from "./NavigationView";
 import { useRoutingOrigin } from "./hooks/useRoutingOrigin";
 import Onboarding from "./onboarding/Onboarding";
 import { useOnboarding } from "./onboarding/useOnboarding";
@@ -90,7 +91,7 @@ const initialFilters: Filters = {
 
 function normalizedMapSettings(value?: Partial<MapSettings>): MapSettings {
   const variant =
-    value?.variant && ["standard", "minimal"].includes(value.variant)
+    value?.variant && ["standard", "minimal", "dark", "satellite"].includes(value.variant)
       ? value.variant
       : DEFAULT_MAP_SETTINGS.variant;
   const parkingPalette =
@@ -2502,19 +2503,26 @@ const mapVariantOptions: Array<{
   value: MapVariant;
   label: string;
   description: string;
-  badge: string;
 }> = [
   {
     value: "standard",
-    label: "Standard",
-    description: "Rrugë dhe vende · OpenStreetMap",
-    badge: "Aktuale",
+    label: "Streets",
+    description: "Rrugë, lagje dhe vende për orientim të përditshëm.",
   },
   {
     value: "minimal",
-    label: "E thjeshtë",
-    description: "Më pak hollësi · CARTO",
-    badge: "E mëparshme",
+    label: "Light",
+    description: "Hartë e çelët dhe e pastër që nxjerr në pah parkingjet.",
+  },
+  {
+    value: "dark",
+    label: "Dark",
+    description: "Ngjyra të errëta për përdorim në mbrëmje.",
+  },
+  {
+    value: "satellite",
+    label: "Satellite",
+    description: "Pamje satelitore me emra rrugësh dhe vendesh.",
   },
 ];
 
@@ -3252,7 +3260,6 @@ function DetailsView({
         <button
           className="button"
           onClick={onNavigate}
-          disabled={userLocationLive && routeLoading}
         >
           {!userLocationLive
             ? "Aktivizo lokacionin"
@@ -3263,219 +3270,6 @@ function DetailsView({
                 : "Nisu drejt parkingut"}
         </button>
       </div>
-    </div>
-  );
-}
-
-function NavigationView({
-  parking,
-  route,
-  userLocation,
-  userLocationLive,
-  userLocationAccuracy,
-  mapSettings,
-  recenterToken,
-  hasDestination,
-  onRecenter,
-  onStop,
-  onArrive,
-}: {
-  parking: Parking;
-  route: DrivingRoute | null;
-  userLocation: Parking["coordinates"];
-  userLocationLive: boolean;
-  userLocationAccuracy: number | null;
-  mapSettings: MapSettings;
-  recenterToken: number;
-  hasDestination: boolean;
-  onRecenter: () => void;
-  onStop: () => void;
-  onArrive: () => void;
-}) {
-  const [showSteps, setShowSteps] = useState(false);
-  const [mapMoved, setMapMoved] = useState(false);
-  const [muted, setMuted] = useState(false);
-  const [confirmStop, setConfirmStop] = useState(false);
-  const directionRef = useRef<HTMLElement>(null);
-  const stepsRef = useRef<HTMLElement>(null);
-  const nextStep =
-    route?.steps.find(
-      (step) => !["depart", "arrive"].includes(step.maneuverType),
-    ) ?? route?.steps[0];
-  const routeMinutes = route
-    ? Math.max(1, Math.ceil(route.durationSeconds / 60))
-    : parking.driveMinutes;
-  const routeDistance = route?.distanceMeters ?? parking.distanceMeters;
-  const turnIcon = nextStep?.instruction.includes("majtas")
-    ? "↰"
-    : nextStep?.instruction.includes("djathtas")
-      ? "↱"
-      : "↑";
-  const arrivalTime = new Intl.DateTimeFormat("sq-AL", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(new Date(Date.now() + routeMinutes * 60_000));
-  useEffect(() => {
-    if (!showSteps) return;
-    const closeSteps = (event: PointerEvent) => {
-      const target = event.target as Node;
-      if (
-        !directionRef.current?.contains(target) &&
-        !stepsRef.current?.contains(target)
-      )
-        setShowSteps(false);
-    };
-    document.addEventListener("pointerdown", closeSteps);
-    return () => document.removeEventListener("pointerdown", closeSteps);
-  }, [showSteps]);
-  return (
-    <div className="screen screen--map">
-      <StatusBar />
-      <LiveParkingMap
-        parkings={[]}
-        selected={parking}
-        onSelect={() => undefined}
-        mode="navigation"
-        route={route}
-        recenterToken={recenterToken}
-        userLocation={userLocation}
-        userLocationLive={userLocationLive}
-        userLocationAccuracy={userLocationAccuracy}
-        mapSettings={mapSettings}
-        onManualMove={() => setMapMoved(true)}
-      />
-
-      <section className="direction-card" ref={directionRef}>
-        <span className="turn-icon">{turnIcon}</span>
-        <div>
-          <small>
-            {nextStep && userLocationLive
-              ? "Drejtimi i ardhshëm"
-              : "Udhëzimet janë pezulluar"}
-          </small>
-          <strong>
-            {userLocationLive
-              ? (nextStep?.instruction ?? "Rruga nuk është e disponueshme")
-              : "Duke pritur lokacionin"}
-          </strong>
-          <span>{nextStep ? `në ${nextStep.roadName}` : "OSRM routing"}</span>
-        </div>
-        <button
-          onClick={() => setShowSteps((value) => !value)}
-          aria-label={showSteps ? "Mbyll udhëzimet" : "Më shumë udhëzime"}
-        >
-          {showSteps ? "×" : <AppIcon name="more" />}
-        </button>
-      </section>
-
-      {showSteps && (
-        <section
-          className="route-steps-card"
-          aria-label="Udhëzimet e rutës"
-          ref={stepsRef}
-        >
-          <strong>Hapat e rutës</strong>
-          {(route?.steps ?? [])
-            .filter((step) => step.maneuverType !== "depart")
-            .slice(0, 6)
-            .map((step, index) => (
-              <div key={`${step.maneuverType}-${index}`}>
-                <b>{index + 1}</b>
-                <span>
-                  {step.instruction}
-                  <small>
-                    {step.roadName} • {step.distanceMeters} m
-                  </small>
-                </span>
-              </div>
-            ))}
-          {!route?.steps.length && <p>Udhëzimet po llogariten…</p>}
-        </section>
-      )}
-
-      <div className="navigation-map-actions">
-        <button
-          className={`navigation-mute ${muted ? "navigation-mute--active" : ""}`}
-          onClick={() => {
-            setMuted((value) => !value);
-            subtleHaptic();
-          }}
-          aria-pressed={muted}
-          aria-label={muted ? "Aktivizo zërin" : "Hesht udhëzimet"}
-        >
-          <AppIcon name="mute" />
-        </button>
-        {mapMoved && (
-          <button
-            className="navigation-recenter"
-            onClick={() => {
-              setMapMoved(false);
-              onRecenter();
-            }}
-            aria-label="Rikthe hartën te lokacioni im"
-          >
-            <AppIcon name="recenter" />
-          </button>
-        )}
-      </div>
-
-      <section className="arrival-card">
-        <div>
-          <small>Drejt {parking.name}</small>
-          <strong>{arrivalTime}</strong>
-        </div>
-        <b>
-          {routeMinutes} min •{" "}
-          {routeDistance >= 1000
-            ? `${(routeDistance / 1000).toFixed(1)} km`
-            : `${routeDistance} m`}
-        </b>
-        <span className="confidence-badge">
-          ●{" "}
-          {parking.spaces !== null
-            ? `${parking.spaces} vende të lira`
-            : accessLabel(parking)}
-        </span>
-        <button
-          className="stop-button"
-          onClick={(event) => {
-            event.stopPropagation();
-            setConfirmStop(true);
-          }}
-        >
-          <i />
-          Ndalo
-        </button>
-        <button
-          className="arrival-hint"
-          onClick={(event) => {
-            event.stopPropagation();
-            onArrive();
-          }}
-        >
-          {hasDestination
-            ? "Parkova • vazhdo në këmbë"
-            : "Parkova • përfundo navigimin"}
-        </button>
-      </section>
-      {confirmStop && (
-        <section
-          className="stop-confirmation"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Konfirmo ndalimin e navigimit"
-        >
-          <strong>Ta ndalim navigimin?</strong>
-          <span>Rruga mbetet e disponueshme te detajet e parkingut.</span>
-          <div>
-            <button onClick={() => setConfirmStop(false)}>Vazhdo rutën</button>
-            <button className="danger" onClick={onStop}>
-              Po, ndalo
-            </button>
-          </div>
-        </section>
-      )}
     </div>
   );
 }
@@ -3630,6 +3424,7 @@ export default function App() {
   );
   const [userLocation, setUserLocation] = useState(USER_LOCATION);
   const [locationStatus, setLocationStatus] = useState<LocationStatus>("idle");
+  const [locationTimestamp, setLocationTimestamp] = useState<number | null>(null);
   const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null);
   const [streetViewParking, setStreetViewParking] = useState<Parking | null>(
     null,
@@ -3815,6 +3610,7 @@ export default function App() {
     };
     const insidePrishtina = isWithinPrishtinaMap(nextLocation);
     setUserLocation(nextLocation);
+    setLocationTimestamp(position.timestamp);
     setLocationAccuracy(Math.round(position.coords.accuracy));
     setLocationStatus(insidePrishtina ? "ready" : "outside");
     if (options.recenter && insidePrishtina)
@@ -4632,8 +4428,9 @@ export default function App() {
             userLocation={activeUserLocation}
             onDetails={() => setScreen("details")}
             onNavigate={() => {
+              setRouteNotice("");
+              setScreen("navigation");
               if (!userLocationInPrishtina) {
-                setRouteNotice("Aktivizo lokacionin për të nisur navigimin.");
                 requestUserLocation({ recenter: false });
                 return;
               }
@@ -4642,14 +4439,9 @@ export default function App() {
                 route.source !== "osrm" ||
                 selected.id !== currentSelected.id
               ) {
-                setRouteNotice(
-                  "Prit derisa të gjendet rruga, ose provo përsëri.",
-                );
                 setRouteRetry((value) => value + 1);
                 return;
               }
-              setRouteNotice("");
-              setScreen("navigation");
             }}
             onStreetView={() => setStreetViewParking(currentSelected)}
             onCloseParkingPreview={() => setParkingPreviewOpen(false)}
@@ -4751,8 +4543,9 @@ export default function App() {
             }}
             onBack={() => setScreen("home")}
             onNavigate={() => {
+              setRouteNotice("");
+              setScreen("navigation");
               if (!userLocationInPrishtina) {
-                setRouteNotice("Aktivizo lokacionin për të nisur navigimin.");
                 requestUserLocation({ recenter: false });
                 return;
               }
@@ -4762,14 +4555,16 @@ export default function App() {
                 setRouteRetry((value) => value + 1);
                 return;
               }
-              setRouteNotice("");
-              setScreen("navigation");
             }}
             onStreetView={() => setStreetViewParking(currentSelected)}
           />
         )}
         {screen === "navigation" && (
           <NavigationView
+            key={currentSelected.id}
+            routeLoading={routeLoading}
+            routeError={routeError}
+            locationTimestamp={locationTimestamp}
             parking={currentSelected}
             route={route}
             userLocation={activeUserLocation}
