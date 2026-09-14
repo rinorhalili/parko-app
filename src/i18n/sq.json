@@ -1,0 +1,10 @@
+{
+  "app.name": "Parko",
+  "nav.map": "Harta",
+  "nav.community": "Komuniteti",
+  "nav.profile": "Profili",
+  "nav.settings": "Cilësimet",
+  "state.loading": "Duke u ngarkuar...",
+  "state.empty": "Nuk ka të dhëna për t'u shfaqur.",
+  "state.error": "Diçka shkoi keq."
+}

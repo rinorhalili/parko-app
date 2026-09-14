@@ -16,6 +16,7 @@
     "check": "tsc -b --pretty false",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "backend:install": "npm install --prefix backend",
     "backend:dev": "npm run dev --prefix backend",
     "backend:build": "npm run build --prefix backend",
@@ -44,6 +45,7 @@
     "@types/react-dom": "latest",
     "electron": "^44.0.0",
     "jsdom": "^29.1.1",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "@playwright/test": "^1.55.0"
   }
 }

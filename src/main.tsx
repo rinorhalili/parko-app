@@ -1,6 +1,6 @@
-import { lazy, StrictMode, Suspense, useEffect, useState } from 'react'
+import { StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import App from './App'
+import Router from './router'
 import { CrowdSourcingProvider } from './crowdsourcing'
 import 'leaflet/dist/leaflet.css'
 import './styles.css'
@@ -24,70 +24,10 @@ if ('serviceWorker' in navigator) {
   })
 }
 
-type AppMode = 'app' | 'dashboard' | 'privacy' | 'terms' | 'notfound'
-const AdminDashboard = lazy(() => import('./AdminDashboard'))
-const PrivacyPolicy = lazy(() => import('./PrivacyPolicy'))
-const Terms = lazy(() => import('./Terms'))
-const NotFound = lazy(() => import('./NotFound'))
-
 declare global {
   interface Window {
     __parkoReactRoot?: Root
   }
-}
-
-function resolveInitialMode(): AppMode {
-  const params = new URLSearchParams(window.location.search)
-  const urlMode = params.get('view')
-  if (urlMode === 'app' || urlMode === 'dashboard' || urlMode === 'privacy' || urlMode === 'terms') {
-    return urlMode
-  }
-
-  const adminFlag = params.get('admin')
-  if (adminFlag === '1' || adminFlag === 'true') {
-    return 'dashboard'
-  }
-
-  const basePath = import.meta.env.BASE_URL === '/' ? '' : import.meta.env.BASE_URL.replace(/\/$/, '')
-  const pathname = window.location.pathname.replace(basePath, '').replace(/\/+$/, '')
-  if (pathname.endsWith('/privacy')) {
-    return 'privacy'
-  }
-  if (pathname.endsWith('/terms')) {
-    return 'terms'
-  }
-  if (pathname.endsWith('/admin') || pathname.endsWith('/dashboard')) {
-    return 'dashboard'
-  }
-
-  if (pathname === '') return window.electronAPI ? 'dashboard' : 'app'
-  return 'notfound'
-}
-
-function AppRouter() {
-  const [mode, setMode] = useState(resolveInitialMode)
-  useEffect(() => {
-    const update = () => setMode(resolveInitialMode())
-    window.addEventListener('popstate', update)
-    return () => window.removeEventListener('popstate', update)
-  }, [])
-
-  useEffect(() => {
-    const titles: Record<AppMode, string> = {
-      app: 'Parko — Parking në Prishtinë',
-      dashboard: 'Paneli i Administratës — Parko',
-      privacy: 'Politika e Privatësisë — Parko',
-      terms: 'Kushtet e Përdorimit — Parko',
-      notfound: 'Faqja nuk u gjet — Parko',
-    }
-    document.title = titles[mode]
-  }, [mode])
-
-  return (
-    <>
-      {mode === 'dashboard' ? <Suspense fallback={<div className="app-loading" role="status">Duke hapur panelin…</div>}><AdminDashboard /></Suspense> : mode === 'privacy' ? <Suspense fallback={<div className="app-loading" role="status">Duke hapur politikën…</div>}><PrivacyPolicy /></Suspense> : mode === 'terms' ? <Suspense fallback={<div className="app-loading" role="status">Duke hapur kushtet…</div>}><Terms /></Suspense> : mode === 'notfound' ? <Suspense fallback={<div className="app-loading" role="status">Duke hapur faqen…</div>}><NotFound /></Suspense> : <App />}
-    </>
-  )
 }
 
 const rootElement = document.getElementById('root')!
@@ -96,7 +36,7 @@ window.__parkoReactRoot = root
 root.render(
   <StrictMode>
     <CrowdSourcingProvider>
-      <AppRouter />
+      <Router />
     </CrowdSourcingProvider>
   </StrictMode>,
 )

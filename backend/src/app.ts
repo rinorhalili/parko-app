@@ -28,6 +28,9 @@ import { userRoutes } from "./routes/user.routes.js";
 import { favoritesRoutes } from "./routes/favorites.routes.js";
 import { pushSubscriptionRoutes } from "./routes/push-subscription.routes.js";
 import { mediaRoutes } from "./routes/media.routes.js";
+import { analyticsRoutes } from "./modules/analytics/routes.js";
+import { searchRoutes } from "./modules/search/routes.js";
+import { zoneRoutes } from "./modules/zones/routes.js";
 
 export function createApp() {
   const app = express();
@@ -75,6 +78,9 @@ export function createApp() {
   api.use("/notifications", notificationRoutes);
   api.use("/push-subscription", pushSubscriptionRoutes);
   api.use("/media", mediaRoutes);
+  api.use("/zones", zoneRoutes);
+  api.use("/search", searchRoutes);
+  api.use("/analytics", analyticsRoutes);
   api.use("/moderation", moderationRoutes);
   api.use("/admin", adminRoutes);
   api.use("/audit", auditRoutes);

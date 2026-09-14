@@ -1,0 +1,10 @@
+{
+  "app.name": "Parko",
+  "nav.map": "Map",
+  "nav.community": "Community",
+  "nav.profile": "Profile",
+  "nav.settings": "Settings",
+  "state.loading": "Loading...",
+  "state.empty": "There is nothing to show yet.",
+  "state.error": "Something went wrong."
+}
