@@ -15,7 +15,7 @@
     "expo-secure-store":"~14.0.1",
     "react":"18.3.1",
     "react-native":"0.76.9",
-    "react-native-maps":"1.18.0",
+    "react-native-maps":"1.29.0",
     "socket.io-client":"^4.8.1"
   },
   "devDependencies":{"@types/react":"~18.3.12","typescript":"~5.3.3"}
