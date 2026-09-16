@@ -21,12 +21,14 @@ const parkingPointType = z.enum(["public", "street", "prishtina", "private"]);
 const parkingPointCreate = z.object({
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
-  parkingType: parkingPointType
+  parkingType: parkingPointType,
+  pricePerHour: z.number().min(0).max(50).nullable().optional()
 });
 const parkingPointPatch = z.object({
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
-  parkingType: parkingPointType.optional()
+  parkingType: parkingPointType.optional(),
+  pricePerHour: z.number().min(0).max(50).nullable().optional()
 });
 
 export const adminRoutes = Router();

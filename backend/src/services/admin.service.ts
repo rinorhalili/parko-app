@@ -4,6 +4,13 @@ import { auditRepository } from "../repositories/audit.repository.js";
 import { badRequest } from "../utils/errors.js";
 import { emitRealtime } from "../websocket/io.js";
 type AdminParkingCategory = "public" | "street" | "prishtina" | "private";
+type AdminParkingPointInput = {
+  latitude?: number;
+  longitude?: number;
+  parkingType?: AdminParkingCategory;
+  pricePerHour?: number | null;
+};
+
 function adminPointFields(category: AdminParkingCategory) {
   const labels: Record<AdminParkingCategory, string> = {
     public: "Publik",
@@ -18,6 +25,15 @@ function adminPointFields(category: AdminParkingCategory) {
     type: category === "private" ? "PRIVATE" as const : category === "street" || category === "prishtina" ? "STREET" as const : "LOT" as const,
   };
 }
+
+function adminPointPriceFields(input: AdminParkingPointInput) {
+  if (input.parkingType && input.parkingType !== "private")
+    return { pricePerHour: null };
+  if (input.pricePerHour !== undefined)
+    return { pricePerHour: input.pricePerHour };
+  return {};
+}
+
 export class AdminService {
   async listParking(page: number, q: string, scope: string) {
     const where = { ...(scope === "pending" ? { ownerId: { not: null }, verifiedAt: null, status: { not: "TEMPORARILY_UNAVAILABLE" as const } } : scope === "disabled" ? { status: "TEMPORARILY_UNAVAILABLE" as const } : {}), ...(q ? { OR: ["title", "address", "id"].map((field) => ({ [field]: { contains: q, mode: "insensitive" as const } })) } : {}) };
@@ -28,10 +44,11 @@ export class AdminService {
     const updated = await adminRepository.updateParking(id, { ...fields, status: action === "approve" ? "UNKNOWN" : "TEMPORARILY_UNAVAILABLE", ...(action === "approve" ? { verifiedAt: new Date(), reportedAt: null } : {}) });
     await auditRepository.create({ actorId: adminId, action: `parking.${action}`, target: updated.id, metadata: { reason: reason ?? null } }); emitRealtime("parking:status.changed", { parkingSpotId: updated.id, status: updated.status }, updated.zone ? `zone:${updated.zone}` : undefined); return updated;
   }
-  async createParkingPoint(adminId: string, input: { latitude: number; longitude: number; parkingType: AdminParkingCategory }) {
+  async createParkingPoint(adminId: string, input: { latitude: number; longitude: number; parkingType: AdminParkingCategory; pricePerHour?: number | null }) {
     const fields = adminPointFields(input.parkingType);
     const created = await adminRepository.createParking({
       ...fields,
+      ...adminPointPriceFields(input),
       latitude: input.latitude,
       longitude: input.longitude,
       status: "UNKNOWN",
@@ -42,10 +59,11 @@ export class AdminService {
     emitRealtime("parking:updated", created);
     return created;
   }
-  async updateParkingPoint(adminId: string, id: string, input: { latitude?: number; longitude?: number; parkingType?: AdminParkingCategory }) {
+  async updateParkingPoint(adminId: string, id: string, input: AdminParkingPointInput) {
     const typeFields = input.parkingType ? adminPointFields(input.parkingType) : {};
     const updated = await adminRepository.updateParking(id, {
       ...typeFields,
+      ...adminPointPriceFields(input),
       ...(input.latitude === undefined ? {} : { latitude: input.latitude }),
       ...(input.longitude === undefined ? {} : { longitude: input.longitude }),
     });

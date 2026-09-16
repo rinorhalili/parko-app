@@ -309,6 +309,7 @@ type BackendParkingSpot = {
   latitude: number;
   longitude: number;
   capacity: number | null;
+  pricePerHour: number | null;
   status:
     | "AVAILABLE"
     | "OCCUPIED"
@@ -354,7 +355,7 @@ async function loadBackendParkingSpots(signal?: AbortSignal) {
             ? "available"
             : "full"
           : "unknown",
-        pricePerHour: null,
+        pricePerHour: spot.pricePerHour,
         distanceMeters: distanceMeters(USER_LOCATION, {
           lat: spot.latitude,
           lng: spot.longitude,
@@ -385,7 +386,7 @@ async function loadBackendParkingSpots(signal?: AbortSignal) {
         cardPayment: false,
         evCharging: false,
         accessible: spot.type === "ACCESSIBLE",
-        free: false,
+        free: spot.pricePerHour === 0,
         coordinates: { lat: spot.latitude, lng: spot.longitude },
         access: ["TEMPORARILY_UNAVAILABLE", "RESERVED"].includes(spot.status)
           ? "no"
@@ -405,6 +406,7 @@ async function loadBackendParkingSpots(signal?: AbortSignal) {
             : null,
         availabilityUpdatedAt: live ? spot.reportedAt! : undefined,
         availabilitySource: live ? "Parko community" : undefined,
+        pricingSource: spot.pricePerHour !== null ? "admin" : null,
       };
     });
 }

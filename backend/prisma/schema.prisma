@@ -163,6 +163,7 @@ model ParkingSpot {
   status      ParkingStatus   @default(UNKNOWN)
   type        ParkingType     @default(STREET)
   capacity    Int?
+  pricePerHour Float?
   reportedAt  DateTime?
   verifiedAt  DateTime?
   createdAt   DateTime        @default(now())

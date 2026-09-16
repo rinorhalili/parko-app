@@ -42,6 +42,7 @@ type ParkingSpotRow = {
   zone: string | null;
   type: "STREET" | "GARAGE" | "LOT" | "PRIVATE" | "ACCESSIBLE";
   capacity: number | null;
+  pricePerHour: number | null;
   latitude: number;
   longitude: number;
   status: string;
@@ -650,6 +651,24 @@ const styles = `
     font-weight: 750;
   }
 
+  .private-price-editor {
+    display: grid;
+    gap: 7px;
+  }
+
+  .private-price-editor label {
+    display: grid;
+    gap: 6px;
+  }
+
+  .private-price-editor span {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 850;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+
   .type-picker {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -769,6 +788,14 @@ function formatPrice(price: number | null) {
   return price === 0 ? "Falas" : `${price.toFixed(2)} €/orë`;
 }
 
+function parsePriceDraft(value: string) {
+  const normalized = value.trim().replace(",", ".");
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 50) return undefined;
+  return Math.round(parsed * 100) / 100;
+}
+
 function submissionFromSpot(spot: ParkingSpotRow): SpotSubmission {
   const category: ParkingCategory =
     spot.zone?.toLowerCase().includes("prishtina parking")
@@ -796,7 +823,7 @@ function submissionFromSpot(spot: ParkingSpotRow): SpotSubmission {
     city: "Prishtina",
     address: spot.address ?? spot.title,
     category,
-    proposedPrice: null,
+    proposedPrice: spot.pricePerHour,
     lat: spot.latitude,
     lng: spot.longitude,
     notes: spot.description ?? "Pa shënim nga raportuesi.",
@@ -1095,6 +1122,8 @@ export default function AdminDashboard() {
   const [pendingPoint, setPendingPoint] = useState<PendingPoint>(null);
   const [draftParkingType, setDraftParkingType] =
     useState<ParkingCategory>("public");
+  const [draftPrivatePrice, setDraftPrivatePrice] = useState("");
+  const [selectedPrivatePrice, setSelectedPrivatePrice] = useState("");
   const requestVersion = useRef(0);
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1199,6 +1228,15 @@ export default function AdminDashboard() {
   const selectedSubmission =
     filteredSubmissions[selectedIndex] ?? filteredSubmissions[0];
 
+  useEffect(() => {
+    setSelectedPrivatePrice(
+      selectedSubmission?.proposedPrice === null ||
+        selectedSubmission?.proposedPrice === undefined
+        ? ""
+        : String(selectedSubmission.proposedPrice),
+    );
+  }, [selectedSubmission?.id, selectedSubmission?.proposedPrice]);
+
   const selectById = (id: string) => {
     const index = filteredSubmissions.findIndex((item) => item.id === id);
     if (index >= 0) setSelectedIndex(index);
@@ -1238,6 +1276,12 @@ export default function AdminDashboard() {
 
   const saveNewPoint = async () => {
     if (!pendingPoint || actionInProgress) return;
+    const pricePerHour =
+      draftParkingType === "private" ? parsePriceDraft(draftPrivatePrice) : null;
+    if (pricePerHour === undefined) {
+      setError("Vendos një çmim të vlefshëm për orë, p.sh. 1 ose 0.50.");
+      return;
+    }
     setActionInProgress(true);
     setError("");
     try {
@@ -1245,10 +1289,12 @@ export default function AdminDashboard() {
         latitude: pendingPoint.lat,
         longitude: pendingPoint.lng,
         parkingType: draftParkingType,
+        pricePerHour,
       });
       setSuccess("Pika e parkingut u ruajt në koordinatat e zgjedhura.");
       setPendingPoint(null);
       setAddPointMode(false);
+      setDraftPrivatePrice("");
       await loadPendingSubmissions();
       selectById(created.id);
     } catch (reason) {
@@ -1268,6 +1314,27 @@ export default function AdminDashboard() {
       await loadPendingSubmissions();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Përditësimi i llojit dështoi.");
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  const saveSelectedPointPrice = async () => {
+    if (!selectedSubmission || actionInProgress) return;
+    const pricePerHour = parsePriceDraft(selectedPrivatePrice);
+    if (pricePerHour === undefined) {
+      setError("Vendos një çmim të vlefshëm për orë, p.sh. 1 ose 0.50.");
+      return;
+    }
+    setActionInProgress(true);
+    setError("");
+    try {
+      await updateAdminParkingPoint(selectedSubmission.id, { pricePerHour });
+      setSuccess("Çmimi për orë u ruajt.");
+      await loadPendingSubmissions();
+      selectById(selectedSubmission.id);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Ruajtja e çmimit dështoi.");
     } finally {
       setActionInProgress(false);
     }
@@ -1559,6 +1626,7 @@ export default function AdminDashboard() {
                       onClick={() => {
                         setAddPointMode((value) => !value);
                         setPendingPoint(null);
+                        setDraftPrivatePrice("");
                       }}
                       disabled={actionInProgress}
                     >
@@ -1582,9 +1650,31 @@ export default function AdminDashboard() {
                       <small>LLOJI I PARKINGUT</small>
                       <ParkingTypeSelector
                         value={draftParkingType}
-                        onChange={setDraftParkingType}
+                        onChange={(type) => {
+                          setDraftParkingType(type);
+                          if (type !== "private") setDraftPrivatePrice("");
+                        }}
                         disabled={actionInProgress}
                       />
+                      {draftParkingType === "private" && (
+                        <div className="private-price-editor">
+                          <label>
+                            <span>Çmimi për orë</span>
+                            <input
+                              className="admin-input"
+                              inputMode="decimal"
+                              value={draftPrivatePrice}
+                              onChange={(event) =>
+                                setDraftPrivatePrice(event.target.value)
+                              }
+                              placeholder="p.sh. 1"
+                              aria-label="Çmimi për orë për parking privat"
+                              disabled={actionInProgress}
+                            />
+                          </label>
+                          <small>Lëre bosh nëse çmimi nuk dihet ende.</small>
+                        </div>
+                      )}
                       <div className="point-editor__actions">
                         <button
                           className="admin-button admin-button--primary"
@@ -1605,6 +1695,34 @@ export default function AdminDashboard() {
                         onChange={(type) => void changeSelectedPointType(type)}
                         disabled={actionInProgress}
                       />
+                      {selectedSubmission.category === "private" && (
+                        <div className="private-price-editor">
+                          <label>
+                            <span>Çmimi për orë</span>
+                            <input
+                              className="admin-input"
+                              inputMode="decimal"
+                              value={selectedPrivatePrice}
+                              onChange={(event) =>
+                                setSelectedPrivatePrice(event.target.value)
+                              }
+                              placeholder="p.sh. 1"
+                              aria-label="Çmimi për orë për parking privat"
+                              disabled={actionInProgress}
+                            />
+                          </label>
+                          <div className="point-editor__actions">
+                            <button
+                              className="admin-button admin-button--primary"
+                              type="button"
+                              onClick={() => void saveSelectedPointPrice()}
+                              disabled={actionInProgress}
+                            >
+                              Ruaj çmimin
+                            </button>
+                          </div>
+                        </div>
+                      )}
                       <div className="point-editor__actions">
                         <button
                           className="admin-button admin-button--danger"

@@ -10,11 +10,11 @@ export function updateAdminParkingStatus(id: string, action: 'approve' | 'disabl
   return apiRequest<ParkingSpot>(`/admin/parking/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ action, reason }) })
 }
 
-export function createAdminParkingPoint(input: { latitude: number; longitude: number; parkingType: AdminParkingPointType }) {
+export function createAdminParkingPoint(input: { latitude: number; longitude: number; parkingType: AdminParkingPointType; pricePerHour?: number | null }) {
   return apiRequest<ParkingSpot>('/admin/parking-points', { method: 'POST', body: JSON.stringify(input) })
 }
 
-export function updateAdminParkingPoint(id: string, input: { latitude?: number; longitude?: number; parkingType?: AdminParkingPointType }) {
+export function updateAdminParkingPoint(id: string, input: { latitude?: number; longitude?: number; parkingType?: AdminParkingPointType; pricePerHour?: number | null }) {
   return apiRequest<ParkingSpot>(`/admin/parking-points/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) })
 }
 

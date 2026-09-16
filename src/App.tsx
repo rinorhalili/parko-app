@@ -3069,6 +3069,8 @@ function DetailsView({
                 ? "Tarifa e vizitorit nga rregullorja zyrtare e zonës."
                 : parking.pricingSource === "osm-sign"
                   ? "Tarifa vjen nga etiketa e publikuar në OpenStreetMap; kontrollo tabelën lokale."
+                  : parking.pricingSource === "admin"
+                    ? "Tarifa është vendosur nga administratori gjatë verifikimit."
                   : "Tarifa nuk supozohet pa të dhëna të verifikueshme."}
             </small>
             <a
@@ -3088,6 +3090,8 @@ function DetailsView({
             <strong>Jo e konfirmuar si Prishtina Parking.</strong>{" "}
             {parking.pricingSource === "osm-sign"
               ? "Tarifa e shfaqur vjen nga OpenStreetMap; zona zyrtare dhe orari nuk dihen."
+              : parking.pricingSource === "admin"
+                ? "Tarifa e shfaqur është vendosur nga administratori; zona zyrtare dhe orari nuk dihen."
               : "Çmimi, zona zyrtare dhe orari nuk plotësohen pa burim të verifikueshëm."}
           </p>
         )}

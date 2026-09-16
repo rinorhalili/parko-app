@@ -51,7 +51,7 @@ export type Parking = {
   municipalCategory?: MunicipalParkingCategory | null
   municipalZone?: 1 | 2 | 3 | null
   usageHours?: string | null
-  pricingSource?: 'official-zone' | 'osm-sign' | null
+  pricingSource?: 'official-zone' | 'osm-sign' | 'admin' | null
 }
 
 export type ParkingLoadStatus = 'loading' | 'live' | 'fallback'

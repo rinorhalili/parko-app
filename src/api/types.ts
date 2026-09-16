@@ -54,6 +54,7 @@ export interface ParkingSpot {
   status: ParkingStatus
   type: ParkingType
   capacity: number | null
+  pricePerHour: number | null
   reportedAt: string | null
   verifiedAt: string | null
   createdAt: string

@@ -1,0 +1,1 @@
+ALTER TABLE "ParkingSpot" ADD COLUMN "pricePerHour" DOUBLE PRECISION;
