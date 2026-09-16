@@ -5,6 +5,7 @@ import {
   markNotificationRead,
   type Notification,
 } from "../api/notificationService";
+import { useAuthContext } from "./AuthContext";
 
 type NotificationContextValue = {
   notifications: Notification[];
@@ -18,6 +19,7 @@ const NotificationContext = createContext<NotificationContextValue | null>(null)
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const { isAuthenticated, isLoading } = useAuthContext();
 
   const refresh = useCallback(async () => {
     setNotifications(await listNotifications());
@@ -36,11 +38,15 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (isLoading || !isAuthenticated) {
+      setNotifications([]);
+      return;
+    }
     void refresh().catch(() => undefined);
     const update = () => void refresh().catch(() => undefined);
     window.addEventListener("parko:auth-changed", update);
     return () => window.removeEventListener("parko:auth-changed", update);
-  }, [refresh]);
+  }, [isAuthenticated, isLoading, refresh]);
 
   const value = useMemo(
     () => ({
