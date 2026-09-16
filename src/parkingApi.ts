@@ -1,4 +1,3 @@
-import { OSM_PARKING_SNAPSHOT } from "./osmParkingSnapshot";
 import { OFFICIAL_PRISHTINA_PARKING_MARKERS } from "./officialPrishtinaParking";
 import { deriveMunicipalParkingData } from "./prishtinaParkingRules";
 import { listParking } from "./api/parkingService";
@@ -17,6 +16,10 @@ export const PRISHTINA_MAP_BOUNDS = {
 } as const;
 const PRISHTINA_PARKING_BOUNDS = "42.625,21.115,42.690,21.215";
 const USER_LOCATION = { lat: 42.6582, lng: 21.1585 };
+
+function isBundledParkingId(id: string) {
+  return id.startsWith("osm-") || id.startsWith("prishtina-parking-");
+}
 
 export function isWithinPrishtinaMap(coordinates: Parking["coordinates"]) {
   return (
@@ -323,6 +326,8 @@ async function loadBackendParkingSpots(signal?: AbortSignal) {
   if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
   return (data as BackendParkingSpot[])
     .filter((spot) =>
+      !isBundledParkingId(spot.id) &&
+      (!spot.ownerId || Boolean(spot.verifiedAt)) &&
       isWithinPrishtinaMap({ lat: spot.latitude, lng: spot.longitude }),
     )
     .map((spot): Parking => {
@@ -386,7 +391,7 @@ async function loadBackendParkingSpots(signal?: AbortSignal) {
           ? "no"
           : type === "private"
             ? "private"
-            : "unknown",
+            : "public",
         source: spot.ownerId
           ? "community"
           : spot.id.startsWith("prishtina-parking-")
@@ -475,28 +480,16 @@ export function mergeParkingSources(mapped: Parking[], backend: Parking[]) {
   return [...byId.values()];
 }
 
-let osmCache: { parkings: Parking[]; expires: number } | undefined;
 export async function loadPrishtinaParkings(
   signal?: AbortSignal,
   onUpdate?: (parkings: Parking[]) => void,
 ) {
-  let mapped =
-    osmCache && osmCache.expires > Date.now()
-      ? osmCache.parkings
-      : getPrishtinaParkingSnapshot();
+  const mapped = getPrishtinaParkingSnapshot();
   let backend: Parking[] = [];
   const publish = () => {
     if (!signal?.aborted) onUpdate?.(mergeParkingSources(mapped, backend));
   };
   const results = await Promise.allSettled([
-    (osmCache && osmCache.expires > Date.now()
-      ? Promise.resolve(mapped)
-      : loadOsmParkings(signal)
-    ).then((data) => {
-      mapped = data;
-      osmCache = { parkings: data, expires: Date.now() + 5 * 60_000 };
-      publish();
-    }),
     loadBackendParkingSpots(signal).then((data) => {
       backend = data;
       publish();
@@ -600,20 +593,9 @@ export async function loadParkingGeometry(
 }
 
 export function getPrishtinaParkingSnapshot() {
-  const snapshotParkings = OSM_PARKING_SNAPSHOT.map(
-    ([type, id, lat, lng, tags]) => fromOsm({ type, id, lat, lon: lng, tags }),
-  ).filter((parking): parking is Parking => parking !== null);
-  const officialParkings = OFFICIAL_PRISHTINA_PARKING_MARKERS.map(
+  return OFFICIAL_PRISHTINA_PARKING_MARKERS.map(
     fromOfficialPrishtinaParkingMarker,
-  );
-  const snapshotWithoutDuplicates = withoutDuplicates(
-    snapshotParkings,
-    officialParkings,
-    30,
-  );
-  return [...officialParkings, ...snapshotWithoutDuplicates].sort(
-    (a, b) => a.distanceMeters - b.distanceMeters,
-  );
+  ).sort((a, b) => a.distanceMeters - b.distanceMeters);
 }
 
 export { USER_LOCATION };

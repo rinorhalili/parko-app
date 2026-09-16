@@ -473,7 +473,7 @@ const styles = `
 
   .main-grid {
     display: grid;
-    grid-template-columns: minmax(0, .98fr) minmax(0, 1.02fr);
+    grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr);
     min-height: 640px;
   }
 
@@ -599,7 +599,7 @@ const styles = `
   }
 
   .community-map {
-    height: 298px;
+    height: 430px;
     background: #dfe8ef;
   }
 

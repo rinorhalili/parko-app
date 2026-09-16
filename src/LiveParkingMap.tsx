@@ -180,8 +180,8 @@ export default function LiveParkingMap({
   modeRef.current = mode
   const visibleParkings = useMemo(() => {
     const candidates = mode === 'navigation' || mode === 'walking' ? [selected] : parkings
-    if (markerFilter === 'free') return candidates.filter((parking) => parking.pricePerHour === 0)
-    if (markerFilter === 'paid') return candidates.filter((parking) => (parking.pricePerHour ?? 0) > 0)
+    if (markerFilter === 'free') return candidates.filter((parking) => parking.pricePerHour === 0 && parking.pricingSource)
+    if (markerFilter === 'paid') return candidates.filter((parking) => parking.pricePerHour !== null && parking.pricePerHour > 0 && parking.pricingSource)
     if (markerFilter === 'municipal') return candidates.filter((parking) => parking.municipalManaged)
     return candidates
   }, [markerFilter, mode, parkings, selected])

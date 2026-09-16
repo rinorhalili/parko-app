@@ -2,13 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { clampToPrishtinaMap, getPrishtinaParkingSnapshot, isWithinPrishtinaMap } from './parkingApi'
 
 describe('Prishtina parking snapshot', () => {
-  it('includes the official Prishtina Parking map locations', () => {
+  it('includes only the official Prishtina Parking map locations', () => {
     const parkings = getPrishtinaParkingSnapshot()
-    const officialParkings = parkings.filter((parking) => parking.source === 'municipal' && parking.municipalManaged)
 
-    expect(officialParkings).toHaveLength(90)
-    expect(officialParkings.some((parking) => parking.municipalCode === 'X1')).toBe(true)
-    expect(officialParkings.some((parking) => parking.municipalCode === 'K13')).toBe(true)
+    expect(parkings).toHaveLength(90)
+    expect(parkings.every((parking) => parking.source === 'municipal')).toBe(true)
+    expect(parkings.every((parking) => parking.municipalManaged)).toBe(true)
+    expect(parkings.some((parking) => parking.municipalCode === 'X1' && parking.pricePerHour === 0.5)).toBe(true)
+    expect(parkings.some((parking) => parking.municipalCode === 'K13')).toBe(true)
   })
 
   it('keeps interactive map coordinates inside Prishtina', () => {

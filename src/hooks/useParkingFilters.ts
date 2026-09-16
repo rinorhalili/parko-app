@@ -20,8 +20,16 @@ export function useParkingFilters(parkings: Parking[], initial: Filters = defaul
       parkings.filter((parking) => {
         if (filters.availableOnly && parking.status !== "available") return false;
         if (filters.verifiedOnly && parking.confidence === "low") return false;
-        if (filters.freeOnly && !parking.free) return false;
-        if (filters.paidOnly && parking.free) return false;
+        if (filters.freeOnly && !(parking.free && parking.pricingSource)) return false;
+        if (
+          filters.paidOnly &&
+          !(
+            parking.pricePerHour !== null &&
+            parking.pricePerHour > 0 &&
+            parking.pricingSource
+          )
+        )
+          return false;
         if (filters.evCharging && !parking.evCharging) return false;
         if (filters.accessible && !parking.accessible) return false;
         if (filters.type === "municipal" && !parking.municipalManaged) return false;

@@ -26,6 +26,7 @@ import {
   isWithinPrishtinaMap,
   loadParkingGeometry,
   loadPrishtinaParkings,
+  PRISHTINA_CENTER,
   USER_LOCATION,
 } from "./parkingApi";
 import { parkingAccessPoint } from "./parkingGeometry";
@@ -74,6 +75,31 @@ import type {
   RankedParking,
   Screen,
 } from "./types";
+
+const EMPTY_SELECTED_PARKING: Parking = {
+  id: "__blank-parking__",
+  name: "Parking",
+  zone: "Prishtinë",
+  address: "Prishtinë, Kosovë",
+  capacity: null,
+  spaces: null,
+  status: "unknown",
+  pricePerHour: null,
+  distanceMeters: 0,
+  driveMinutes: 0,
+  confidence: "low",
+  updatedMinutesAgo: 0,
+  type: "public",
+  open24h: false,
+  covered: false,
+  cardPayment: false,
+  evCharging: false,
+  accessible: false,
+  free: false,
+  coordinates: PRISHTINA_CENTER,
+  access: "unknown",
+  source: "community",
+};
 
 const Login = lazy(() => import("./Login"));
 const CommunityView = lazy(() => import("./CommunityView"));
@@ -332,15 +358,26 @@ function parkingTrust(parking: Parking) {
   if (parking.confidence === "high")
     return {
       tone: "mapped",
-      label: "OSM · e dokumentuar",
+      label:
+        parking.source === "openstreetmap"
+          ? "OSM · e dokumentuar"
+          : "E verifikuar",
       detail:
-        "Lokacioni dhe konturi janë të hartuar; disponueshmëria nuk është live.",
+        parking.source === "openstreetmap"
+          ? "Lokacioni dhe konturi janë të hartuar; disponueshmëria nuk është live."
+          : "Lokacioni është pranuar si parking i verifikuar.",
     };
   if (parking.confidence === "medium")
     return {
       tone: "partial",
-      label: "OSM · e pjesshme",
-      detail: "Disa të dhëna mungojnë; kontrollo tabelën dhe hyrjen.",
+      label:
+        parking.source === "openstreetmap"
+          ? "OSM · e pjesshme"
+          : "E verifikuar pjesërisht",
+      detail:
+        parking.source === "openstreetmap"
+          ? "Disa të dhëna mungojnë; kontrollo tabelën dhe hyrjen."
+          : "Parkingu është në listë të verifikuar, por disa detaje mungojnë.",
     };
   return {
     tone: "unknown",
@@ -381,10 +418,9 @@ function municipalCategoryLabel(parking: Parking) {
 }
 
 function parkingTypeLabel(parking: Parking) {
-  if (parking.source === "community") return "Komuniteti Parko";
   if (parking.municipalManaged) return "Prishtina Parking";
   return {
-    public: "Publik · OSM",
+    public: "Publik",
     private: "Privat",
     street: "Në rrugë",
   }[parking.type];
@@ -445,6 +481,7 @@ function parkingSourceLabel(parking: Parking) {
   if (parking.municipalManaged) return "Prishtina Parking";
   if (parking.source === "openstreetmap" && parking.confidence !== "low")
     return "OpenStreetMap";
+  if (parking.confidence !== "low") return "Parko · e verifikuar";
   return "Burim i pakonfirmuar";
 }
 
@@ -578,9 +615,9 @@ type ParkingFeatureCounts = {
 const parkingTypeOptions: Array<[ParkingTypeFilter, string, string]> = [
   ["all", "Të gjitha", "Çdo operator"],
   ["municipal", "Prishtina Parking", "Operatori zyrtar"],
-  ["public", "Publike", "Burim OpenStreetMap"],
+  ["public", "Publike", "Qasje publike"],
   ["street", "Në rrugë", "Parking anësor"],
-  ["private", "Private", "Biznes ose klientë"],
+  ["private", "Private", "Me qasje të kufizuar"],
 ];
 
 function parkingMatchesType(parking: Parking, type: ParkingTypeFilter) {
@@ -3209,7 +3246,7 @@ export default function App() {
     return (
       snapshot.find(
         (parking) => parking.id === persistedPreferences.selectedParkingId,
-      ) ?? snapshot[0]
+      ) ?? snapshot[0] ?? EMPTY_SELECTED_PARKING
     );
   });
   const [filters, setFilters] = useState<Filters>(() => ({
@@ -3395,6 +3432,8 @@ export default function App() {
         );
         if (restored && !parkingSelectedByUserRef.current)
           setSelected(restored);
+        else if (results[0] && selected.id === EMPTY_SELECTED_PARKING.id)
+          setSelected(results[0]);
       })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === "AbortError")
@@ -3706,9 +3745,15 @@ export default function App() {
   const mapMarkerCounts = useMemo<Record<MapMarkerFilter, number>>(
     () => ({
       all: mapParkings.length,
-      free: mapParkings.filter((parking) => parking.pricePerHour === 0).length,
-      paid: mapParkings.filter((parking) => (parking.pricePerHour ?? 0) > 0)
-        .length,
+      free: mapParkings.filter(
+        (parking) => parking.pricePerHour === 0 && parking.pricingSource,
+      ).length,
+      paid: mapParkings.filter(
+        (parking) =>
+          parking.pricePerHour !== null &&
+          parking.pricePerHour > 0 &&
+          parking.pricingSource,
+      ).length,
       municipal: mapParkings.filter((parking) => parking.municipalManaged)
         .length,
     }),
