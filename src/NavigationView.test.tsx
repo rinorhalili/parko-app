@@ -71,6 +71,17 @@ it('supports manual arrival before continuing on foot', async () => {
   expect(finish).not.toHaveBeenCalled()
 })
 
+it('promotes the existing maneuver and keeps route steps secondary', async () => {
+  await render({ route: { ...route, steps: [{ instruction: 'Kthehu djathtas', roadName: 'Rruga B', distanceMeters: 240, maneuverType: 'turn' }] } })
+  expect(host.querySelector('.trip-header h1')?.textContent).toBe('Kthehu djathtas')
+  expect(host.querySelector('.trip-header')?.textContent).toContain('segmenti 240 m')
+  expect(host.querySelector('#trip-steps')).toBeNull()
+  const stepsButton = host.querySelector('[aria-controls="trip-steps"]') as HTMLButtonElement
+  await act(async () => stepsButton.click())
+  expect(stepsButton.getAttribute('aria-expanded')).toBe('true')
+  expect(host.querySelector('#trip-steps')?.textContent).toContain('Kthehu djathtas')
+})
+
 it('rejects inaccurate, stale and distant arrival fixes', () => {
   expect(reliableArrival(end, end, 10, Date.now() - 31_000, Date.now())).toBe(false)
   expect(reliableArrival(end, end, null, Date.now(), Date.now())).toBe(false)

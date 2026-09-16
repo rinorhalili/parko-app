@@ -1,4 +1,6 @@
 import NavigationView from "./NavigationView";
+import { AppIcon } from "./ui/Icon";
+import { BottomSheet, SheetHandle, MapFloatingControl, ParkingActions, PrimaryButton, StatusBadge, InfoRow } from "./ui/components";
 import { useRoutingOrigin } from "./hooks/useRoutingOrigin";
 import Onboarding from "./onboarding/Onboarding";
 import { useOnboarding } from "./onboarding/useOnboarding";
@@ -117,139 +119,6 @@ function subtleHaptic(duration = 8) {
   if ("vibrate" in navigator) navigator.vibrate(duration);
 }
 
-type AppIconName =
-  | "search"
-  | "filter"
-  | "pin"
-  | "location"
-  | "map"
-  | "heart"
-  | "user"
-  | "settings"
-  | "route"
-  | "info"
-  | "street"
-  | "chevron"
-  | "more"
-  | "mute"
-  | "recenter";
-
-function AppIcon({ name, size = 20 }: { name: AppIconName; size?: number }) {
-  const common = {
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.9,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-  };
-  return (
-    <svg
-      className="app-icon"
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      focusable="false"
-    >
-      {name === "search" && (
-        <>
-          <circle cx="11" cy="11" r="6.5" {...common} />
-          <path d="m16 16 4 4" {...common} />
-        </>
-      )}
-      {name === "filter" && (
-        <>
-          <path d="M4 7h16M7 12h10M10 17h4" {...common} />
-          <circle cx="8" cy="7" r="1" fill="currentColor" />
-          <circle cx="15" cy="12" r="1" fill="currentColor" />
-          <circle cx="12" cy="17" r="1" fill="currentColor" />
-        </>
-      )}
-      {name === "pin" && (
-        <>
-          <path
-            d="M12 21s6-5.1 6-11a6 6 0 1 0-12 0c0 5.9 6 11 6 11Z"
-            {...common}
-          />
-          <circle cx="12" cy="10" r="2" {...common} />
-        </>
-      )}
-      {name === "location" && (
-        <>
-          <path d="m20 4-7.5 16-2.1-6.4L4 11.5 20 4Z" {...common} />
-        </>
-      )}
-      {name === "map" && (
-        <>
-          <path d="m3 6 5-2 8 3 5-2v13l-5 2-8-3-5 2V6Z" {...common} />
-          <path d="M8 4v13M16 7v13" {...common} />
-        </>
-      )}
-      {name === "heart" && (
-        <path
-          d="M20.5 9.5c0 5-8.5 10-8.5 10s-8.5-5-8.5-10A4.5 4.5 0 0 1 12 7a4.5 4.5 0 0 1 8.5 2.5Z"
-          {...common}
-        />
-      )}
-      {name === "user" && (
-        <>
-          <circle cx="12" cy="8" r="3.5" {...common} />
-          <path d="M5 21c.8-4 3.1-6 7-6s6.2 2 7 6" {...common} />
-        </>
-      )}
-      {name === "settings" && (
-        <>
-          <circle cx="12" cy="12" r="3" fill="none" strokeWidth="1.5" />
-          <path
-            d="M13.7654 2.15224C13.3978 2 12.9319 2 12 2C11.0681 2 10.6022 2 10.2346 2.15224C9.74457 2.35523 9.35522 2.74458 9.15223 3.23463C9.05957 3.45834 9.0233 3.7185 9.00911 4.09799C8.98826 4.65568 8.70226 5.17189 8.21894 5.45093C7.73564 5.72996 7.14559 5.71954 6.65219 5.45876C6.31645 5.2813 6.07301 5.18262 5.83294 5.15102C5.30704 5.08178 4.77518 5.22429 4.35436 5.5472C4.03874 5.78938 3.80577 6.1929 3.33983 6.99993C2.87389 7.80697 2.64092 8.21048 2.58899 8.60491C2.51976 9.1308 2.66227 9.66266 2.98518 10.0835C3.13256 10.2756 3.3397 10.437 3.66119 10.639C4.1338 10.936 4.43789 11.4419 4.43786 12C4.43783 12.5581 4.13375 13.0639 3.66118 13.3608C3.33965 13.5629 3.13248 13.7244 2.98508 13.9165C2.66217 14.3373 2.51966 14.8691 2.5889 15.395C2.64082 15.7894 2.87379 16.193 3.33973 17C3.80568 17.807 4.03865 18.2106 4.35426 18.4527C4.77508 18.7756 5.30694 18.9181 5.83284 18.8489C6.07289 18.8173 6.31632 18.7186 6.65204 18.5412C7.14547 18.2804 7.73556 18.27 8.2189 18.549C8.70224 18.8281 8.98826 19.3443 9.00911 19.9021C9.02331 20.2815 9.05957 20.5417 9.15223 20.7654C9.35522 21.2554 9.74457 21.6448 10.2346 21.8478C10.6022 22 11.0681 22 12 22C12.9319 22 13.3978 22 13.7654 21.8478C14.2554 21.6448 14.6448 21.2554 14.8477 20.7654C14.9404 20.5417 14.9767 20.2815 14.9909 19.902C15.0117 19.3443 15.2977 18.8281 15.781 18.549C16.2643 18.2699 16.8544 18.2804 17.3479 18.5412C17.6836 18.7186 17.927 18.8172 18.167 18.8488C18.6929 18.9181 19.2248 18.7756 19.6456 18.4527C19.9612 18.2105 20.1942 17.807 20.6601 16.9999C21.1261 16.1929 21.3591 15.7894 21.411 15.395C21.4802 14.8691 21.3377 14.3372 21.0148 13.9164C20.8674 13.7243 20.6602 13.5628 20.3387 13.3608C19.8662 13.0639 19.5621 12.558 19.5621 11.9999C19.5621 11.4418 19.8662 10.9361 20.3387 10.6392C20.6603 10.4371 20.8675 10.2757 21.0149 10.0835C21.3378 9.66273 21.4803 9.13087 21.4111 8.60497C21.3592 8.21055 21.1262 7.80703 20.6602 7C20.1943 6.19297 19.9613 5.78945 19.6457 5.54727C19.2249 5.22436 18.693 5.08185 18.1671 5.15109C17.9271 5.18269 17.6837 5.28136 17.3479 5.4588C16.8545 5.71959 16.2644 5.73002 15.7811 5.45096C15.2977 5.17191 15.0117 4.65566 14.9909 4.09794C14.9767 3.71848 14.9404 3.45833 14.8477 3.23463C14.6448 2.74458 14.2554 2.35523 13.7654 2.15224Z"
-            fill="none"
-            strokeWidth="1.5"
-          />
-        </>
-      )}
-      {name === "route" && (
-        <>
-          <path d="M5 19c0-4 3-4 6-4s6 0 6-4V5" {...common} />
-          <path d="m14 8 3-3 3 3" {...common} />
-          <circle cx="5" cy="19" r="2" {...common} />
-        </>
-      )}
-      {name === "info" && (
-        <>
-          <circle cx="12" cy="12" r="9" {...common} />
-          <path d="M12 11v5M12 8h.01" {...common} />
-        </>
-      )}
-      {name === "street" && (
-        <>
-          <path d="M4 19 8 5h8l4 14" {...common} />
-          <path d="M12 5v3M12 12v3M12 19v1" {...common} />
-        </>
-      )}
-      {name === "chevron" && <path d="m9 5 7 7-7 7" {...common} />}
-      {name === "more" && (
-        <>
-          <circle cx="5" cy="12" r="1.2" fill="currentColor" />
-          <circle cx="12" cy="12" r="1.2" fill="currentColor" />
-          <circle cx="19" cy="12" r="1.2" fill="currentColor" />
-        </>
-      )}
-      {name === "mute" && (
-        <>
-          <path d="M4 10v4h4l5 4V6L8 10H4Z" {...common} />
-          <path d="m17 9 4 4M21 9l-4 4" {...common} />
-        </>
-      )}
-      {name === "recenter" && (
-        <>
-          <circle cx="12" cy="12" r="6" {...common} />
-          <path d="M12 2v3M12 19v3M2 12h3M19 12h3" {...common} />
-          <circle cx="12" cy="12" r="1.5" fill="currentColor" />
-        </>
-      )}
-    </svg>
-  );
-}
 
 type ParkingReport = CommunityParkingReport;
 type ParkingReportPatch = Pick<
@@ -1627,8 +1496,8 @@ function HomeView({
         )}
 
         <div className="map-action-row" aria-label="Veprimet e hartës">
-          <button
-            className={`map-action-button ${plannerOpen ? "map-action-button--active" : ""}`}
+          <MapFloatingControl
+            className={`${plannerOpen ? "map-action-button--active" : ""}`}
             onClick={() => {
               onCloseSearch();
               setPlannerOpen((value) => !value);
@@ -1641,9 +1510,9 @@ function HomeView({
             </span>
             <b>Filtra</b>
             {activeFilterCount > 0 && <small>{activeFilterCount}</small>}
-          </button>
-          <button
-            className={`map-action-button map-action-button--pick ${pickingDestination ? "map-action-button--active" : ""}`}
+          </MapFloatingControl>
+          <MapFloatingControl
+            className={`map-action-button--pick ${pickingDestination ? "map-action-button--active" : ""}`}
             onClick={() => {
               setPlannerOpen(false);
               onCloseSearch();
@@ -1660,9 +1529,9 @@ function HomeView({
               <AppIcon name="pin" />
             </span>
             <b>{pickingDestination ? "Anulo" : "Zgjidh pikë"}</b>
-          </button>
-          <button
-            className={`map-action-button map-action-button--location map-action-button--${locationStatus}`}
+          </MapFloatingControl>
+          <MapFloatingControl
+            className={`map-action-button--location map-action-button--${locationStatus}`}
             onClick={() => {
               setPlannerOpen(false);
               onCloseSearch();
@@ -1681,7 +1550,7 @@ function HomeView({
                   ? "Lokacioni"
                   : "Ku jam"}
             </b>
-          </button>
+          </MapFloatingControl>
         </div>
         {!pickingDestination && locationStatus !== "idle" && locationStatus !== "ready" && (
           <p
@@ -1850,16 +1719,20 @@ function HomeView({
         ) : null}
       </div>
 
+      {!destination && !parkingPreviewOpen && !searchOpen && !plannerOpen && !pickingDestination && (loadStatus !== "live" || mapParkings.length === 0) && (
+        <div className="discovery-status" role="status">
+          <AppIcon name={loadStatus === "loading" ? "map" : "info"} size={18} />
+          <span>{loadStatus === "loading" ? "Duke rifreskuar parkingjet…" : !mapParkings.length ? "Nuk ka parkingje për këta filtra." : "Të dhëna rezervë · rifreskimi nuk u krye"}</span>
+          {loadStatus !== "loading" && !mapParkings.length && <button onClick={() => setPlannerOpen(true)}>Ndrysho filtrat</button>}
+        </div>
+      )}
       {parkingPreviewOpen && !destination && (
-        <section
+        <BottomSheet
           ref={previewSheetRef}
           className="parking-preview-sheet"
           aria-label={`Parkingu i zgjedhur: ${selected.name}`}
         >
-          <div
-            className="parking-preview-sheet__handle"
-            onPointerDown={handlePreviewSheetPointerDown}
-          />
+          <SheetHandle className="parking-preview-sheet__handle" onPointerDown={handlePreviewSheetPointerDown} aria-label="Mbyll parkingun e zgjedhur" onClick={(event) => { if (event.detail === 0 || !previewSheetGestureRef.current.dragging) onCloseParkingPreview(); }} />
           <header>
             <span>
               <small>{parkingTypeLabel(selected)}</small>
@@ -1898,30 +1771,9 @@ function HomeView({
               </span>
             )}
           </div>
-          <p className="parking-route-road">
-            <b>⌖</b>
-            <span>
-              <small>Adresa e parkingut</small>
-              <strong>
-                {selected.address || "Adresa nuk është konfirmuar"}
-              </strong>
-            </span>
-          </p>
-          <div className="parking-preview-actions">
-            <button className="button button--secondary" onClick={onDetails}>
-              <AppIcon name="info" size={17} />
-              Detaje
-            </button>
-            <button className="button button--secondary" onClick={onStreetView}>
-              <AppIcon name="street" size={17} />
-              Street View
-            </button>
-            <button className="button" onClick={onNavigate}>
-              <AppIcon name="route" size={17} />
-              Shko këtu
-            </button>
-          </div>
-        </section>
+          <InfoRow icon="pin" label="Adresa e parkingut">{selected.address || "Adresa nuk është konfirmuar"}</InfoRow>
+          <ParkingActions onNavigate={onNavigate} onDetails={onDetails} onStreetView={onStreetView} />
+        </BottomSheet>
       )}
       {longPressLocation && (
         <section
@@ -1960,12 +1812,13 @@ function HomeView({
         </section>
       )}
       {destination && (
-        <section
+        <BottomSheet
           ref={sheetRef}
+          aria-label="Parkingjet pranë destinacionit"
           className={`home-sheet home-sheet--smart home-sheet--${sheetState}`}
           onPointerDown={handleSheetPointerDown}
         >
-          <button
+          <SheetHandle
             className="sheet-toggle"
             onClick={() => {
               if (suppressSheetClickRef.current) return;
@@ -1981,7 +1834,6 @@ function HomeView({
                   : "Mbyll listën e parkingjeve"
             }
           >
-            <span className="drag-handle" />
             <span>{sheetToggleLabel}</span>
             <b>
               {sheetState === "collapsed"
@@ -1990,7 +1842,7 @@ function HomeView({
                   ? "⌃"
                   : "⌄"}
             </b>
-          </button>
+          </SheetHandle>
           <div className="home-sheet__content">
             <div className="sheet-heading">
               <h1>{`Parking për ${destination.name}`}</h1>
@@ -2037,27 +1889,7 @@ function HomeView({
                   showDriving={locationStatus === "ready"}
                   onOpen={onDetails}
                 />
-                <div className="sheet-primary-actions">
-                  <button className="button" onClick={onNavigate}>
-                    <AppIcon name="route" size={17} />
-                    Shko këtu
-                  </button>
-                  <button
-                    className="button button--secondary"
-                    onClick={onDetails}
-                  >
-                    <AppIcon name="info" size={17} />
-                    Detaje
-                  </button>
-                  <button
-                    className="button button--secondary"
-                    onClick={onStreetView}
-                    aria-label={`Hap Street View për ${selected.name}`}
-                  >
-                    <AppIcon name="street" size={17} />
-                    Street View
-                  </button>
-                </div>
+                <ParkingActions onNavigate={onNavigate} onDetails={onDetails} onStreetView={onStreetView} />
               </>
             ) : sheetState === "medium" ? (
               <div className="empty-state">
@@ -2118,7 +1950,7 @@ function HomeView({
               </>
             )}
           </div>
-        </section>
+        </BottomSheet>
       )}
 
       <BottomNav onProfile={onProfile} onSettings={onSettings} />
@@ -2270,8 +2102,10 @@ function ProfileView({
       </header>
       <main className="saved-list">
         {!user ? (
-          <section className="empty-state">
-            <strong>Hyr në llogari për të parë profilin</strong>
+          <section className="empty-state profile-welcome">
+            <span className="profile-welcome__icon" aria-hidden="true"><AppIcon name="user" size={32} /></span>
+            <strong>Parkingjet e tua, në një vend.</strong>
+            <p>Hyr për të ruajtur parkingje, për të parë rezervimet dhe për të kontribuar në komunitet.</p>
             <button type="button" onClick={onLogin}>
               Hyr ose regjistrohu
             </button>
@@ -2506,22 +2340,22 @@ const mapVariantOptions: Array<{
 }> = [
   {
     value: "standard",
-    label: "Streets",
+    label: "Rrugët",
     description: "Rrugë, lagje dhe vende për orientim të përditshëm.",
   },
   {
     value: "minimal",
-    label: "Light",
+    label: "E çelët",
     description: "Hartë e çelët dhe e pastër që nxjerr në pah parkingjet.",
   },
   {
     value: "dark",
-    label: "Dark",
+    label: "E errët",
     description: "Ngjyra të errëta për përdorim në mbrëmje.",
   },
   {
     value: "satellite",
-    label: "Satellite",
+    label: "Satelit",
     description: "Pamje satelitore me emra rrugësh dhe vendesh.",
   },
 ];
@@ -2617,7 +2451,7 @@ function SettingsView({
                 onClick={() => onChange({ ...settings, variant: option.value })}
                 aria-pressed={settings.variant === option.value}
               >
-
+                <AppIcon name="map" size={22} />
                 <span>
                   <strong>{option.label}</strong>
                   <small>{option.description}</small>
@@ -2782,55 +2616,62 @@ function SettingsView({
             </span>
           </div>
           <button className="settings-login-button" onClick={onEditOnboardingPreferences}>
+            <AppIcon name="filter" size={21} />
             <span><strong>Preferencat e parkingut</strong><small>Zgjedhjet e ruajtura gjatë prezantimit.</small></span>
-            <b>›</b>
+            <AppIcon name="chevron" size={18} />
           </button>
           <button className="settings-login-button" onClick={onRestartOnboarding}>
+            <AppIcon name="info" size={21} />
             <span><strong>Shfaq prezantimin</strong><small>Njihu përsëri me Parko.</small></span>
-            <b>›</b>
+            <AppIcon name="chevron" size={18} />
           </button>
           <button className="settings-login-button" onClick={onCommunity}>
+            <AppIcon name="user" size={21} />
             <span>
               <strong>Komuniteti dhe njoftimet</strong>
               <small>Postime dhe njoftime nga llogaria jote.</small>
             </span>
-            <b>›</b>
+            <AppIcon name="chevron" size={18} />
           </button>
           <button className="settings-login-button" onClick={onCommunitySpots}>
+            <AppIcon name="map" size={21} />
             <span>
               <strong>Parkingjet e komunitetit</strong>
               <small>
                 Shiko vendet e regjistruara dhe rezervo kur është e mundur.
               </small>
             </span>
-            <b>›</b>
+            <AppIcon name="chevron" size={18} />
           </button>
           {!user && (
             <button className="settings-login-button" onClick={onLogin}>
+            <AppIcon name="user" size={21} />
               <span>
                 <strong>Hyr ose regjistrohu</strong>
                 <small>Ruaj preferencat dhe parkingjet e tua.</small>
               </span>
-              <b>›</b>
+              <AppIcon name="chevron" size={18} />
             </button>
           )}
           <a
             className="settings-login-button settings-login-button--link"
             href="/privacy"
           >
+            <AppIcon name="info" size={21} />
             <span>
               <strong>Politika e privatësisë</strong>
             </span>
-            <b>›</b>
+            <AppIcon name="chevron" size={18} />
           </a>
           <a
             className="settings-login-button settings-login-button--link"
             href="/terms"
           >
+            <AppIcon name="info" size={21} />
             <span>
               <strong>Kushtet e përdorimit</strong>
             </span>
-            <b>›</b>
+            <AppIcon name="chevron" size={18} />
           </a>
         </section>
 
@@ -3009,7 +2850,7 @@ function DetailsView({
         mapSettings={mapSettings}
       />
       <button className="floating-back" onClick={onBack} aria-label="Kthehu">
-        ‹
+        <AppIcon name="chevron" size={22} />
       </button>
       <button
         className={`floating-add ${saved ? "floating-add--saved" : ""}`}
@@ -3018,11 +2859,12 @@ function DetailsView({
           saved ? "Hiqe parkingun nga të ruajturat" : "Ruaje parkingun"
         }
       >
-        {saved ? "♥" : "♡"}
+        <AppIcon name="heart" size={22} />
       </button>
 
-      <section
+      <BottomSheet
         ref={sheetRef}
+        aria-label={`Detajet për ${parking.name}`}
         className={`details-sheet details-sheet--${sheetState}${sheetDragging ? " details-sheet--dragging" : ""}`}
         onPointerDown={handleDetailsSheetPointerDown}
       >
@@ -3030,13 +2872,10 @@ function DetailsView({
           className="details-sheet__header"
           onPointerDown={handleDetailsSheetPointerDown}
         >
-          <button type="button" className="details-sheet-toggle" aria-label={sheetState === "full" ? "Zvogëlo detajet" : "Zgjero detajet"} aria-expanded={sheetState === "full"} onClick={() => { if (!suppressDetailsClickRef.current) setSheetState(current => current === "full" ? "half" : "full"); }}><span className="drag-handle" /></button>
+          <SheetHandle className="details-sheet-toggle" aria-label={sheetState === "full" ? "Zvogëlo detajet" : "Zgjero detajet"} aria-expanded={sheetState === "full"} onClick={() => { if (!suppressDetailsClickRef.current) setSheetState(current => current === "full" ? "half" : "full"); }} />
           <h1>{parking.name}</h1>
-        <span
-          className={`availability-badge availability-badge--${parking.status}`}
-        >
-          ● {availabilityLabel(parking)}
-        </span>
+          <StatusBadge tone={parking.status === "available" ? "success" : parking.status === "full" ? "danger" : "warning"}>{availabilityLabel(parking)}</StatusBadge>
+          <InfoRow icon="pin">{parking.address || parking.zone}</InfoRow>
         </div>
         {mapSettings.showDataSources && (
           <DataTrustBadge parking={parking} detailed />
@@ -3255,20 +3094,10 @@ function DetailsView({
             Burimi nuk ka faqe raportimi
           </span>
         )}
-      </section>
+      </BottomSheet>
       <div className="details-actions">
-        <button
-          className="button"
-          onClick={onNavigate}
-        >
-          {!userLocationLive
-            ? "Aktivizo lokacionin"
-            : routeLoading
-              ? "Duke llogaritur…"
-              : !route
-                ? "Provo përsëri"
-                : "Nisu drejt parkingut"}
-        </button>
+        <PrimaryButton onClick={onNavigate}><AppIcon name="route" />Shko këtu</PrimaryButton>
+        {(!userLocationLive || routeLoading || !route) && <small role="status">{!userLocationLive ? "Nevojitet lokacioni për udhëzime nga vendndodhja jote" : routeLoading ? "Duke llogaritur rrugën…" : "Rruga nuk u ngarkua · provo përsëri"}</small>}
       </div>
     </div>
   );

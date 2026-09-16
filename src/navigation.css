@@ -1,50 +1,58 @@
 .navigation-screen { container-type: inline-size; }
-.trip-map-destination { display: grid; place-items: center; width: 36px; height: 36px; border: 3px solid white; border-radius: 12px; background: #245fc9; color: white; font-size: 20px; font-weight: 800; box-shadow: 0 2px 8px #10203355; }
+.trip-map-destination { display: grid; place-items: center; width: 36px; height: 36px; border: 3px solid white; border-radius: 12px; background: var(--primary); color: white; font-size: 20px; font-weight: 700; box-shadow: 0 2px 8px #172b3a55; }
 .navigation-screen .map-canvas { inset: 0; }
-.trip-header, .trip-panel { position: absolute; z-index: 20; left: 12px; right: 12px; background: var(--surface, #fff); border: 1px solid var(--border, #dde5ef); border-radius: 16px; box-shadow: var(--shadow-float, 0 6px 24px #10203320); }
-.trip-header { top: max(12px, env(safe-area-inset-top)); display: flex; align-items: flex-start; gap: 12px; padding: 16px 12px 16px 16px; }
-.trip-parking-icon { display: grid; place-items: center; flex: 0 0 40px; height: 40px; border-radius: 12px; background: var(--primary-soft, #eaf1ff); color: var(--primary, #2563eb); font-size: 24px; font-weight: 800; }
-.trip-destination { flex: 1; min-width: 0; }
-.trip-eyebrow { color: var(--primary); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
-.trip-destination h1 { margin: 4px 0; font-size: 18px; line-height: 1.3; overflow-wrap: anywhere; max-height: 3.9em; overflow: auto; }
-.trip-destination p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); max-height: 3em; overflow: auto; }
-.trip-close { display: grid; place-items: center; flex: 0 0 48px; height: 48px; border-radius: 12px; background: #f1f5f9; color: #334155; }
-.trip-panel { bottom: max(12px, env(safe-area-inset-bottom)); padding: 16px; max-height: 52%; overflow-y: auto; }
-.trip-status { color: var(--muted); font-size: 12px; line-height: 1.5; margin-bottom: 14px; }
-.trip-metrics { display: grid; grid-template-columns: 1.15fr 1fr 1fr; gap: 10px; padding-bottom: 16px; border-bottom: 1px solid var(--border, #e2e8f0); font-variant-numeric: tabular-nums; }
-.trip-metrics > div { display: flex; flex-direction: column; gap: 6px; }
-.trip-metrics strong { white-space: nowrap; font-size: clamp(20px, 6cqi, 28px); line-height: 1.15; }
+.trip-header, .trip-panel { position: absolute; z-index: 20; left: 12px; right: 12px; border-radius: 22px; box-shadow: 0 4px 24px #172b3a20; }
+.trip-header { top: max(12px, env(safe-area-inset-top)); display: flex; align-items: flex-start; gap: 8px; padding: 18px 12px 18px 18px; background: #163d37; color: white; }
+.trip-maneuver { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; }
+.trip-maneuver__icon { font-size: 46px; font-weight: 500; line-height: 1; flex-shrink: 0; }
+.trip-maneuver > div { min-width: 0; }
+.trip-eyebrow { font-size: 11px; font-weight: 500; color: #bdd7cf; }
+.trip-maneuver h1 { margin: 6px 0 0; font-size: 23px; line-height: 1.2; letter-spacing: -.03em; font-weight: 600; overflow-wrap: anywhere; max-height: 4.8em; overflow-y: auto; }
+.trip-maneuver p { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: #e1eee8; }
+.trip-close { display: grid; place-items: center; flex: 0 0 44px; height: 44px; border-radius: 50%; background: #ffffff18; color: white; }
+.trip-panel { bottom: max(12px, env(safe-area-inset-bottom)); padding: 16px; max-height: 52%; overflow-y: auto; background: white; border: 1px solid var(--line); }
+.trip-destination-row { display: flex; align-items: center; gap: 10px; padding-bottom: 14px; }
+.trip-parking-icon { display: grid; place-items: center; flex: 0 0 36px; height: 38px; border-radius: 10px; background: var(--primary-soft); color: var(--primary); font-size: 20px; font-weight: 700; }
+.trip-destination { min-width: 0; }
+.trip-destination h2 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.35; }
+.trip-destination p { margin: 3px 0 0; font-size: 12px; line-height: 1.5; color: var(--muted); max-height: 3em; overflow-y: auto; }
+.trip-metrics { display: grid; grid-template-columns: 1.15fr 1fr 1fr; gap: 8px; padding: 14px 0; border-block: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.trip-metrics > div { display: flex; flex-direction: column; gap: 5px; }
+.trip-metrics strong { white-space: nowrap; font-size: clamp(20px, 6cqi, 26px); line-height: 1.15; font-weight: 600; letter-spacing: -.03em; }
 .trip-metrics > div:first-child strong { color: var(--primary); }
-.trip-metrics strong span { font-size: 16px; }
-.trip-metrics small { font-size: 11px; color: var(--muted); }
-.trip-guidance { display: flex; align-items: center; gap: 12px; padding: 14px 0; }
-.trip-guidance > span { font-size: 34px; color: var(--primary); }
-.trip-guidance > div { display: flex; flex-direction: column; gap: 4px; }
-.trip-guidance strong { font-size: 17px; line-height: 1.35; }
-.trip-guidance small { font-size: 12px; color: var(--muted); }
-.trip-actions { display: flex; gap: 8px; }
-.trip-actions button { flex: 1; min-height: 48px; padding: 8px; border-radius: 10px; background: #f1f5f9; color: #334155; font-size: 13px; font-weight: 600; }
-.trip-arrive, .trip-finish { width: 100%; min-height: 48px; margin-top: 10px; border-radius: 10px; font-weight: 700; font-size: 14px; }
+.trip-metrics strong span { font-size: 15px; font-weight: 500; }
+.trip-metrics small { font-size: 11px; line-height: 1.4; color: var(--muted); }
+.trip-status { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 12px 0 6px; }
+.trip-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.trip-actions button { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; padding: 8px 4px; border-radius: 12px; background: var(--surface-soft); color: var(--ink); font-size: 12px; font-weight: 500; }
+.trip-arrive, .trip-finish { width: 100%; min-height: 48px; margin-top: 8px; border-radius: 14px; font-weight: 600; font-size: 14px; }
 .trip-arrive { background: transparent; color: var(--primary); }
 .trip-finish { background: var(--primary); color: white; }
 .trip-steps { padding-left: 24px; max-height: 140px; overflow-y: auto; }
-.trip-steps li { padding: 8px 0; font-size: 13px; }
+.trip-steps li { padding: 10px 0; font-size: 13px; line-height: 1.5; }
 .trip-steps span { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; }
-.navigation-screen--arrived .trip-status { color: #08764f; font-weight: 700; }
-.navigation-screen--arrived .trip-parking-icon { color: #08764f; background: #dcfce7; }
-.navigation-screen button:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
-.navigation-screen .leaflet-top.leaflet-right { top: 175px; }
+.navigation-screen--arrived .trip-status { color: var(--available); font-weight: 500; }
+.navigation-screen--arrived .trip-parking-icon { color: var(--available); background: var(--available-soft); }
+.navigation-screen .trip-header button:focus-visible { outline: 3px solid white; outline-offset: 3px; }
+.navigation-screen .leaflet-top.leaflet-right { top: 190px; }
 .navigation-screen .leaflet-bottom { bottom: 54%; }
 @container (min-width: 650px) {
   .trip-header, .trip-panel { right: auto; width: 370px; left: 20px; }
-  .trip-panel { max-height: calc(100% - 195px); }
+  .trip-panel { max-height: calc(100% - 200px); }
   .navigation-screen .leaflet-top.leaflet-right { top: 20px; }
   .navigation-screen .leaflet-bottom { bottom: 8px; }
 }
+@media (max-height: 650px) {
+  .trip-panel { padding: 12px 16px; }
+  .trip-destination-row { padding-bottom: 8px; }
+  .trip-metrics { padding: 10px 0; }
+  .trip-status { margin: 8px 0; }
+}
 @media (max-height: 540px) and (orientation: landscape) {
   .trip-header, .trip-panel { width: 310px; left: 10px; right: auto; }
-  .trip-header { padding: 10px; }
-  .trip-panel { top: 145px; bottom: 8px; max-height: none; padding: 12px; }
+  .trip-header { padding: 12px; }
+  .trip-maneuver h1 { font-size: 18px; }
+  .trip-panel { top: 150px; bottom: 8px; max-height: none; padding: 12px; }
   .navigation-screen .leaflet-top.leaflet-right { top: 10px; }
   .navigation-screen .leaflet-bottom { bottom: 4px; }
 }

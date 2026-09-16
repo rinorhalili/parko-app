@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { BottomSheet, SheetHandle } from './ui/components'
 import { getParking, listParking, nearbyParking } from './api/parkingService'
 import { createReservation, type Reservation } from './api/reservationService'
 import type { NearbyParkingSpot, ParkingSpot, ParkingStatus, ParkingType } from './api/types'
@@ -91,15 +92,15 @@ export default function CommunitySpots({ userLocation, canReserve, onBack, onLog
     }
   }
 
-  function dragStartHandler(event: React.PointerEvent<HTMLDivElement>) {
+  function dragStartHandler(event: React.PointerEvent<HTMLElement>) {
     dragStart.current = event.clientY
     event.currentTarget.setPointerCapture(event.pointerId)
   }
-  function dragMoveHandler(event: React.PointerEvent<HTMLDivElement>) {
+  function dragMoveHandler(event: React.PointerEvent<HTMLElement>) {
     if (dragStart.current === null || !sheetRef.current) return
     sheetRef.current.style.setProperty('--sheet-drag-y', `${Math.max(0, event.clientY - dragStart.current)}px`)
   }
-  function dragEndHandler(event: React.PointerEvent<HTMLDivElement>) {
+  function dragEndHandler(event: React.PointerEvent<HTMLElement>) {
     const start = dragStart.current
     dragStart.current = null
     if (sheetRef.current) sheetRef.current.style.setProperty('--sheet-drag-y', '0px')
@@ -114,8 +115,8 @@ export default function CommunitySpots({ userLocation, canReserve, onBack, onLog
       {!loading && !error && !spots.length && <div className="empty-state"><strong>Nuk ka parkingje të regjistruara.</strong><span>Provo përsëri më vonë.</span></div>}
       {spots.map((spot) => <button className="community-spot-card" key={spot.id} onClick={() => void openSpot(spot)}><span><strong>{spot.title}</strong><small>{spot.address ?? spot.zone ?? 'Adresa nuk dihet'}</small></span><i className={`community-status community-status--${spot.status.toLowerCase()}`}>{statusLabels[spot.status]}</i><em>{typeLabels[spot.type]}</em></button>)}
     </main>
-    {selected && <section ref={sheetRef} className="parking-preview-sheet community-spot-sheet" aria-label={`Detajet për ${selected.title}`}>
-      <div className="parking-preview-sheet__handle" onPointerDown={dragStartHandler} onPointerMove={dragMoveHandler} onPointerUp={dragEndHandler} />
+    {selected && <BottomSheet ref={sheetRef} className="parking-preview-sheet community-spot-sheet" aria-label={`Detajet për ${selected.title}`}>
+      <SheetHandle className="parking-preview-sheet__handle" aria-label="Mbyll detajet" onPointerDown={dragStartHandler} onPointerMove={dragMoveHandler} onPointerUp={dragEndHandler} onClick={event => { if (event.detail === 0) setSelected(null) }} onPointerCancel={() => { dragStart.current = null; sheetRef.current?.style.removeProperty('--sheet-drag-y') }} />
       <header><span><small>{typeLabels[selected.type]}</small><strong>{selected.title}</strong></span><button onClick={() => setSelected(null)} aria-label="Mbyll">×</button></header>
       <p className="community-spot-address">{selected.address ?? selected.zone ?? 'Adresa nuk dihet'}</p>
       <i className={`community-status community-status--${selected.status.toLowerCase()}`}>{statusLabels[selected.status]}</i>
@@ -123,6 +124,6 @@ export default function CommunitySpots({ userLocation, canReserve, onBack, onLog
       {reservation ? <div className="reservation-confirmation"><strong>Rezervimi u konfirmua</strong><span>{formatWindow(new Date(reservation.startsAt), new Date(reservation.expiresAt))}</span><button onClick={() => setSelected(null)}>Në rregull</button></div> : reservable(selected) && canReserve ? <div className="reservation-form"><strong>Rezervo vendin</strong><div className="reservation-durations">{([30, 60, 120, 240] as Duration[]).map((value) => <button key={value} className={duration === value ? 'selected' : ''} onClick={() => setDuration(value)}>{value < 60 ? '30 min' : `${value / 60} orë`}</button>)}</div><small>{formatWindow(selectedWindow.startsAt, selectedWindow.expiresAt)}</small><button className="button reservation-submit" disabled={submitting} onClick={() => void submitReservation()}>{submitting ? 'Duke rezervuar…' : 'Rezervo'}</button></div> : <p className="community-spot-note">{reservable(selected) ? 'Hyr në llogari për të rezervuar këtë vend.' : 'Ky vend nuk është i disponueshëm për rezervim.'}</p>}
       {!canReserve && reservable(selected) && <button className="community-login-link" onClick={onLogin}>Hyr në llogari për të rezervuar</button>}
       {error && <p className="community-form-error" role="alert">{error}</p>}
-    </section>}
+    </BottomSheet>}
   </div>
 }

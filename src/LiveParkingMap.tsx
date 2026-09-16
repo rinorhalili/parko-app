@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { parkingMarkerHtml } from './ui/parkingMarker'
 import L from 'leaflet'
 import { maplibreGL } from '@maplibre/maplibre-gl-leaflet'
 import { setWorkerUrl } from 'maplibre-gl'
@@ -222,7 +223,7 @@ export default function LiveParkingMap({
         iconCreateFunction: (cluster) => L.divIcon({
           html: `<div class="parking-cluster-bubble">${cluster.getChildCount()}</div>`,
           className: 'parking-cluster-icon',
-          iconSize: L.point(38, 38),
+          iconSize: L.point(44, 44),
         }),
       }).addTo(map)
     } catch (error) {
@@ -396,9 +397,9 @@ export default function LiveParkingMap({
           pane: 'parkingAreas',
           icon: L.divIcon({
             className: '',
-            html: `<span class="parking-point parking-point--${category}${isSelected ? ' parking-point--selected' : ''}${restricted ? ' parking-point--restricted' : ''}" style="--parking-point-color:${color};--parking-point-border:${isSelected ? '#0b3fd1' : '#fff'};--parking-point-opacity:${restricted ? .45 : .9};--parking-point-size:${isSelected ? (mapSettings.largePointMarkers ? 22 : 16) : (mapSettings.largePointMarkers ? 16 : 11)}px;--parking-point-border-width:${isSelected ? 3.5 : mapSettings.largePointMarkers ? 2.25 : 1.5}px"></span>`,
-            iconSize: L.point(isSelected ? (mapSettings.largePointMarkers ? 22 : 16) : (mapSettings.largePointMarkers ? 16 : 11), isSelected ? (mapSettings.largePointMarkers ? 22 : 16) : (mapSettings.largePointMarkers ? 16 : 11)),
-            iconAnchor: L.point(isSelected ? (mapSettings.largePointMarkers ? 11 : 8) : (mapSettings.largePointMarkers ? 8 : 5.5), isSelected ? (mapSettings.largePointMarkers ? 11 : 8) : (mapSettings.largePointMarkers ? 8 : 5.5)),
+            html: parkingMarkerHtml({ color, category, selected: isSelected, restricted, large: mapSettings.largePointMarkers }),
+            iconSize: L.point(44, 44),
+            iconAnchor: L.point(22, 22),
           }),
         })]
 

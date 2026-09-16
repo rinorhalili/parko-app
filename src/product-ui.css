@@ -1,25 +1,25 @@
 /* Parko product presentation. Map positioning, gestures and data stay in their existing modules. */
 :root {
-  --primary: #245fc9;
-  --primary-soft: #edf3fc;
-  --ink: #1e2c3b;
-  --muted: #586779;
-  --line: #dfe5eb;
+  --primary: #2463eb;
+  --primary-soft: #eef4ff;
+  --ink: #172b3a;
+  --muted: #637384;
+  --line: #e7ecf1;
   --surface: #fff;
   --surface-soft: #f5f7f9;
   --available: #16805a;
   --available-soft: #eaf5ef;
   --limited: #a96814;
   --danger: #bd3d46;
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
   --shadow-float: 0 2px 10px #1e2c3b14;
   --shadow-sheet: 0 -2px 12px #1e2c3b12;
-  --nav-height: calc(64px + env(safe-area-inset-bottom));
+  --nav-height: calc(68px + env(safe-area-inset-bottom));
   font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 400;
 }
 body { background: var(--surface-soft); }
 * { scroll-behavior: auto; }
@@ -205,7 +205,7 @@ button:not(:disabled):active { transform: none; filter: brightness(.94); }
 .map-context-menu { bottom: calc(var(--nav-height) + 12px); }
 @media (min-width: 521px) {
   .app-shell { padding: 16px; background: #edf1f5; }
-  .phone-frame { width: 414px; max-width: 100%; height: min(860px, calc(100dvh - 32px)); border-radius: 24px; box-shadow: 0 8px 32px #1e2c3b1a; }
+  .phone-frame { width: 430px; max-width: 100%; height: min(900px, calc(100dvh - 32px)); border-radius: 24px; box-shadow: 0 8px 32px #1e2c3b1a; }
 }
 @media (max-width: 350px) {
   .home-controls { left: 8px; right: 8px; }
@@ -216,4 +216,204 @@ button:not(:disabled):active { transform: none; filter: brightness(.94); }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+/* Shared components */
+.ui-primary, .button { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; font-size: 15px; font-weight: 600; border-radius: 16px; box-shadow: none; }
+.ui-primary { background: var(--primary); color: white; }
+.ui-sheet { border-radius: 24px 24px 0 0; border-top: 1px solid var(--line); background: white; box-shadow: 0 -6px 28px #172b3a12; }
+.ui-sheet-handle { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 44px; padding: 0; background: transparent; color: var(--muted); touch-action: none; }
+.ui-sheet-handle .drag-handle { display: block; width: 36px; height: 4px; margin: 0; border-radius: 4px; background: #c9d2dd; flex-shrink: 0; }
+.ui-status { display: inline-flex; align-items: center; gap: 7px; width: fit-content; max-width: 100%; padding: 6px 10px; border-radius: 8px; background: var(--surface-soft); color: var(--muted); font-size: 12px; line-height: 1.4; font-weight: 500; }
+.ui-status i { flex: 0 0 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.ui-status--success { background: #edf8f2; color: var(--available); }
+.ui-status--warning { background: #fff6e6; color: #95620c; }
+.ui-status--danger { background: #fff0f1; color: var(--danger); }
+.ui-info-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; color: var(--muted); }
+.ui-info-row > div { display: grid; gap: 3px; min-width: 0; }
+.ui-info-row small { font-size: 12px; }
+.ui-info-row span { font-size: 13px; line-height: 1.5; color: var(--ink); overflow-wrap: anywhere; }
+.parking-actions { display: grid; gap: 4px; padding-top: 12px; }
+.parking-actions > .ui-primary { width: 100%; }
+.parking-actions__secondary { display: grid; grid-template-columns: 1fr 1fr; }
+.parking-actions__secondary button { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; background: transparent; color: var(--muted); font-size: 13px; font-weight: 500; border-radius: 12px; }
+.parking-actions__secondary button + button { position: relative; }
+.parking-actions__secondary button + button::before { content: ''; position: absolute; left: 0; top: 14px; height: 16px; border-left: 1px solid var(--line); }
+
+/* Map-first discovery */
+.home-controls { top: calc(16px + env(safe-area-inset-top)); left: 16px; right: 16px; }
+.home-controls { pointer-events: none; }
+.home-controls > :not(.location-inline-status) { pointer-events: auto; }
+.location-inline-status { pointer-events: none; }
+.search-box { min-height: 56px; padding: 0 6px 0 14px; border-color: #dde5ee; border-radius: 18px; box-shadow: 0 3px 16px #172b3a12; }
+.search-box:focus-within { box-shadow: 0 0 0 3px #2463eb14; }
+.search-box__pin { color: var(--primary); }
+.search-box__copy input { font-size: 15px; }
+.search-box__copy input::placeholder { color: var(--muted); opacity: 1; }
+.map-action-row { gap: 8px; margin-top: 10px; }
+.map-action-button, .map-action-button--active, .map-action-button--location.map-action-button--ready { flex: 1 1 auto; padding-inline: 11px; border-radius: 24px; border-color: #dde5ee; }
+.map-action-button--active { border-color: #aac5ff; }
+.map-action-button--location.map-action-button--ready { color: var(--primary); }
+.location-inline-status { padding: 8px 12px; border: 1px solid #f1e4cb; border-radius: 12px; line-height: 1.5; }
+.map-canvas .leaflet-top.leaflet-right { top: 152px; }
+.leaflet-map .leaflet-control-zoom { overflow: hidden; border: 1px solid var(--line); border-radius: 22px; }
+.leaflet-map .leaflet-control-zoom a { color: var(--muted); font-size: 21px; }
+.parking-marker-hit { display: grid; place-items: center; width: 44px; height: 44px; }
+.parking-marker-hit .parking-point { display: grid; place-items: center; border: 3px solid var(--parking-point-color); border-radius: 10px; width: var(--parking-point-size); height: var(--parking-point-size); background: white; color: var(--ink); font-size: 14px; font-weight: 700; opacity: 1; box-shadow: 0 2px 5px #172b3a40; }
+.parking-marker-hit .parking-point--selected { outline: 3px solid white; outline-offset: 1px; border-color: var(--primary); background: var(--primary); color: white; border-radius: 12px; font-size: 17px; }
+.parking-marker-hit .parking-point--restricted { border-style: dashed; }
+.parking-cluster-icon .parking-cluster-bubble { color: var(--ink); border: 3px solid #bed0ef; }
+.parking-cluster-icon { display: grid; place-items: center; }
+.map-context-menu { border-radius: 24px; padding: 20px; }
+.map-context-menu button { min-height: 48px; font-size: 14px; border-radius: 12px; }
+.search-suggestions { top: calc(84px + env(safe-area-inset-top)); border-radius: 24px 24px 0 0; }
+.search-sheet-header { min-height: 58px; padding: 4px 20px; }
+.search-suggestions > button { min-height: 72px; padding: 14px 20px; }
+.smart-planner { max-height: calc(100% - 96px - var(--nav-height)); border-radius: 24px 24px 0 0; padding-top: 20px; }
+.smart-planner header strong { font-size: 21px; letter-spacing: -.03em; }
+.smart-planner header button, .planner-header-actions button { border-radius: 50%; background: var(--surface-soft); }
+.filter-section-label { margin: 24px 0 12px; }
+.parking-type-chooser, .filter-chip-grid { gap: 8px; }
+.parking-type-chooser button, .filter-chip-grid button { min-height: 52px; padding: 12px; border-radius: 12px; font-size: 13px; }
+.planner-options select { min-height: 48px; border-radius: 12px; background: var(--surface-soft); }
+
+/* Summary and detail sheets */
+.home-sheet--smart { height: 382px; max-height: calc(100% - 156px - var(--nav-height)); padding: 0 20px 12px; }
+.home-sheet--collapsed { height: 56px; min-height: 56px; }
+.home-sheet--expanded, .home-sheet--smart.home-sheet--expanded { top: calc(140px + env(safe-area-inset-top)); max-height: none; }
+.sheet-toggle { position: relative; gap: 8px; padding-top: 9px; }
+.sheet-toggle .drag-handle { position: absolute; top: 8px; left: calc(50% - 18px); }
+.sheet-heading { gap: 8px; margin-bottom: 8px; }
+.sheet-heading h1 { font-size: 18px; letter-spacing: -.02em; }
+.sheet-heading button { flex-shrink: 0; font-size: 12px; }
+.parking-card { padding: 14px 0; }
+.parking-card__icon { width: 40px; height: 44px; min-width: 40px; border-radius: 12px; font-size: 19px; background: var(--primary-soft); color: var(--primary); }
+.parking-card__content strong { font-size: 15px; }
+.parking-card .parking-card__content small, .parking-card .parking-card__source, .parking-card .parking-kind { font-size: 12px; font-weight: 400; line-height: 1.5; }
+.recommendation-tabs { gap: 8px; }
+.recommendation-tabs button { min-height: 48px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-soft); }
+.recommendation-tabs button.selected { background: var(--primary-soft); border-color: #afc9ff; color: var(--primary); }
+.recommendation-tabs button small { font-size: 11px; font-weight: 400; }
+.parking-preview-sheet { height: auto; max-height: calc(100% - 156px - var(--nav-height)); padding: 0 20px 12px; overflow-y: auto; }
+.parking-preview-sheet .parking-preview-sheet__handle { height: 44px; min-height: 44px; width: 100%; margin: 0; background: transparent; }
+.parking-preview-sheet__handle::before, .parking-preview-sheet__handle::after { display: none; }
+.parking-preview-sheet header { gap: 12px; }
+.parking-preview-sheet header small { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; font-weight: 600; color: var(--muted); }
+.parking-preview-sheet header strong { font-size: 21px; font-weight: 600; line-height: 1.25; letter-spacing: -.025em; }
+.parking-preview-sheet header button { border-radius: 50%; background: var(--surface-soft); color: var(--muted); }
+.parking-preview-sheet .parking-preview-source { font-size: 12px; font-weight: 400; line-height: 1.5; color: var(--muted); background: var(--surface-soft); margin: 8px 0; }
+.parking-route-summary { background: var(--surface-soft); border: 0; border-radius: 14px; padding: 12px; gap: 12px; margin: 12px 0 0; }
+.parking-route-summary strong { font-size: 18px; }
+.parking-route-summary small { font-weight: 400; text-transform: none; }
+.expanded-parking-summary { grid-template-columns: minmax(0, 1fr); padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface-soft); box-shadow: none; }
+.expanded-parking-summary strong { font-size: 15px; font-weight: 600; color: var(--ink); white-space: normal; }
+.expanded-parking-summary > span:nth-child(2) { text-align: left; }
+.expanded-parking-summary b { font-size: 12px; font-weight: 500; }
+.expanded-parking-summary small { font-size: 12px; font-weight: 400; line-height: 1.5; white-space: normal; }
+.expanded-parking-summary button { min-height: 48px; border-radius: 12px; font-size: 14px; }
+.details-sheet { padding-bottom: 140px; }
+.details-sheet--peek { height: 252px; }
+.details-sheet--half { height: min(62%, 550px); }
+.details-sheet h1 { font-size: 24px; letter-spacing: -.035em; line-height: 1.2; margin: 0 0 12px; }
+.details-sheet h2 { font-size: 16px; margin-top: 24px; }
+.details-sheet__header .ui-info-row { padding: 10px 0 0; }
+.details-sheet .data-trust b, .details-sheet .data-trust small, .details-sheet .data-trust span { font-size: 12px; font-weight: 400; line-height: 1.5; }
+.muted-copy { font-size: 13px; line-height: 1.6; }
+.stat-grid { margin: 18px 0; }
+.stat-grid > div { padding: 16px 8px; }
+.stat-grid span { font-size: 12px; font-weight: 400; text-transform: none; }
+.stat-grid strong { font-size: 22px; letter-spacing: -.02em; }
+.municipal-data-card { border: 0; border-radius: 0; background: transparent; padding: 16px 0; box-shadow: none; }
+.details-sheet .municipal-data-card small, .details-sheet .municipal-data-card header span { font-size: 12px; line-height: 1.5; }
+.detail-tags { gap: 8px; }
+.detail-tags span { font-size: 12px; padding: 8px 12px; border-radius: 8px; background: var(--surface-soft); }
+.street-view-inline--details { min-height: 48px; font-size: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-soft); color: var(--ink); }
+.details-actions .ui-primary { width: 100%; }
+.details-actions > small { display: block; margin-top: 8px; color: var(--muted); text-align: center; font-size: 11px; line-height: 1.4; }
+.floating-back, .floating-add { display: grid; place-items: center; top: calc(16px + env(safe-area-inset-top)); border-radius: 50%; background: white; color: var(--ink); }
+.floating-back .app-icon { transform: rotate(180deg); }
+.floating-add--saved .app-icon { fill: var(--primary); color: var(--primary); }
+
+/* Grouped settings and account */
+.bottom-nav { padding-inline: 12px; }
+.bottom-nav__item { min-height: 60px; font-size: 11px; }
+.bottom-nav__item span { width: 52px; height: 28px; border-radius: 16px; }
+.bottom-nav__item--active span { background: var(--primary-soft); }
+.settings-header, .saved-header { height: calc(112px + env(safe-area-inset-top)); padding: calc(24px + env(safe-area-inset-top)) 24px 20px; }
+.settings-header h1, .saved-header h1 { font-size: 28px; letter-spacing: -.04em; margin: 0 0 6px; }
+.settings-header p { font-weight: 400; color: var(--muted); }
+.settings-header > button { padding: 8px; border-radius: 12px; background: var(--surface-soft); }
+.settings-content, .saved-list { top: calc(112px + env(safe-area-inset-top)); padding: 0 24px 28px; }
+.settings-section, .saved-list > section { padding: 24px 0; }
+.settings-section__heading h2 { margin: 0; color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; }
+.map-variant-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+.map-variant-grid > button { position: relative; flex-direction: column; justify-content: flex-start; align-items: flex-start; min-height: 120px; padding: 16px; border: 1px solid var(--line); border-radius: 16px; }
+.map-variant-grid > button > span { min-width: 0; max-width: 100%; }
+.map-variant-grid > button small { font-weight: 400; white-space: normal; overflow-wrap: anywhere; }
+.map-variant-grid > button { min-width: 0; }
+.map-variant-grid > button > .app-icon { margin-bottom: 12px; color: var(--muted); }
+.map-variant-grid > button.selected > .app-icon { color: var(--primary); }
+.map-variant-grid .selection-check { position: absolute; top: 12px; right: 12px; }
+.parking-palette-options > button { min-height: 72px; padding: 12px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; }
+.parking-palette-options > button.selected { background: white; box-shadow: none; }
+.palette-swatch { border-radius: 8px; width: 32px; height: 32px; }
+.settings-section--toggles > button { min-height: 76px; }
+.settings-section--toggles small, .settings-section--defaults small, .settings-login-button small { font-weight: 400; }
+.settings-section--defaults label { min-height: 80px; }
+.settings-section--defaults select { max-width: 50%; padding: 8px; border-radius: 10px; background: var(--surface-soft); }
+.settings-login-button { gap: 12px; padding: 14px 0; }
+.settings-login-button > span { flex: 1; }
+.settings-login-button > .app-icon { color: var(--muted); }
+.saved-list .profile-avatar { width: 56px; height: 56px; flex-basis: 56px; }
+.saved-list .profile-welcome { padding: 36px 0; display: grid; justify-items: start; gap: 16px; }
+.profile-welcome .profile-welcome__icon { display: grid; place-items: center; width: 72px; height: 72px; border-radius: 24px; color: var(--primary); background: var(--primary-soft); }
+.saved-list .profile-welcome strong { max-width: 260px; font-size: 26px; line-height: 1.2; letter-spacing: -.035em; }
+.profile-welcome p { margin: 0; }
+.profile-welcome button { width: 100%; margin-top: 8px; background: var(--primary); color: white; }
+.saved-list .profile-form button, .saved-list .empty-state button, .saved-list .profile-logout-button { min-height: 48px; border-radius: 12px; }
+.saved-list .profile-form input, .saved-list .profile-form textarea { min-height: 48px; border-radius: 12px; }
+.empty-state { padding: 28px 12px; }
+.empty-state strong { font-size: 16px; }
+.empty-state span, .empty-state p { line-height: 1.6; }
+.empty-state button { min-height: 44px; border-radius: 12px; }
+.direction-card { border-radius: 20px; }
+.walking-arrival-card, .arrival-card { border-radius: 24px; padding: 20px; }
+.walking-arrival-card button { min-height: 52px; border-radius: 16px; background: var(--primary); }
+.login-modal-overlay .login-modal { border-radius: 24px; padding: 32px 24px; }
+.login-modal-overlay .login-title { font-size: 26px; letter-spacing: -.035em; }
+.login-modal-overlay .login-button { min-height: 52px; border-radius: 14px; }
+.login-modal-overlay .form-input { min-height: 48px; border-radius: 12px; }
+.community-spot-card { border-radius: 16px; box-shadow: none; }
+.community-status { font-size: 12px; }
+.community-spot-sheet { bottom: 0; }
+.discovery-status { position: absolute; z-index: 15; bottom: calc(var(--nav-height) + 18px); left: 16px; right: 16px; display: flex; align-items: center; gap: 10px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 16px; background: white; color: var(--muted); box-shadow: var(--shadow-float); font-size: 12px; line-height: 1.5; }
+.discovery-status > span { flex: 1; }
+.discovery-status button { flex: 0 0 90px; min-height: 44px; border-radius: 10px; padding: 8px; background: var(--primary-soft); color: var(--primary); font-size: 12px; font-weight: 500; }
+.filter-chip-grid button span, .filter-chip-grid button b { font-size: 12px; font-weight: 500; }
+.recommendation-tabs button > span { font-size: 12px; font-weight: 500; }
+.recommendation-tabs button > b { font-size: 12px; }
+.walking-arrival-card .arrival-metrics small, .walking-arrival-card > span, .walking-arrival-card small { font-size: 12px; font-weight: 500; }
+.home-sheet--medium .home-sheet__content { max-height: calc(100% - 44px); overflow-y: auto; }
+.home-sheet--medium .parking-actions { position: sticky; bottom: 0; z-index: 1; background: white; }
+
+@media (min-width: 521px) {
+  .app-shell { background: radial-gradient(ellipse at 50% 20%, #f7faff, #e6edf4); }
+  .phone-frame { border-radius: 28px; box-shadow: 0 12px 50px #172b3a20; }
+}
+@media (max-width: 350px) {
+  .home-controls { left: 10px; right: 10px; }
+  .map-action-row { gap: 6px; }
+  .map-action-button { padding-inline: 8px; gap: 4px; }
+  .search-box__copy input { font-size: 14px; }
+  .settings-content, .saved-list { padding-inline: 18px; }
+  .home-sheet--smart, .parking-preview-sheet, .details-sheet { padding-inline: 16px; }
+}
+@media (max-height: 650px) {
+  .home-sheet--smart, .parking-preview-sheet { max-height: calc(100% - 188px - var(--nav-height)); }
+  .home-sheet__content { overflow-y: auto; }
+  .home-sheet--medium .home-sheet__content { display: flex; flex-direction: column; }
+  .home-sheet--medium .home-sheet__content > * { flex-shrink: 0; }
+  .home-sheet--medium .parking-card { order: 1; }
+  .home-sheet--medium .recommendation-tabs { order: 2; }
+  .home-sheet--medium .parking-actions { order: 3; }
 }

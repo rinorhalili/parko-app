@@ -4,6 +4,8 @@ import { parkingAccessPoint } from './parkingGeometry'
 import { reliableArrival, remainingTrip } from './navigationProgress'
 import type { DrivingRoute, MapSettings, Parking } from './types'
 import './navigation.css'
+import { AppIcon } from './ui/Icon'
+import { TripSummary } from './ui/components'
 
 export default function NavigationView({ parking, route, routeLoading, routeError, userLocation, userLocationLive, userLocationAccuracy, locationTimestamp, mapSettings, recenterToken, hasDestination, onRecenter, onStop, onArrive }: {
   parking: Parking
@@ -65,11 +67,13 @@ export default function NavigationView({ parking, route, routeLoading, routeErro
       userLocationAccuracy={userLocationAccuracy} mapSettings={mapSettings} />
 
     <header className="trip-header">
-      <span className="trip-parking-icon" aria-hidden="true">{arrived ? '✓' : 'P'}</span>
-      <div className="trip-destination">
-        <span className="trip-eyebrow">{arrived ? 'Ke mbërritur' : 'Drejt parkingut'}</span>
-        <h1>{parking.name}</h1>
-        <p>{parking.address || parking.zone}</p>
+      <div className="trip-maneuver">
+        <span className="trip-maneuver__icon" aria-hidden="true">{arrived ? '✓' : nextStep?.instruction.includes('majtas') ? '↰' : nextStep?.instruction.includes('djathtas') ? '↱' : '↑'}</span>
+        <div>
+          <span className="trip-eyebrow">{arrived ? 'Në destinacion' : 'Drejt parkingut'}</span>
+          <h1>{arrived ? 'Ke mbërritur' : !freshLocation ? 'Duke pritur lokacionin' : !route || progress?.offRoute ? 'Duke kërkuar udhëzimet' : nextStep?.instruction ?? 'Vazhdo drejt parkingut'}</h1>
+          {!arrived && freshLocation && route && !progress?.offRoute && <p>{nextStep?.roadName}{nextStep && nextStep.distanceMeters > 0 && <span> · segmenti {nextStep.distanceMeters >= 1000 ? `${(nextStep.distanceMeters / 1000).toFixed(1)} km` : `${Math.round(nextStep.distanceMeters)} m`}</span>}</p>}
+        </div>
       </div>
       <button ref={closeRef} className="trip-close" onClick={onStop} aria-label="Mbyll navigimin" title="Mbyll navigimin">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
@@ -77,21 +81,16 @@ export default function NavigationView({ parking, route, routeLoading, routeErro
     </header>
 
     <section className="trip-panel" aria-label="Udhëtimi drejt parkingut">
-      <div className="trip-status" role="status">{status}</div>
-      <div className="trip-metrics">
-        <div><strong>{minutes}<span> min</span></strong><small>{arrived ? 'Udhëtimi përfundoi' : 'Koha e mbetur'}</small></div>
-        <div><strong>{etaLabel}</strong><small>{arrived ? 'Mbërritur në' : 'Mbërritja · ETA'}</small></div>
-        <div><strong>{distanceLabel}</strong><small>{arrived ? 'Në destinacion' : 'Distanca'}</small></div>
+      <div className="trip-destination-row">
+        <span className="trip-parking-icon" aria-hidden="true">{arrived ? '✓' : 'P'}</span>
+        <div className="trip-destination"><h2>{parking.name}</h2><p>{parking.address || parking.zone}</p></div>
       </div>
+      <TripSummary minutes={minutes} eta={etaLabel} distance={distanceLabel} arrived={arrived} />
+      <div className="trip-status" role="status">{status}</div>
       {!arrived && <>
-        <div className="trip-guidance">
-          <span aria-hidden="true">{nextStep?.instruction.includes('majtas') ? '↰' : nextStep?.instruction.includes('djathtas') ? '↱' : '↑'}</span>
-          <div><strong>{!freshLocation ? 'Duke pritur lokacionin' : !route || progress?.offRoute ? 'Duke kërkuar udhëzimet' : nextStep?.instruction ?? 'Vazhdo drejt parkingut'}</strong>
-            {freshLocation && route && !progress?.offRoute && <small>{nextStep?.roadName}</small>}</div>
-        </div>
         <div className="trip-actions">
-          <button onClick={onRecenter} aria-label="Rikthe hartën te lokacioni im">◎ <span>Lokacioni im</span></button>
-          <button onClick={() => setShowSteps(value => !value)} aria-expanded={showSteps} aria-controls="trip-steps">{showSteps ? 'Mbyll hapat' : 'Hapat e rrugës'}</button>
+          <button onClick={onRecenter} aria-label="Rikthe hartën te lokacioni im"><AppIcon name="recenter" size={18} /><span>Lokacioni im</span></button>
+          <button onClick={() => setShowSteps(value => !value)} aria-expanded={showSteps} aria-controls="trip-steps"><AppIcon name="route" size={18} />{showSteps ? 'Mbyll hapat' : 'Hapat e rrugës'}</button>
         </div>
         {showSteps && <ol id="trip-steps" className="trip-steps">{(route?.steps ?? []).map((step, index) => <li key={index}><strong>{step.instruction}</strong><span>{step.roadName} · {step.distanceMeters} m</span></li>)}{!route && <li>Udhëzimet nuk janë të disponueshme.</li>}</ol>}
       </>}

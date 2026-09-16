@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, session, shell } from 'electron'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -95,6 +95,13 @@ async function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Electron does not automatically approve the browser Geolocation API.
+  // Without this handler Parko receives PERMISSION_DENIED even when the OS has
+  // location services enabled.
+  session.defaultSession.setPermissionCheckHandler((_webContents, permission) => permission === 'geolocation')
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    callback(permission === 'geolocation')
+  })
   void createWindow()
 
   app.on('activate', () => {
