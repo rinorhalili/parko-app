@@ -17,6 +17,17 @@ const parkingPatch = z.object({
   zone: z.string().max(80).nullable().optional(),
   capacity: z.number().int().positive().nullable().optional()
 });
+const parkingPointType = z.enum(["public", "street", "prishtina", "private"]);
+const parkingPointCreate = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  parkingType: parkingPointType
+});
+const parkingPointPatch = z.object({
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  parkingType: parkingPointType.optional()
+});
 
 export const adminRoutes = Router();
 adminRoutes.use(authenticate, authorize("ADMIN"));
@@ -24,6 +35,12 @@ adminRoutes.use(authenticate, authorize("ADMIN"));
 adminRoutes.get("/parking", validate({ query: z.object({ page: z.coerce.number().int().min(0).max(1000).default(0), q: z.string().trim().max(120).default(""), scope: z.enum(["pending", "all", "disabled"]).default("pending") }) }), adminController.listParking);
 
 adminRoutes.patch("/parking/:id", validate({ params: z.object({ id: z.string().min(1).max(120) }), body: parkingPatch }), adminController.manageParking);
+
+adminRoutes.post("/parking-points", validate({ body: parkingPointCreate }), adminController.createParkingPoint);
+
+adminRoutes.patch("/parking-points/:id", validate({ params: z.object({ id: z.string().min(1).max(120) }), body: parkingPointPatch }), adminController.updateParkingPoint);
+
+adminRoutes.delete("/parking-points/:id", validate({ params: z.object({ id: z.string().min(1).max(120) }) }), adminController.deleteParkingPoint);
 
 adminRoutes.get("/users", adminController.listUsers);
 

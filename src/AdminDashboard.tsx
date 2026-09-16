@@ -3,11 +3,18 @@ import L from "leaflet";
 import Login from "./Login";
 import { getAccessToken, restoreSession, ApiError } from "./api/client";
 import { me, logout } from "./api/authService";
-import { listAdminParking, updateAdminParkingStatus } from "./api/adminService";
+import {
+  createAdminParkingPoint,
+  deleteAdminParkingPoint,
+  listAdminParking,
+  updateAdminParkingPoint,
+  updateAdminParkingStatus,
+} from "./api/adminService";
 
 type ParkingCategory = "public" | "street" | "prishtina" | "private";
 type NavKey = "queue" | "map" | "reports" | "users";
 type RiskLevel = "low" | "medium" | "high";
+type PendingPoint = { lat: number; lng: number } | null;
 
 type SpotSubmission = {
   id: string;
@@ -622,6 +629,57 @@ const styles = `
     font-weight: 750;
   }
 
+  .point-toolbar,
+  .point-editor,
+  .type-picker {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+    display: grid;
+    gap: 8px;
+  }
+
+  .point-toolbar {
+    grid-template-columns: 1fr auto;
+    align-items: center;
+  }
+
+  .point-toolbar small,
+  .point-editor small {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 750;
+  }
+
+  .type-picker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .type-option {
+    min-height: 38px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #fff;
+    color: var(--ink);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    font-size: 11px;
+    font-weight: 900;
+  }
+
+  .type-option.active {
+    border-color: var(--pill-color);
+    background: var(--pill-soft);
+    color: var(--pill-color);
+  }
+
+  .point-editor__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
   .tools-panel {
     display: grid;
     overflow: hidden;
@@ -713,13 +771,13 @@ function formatPrice(price: number | null) {
 
 function submissionFromSpot(spot: ParkingSpotRow): SpotSubmission {
   const category: ParkingCategory =
-    spot.type === "PRIVATE"
+    spot.zone?.toLowerCase().includes("prishtina parking")
+      ? "prishtina"
+      : spot.type === "PRIVATE"
       ? "private"
       : spot.type === "STREET"
         ? "street"
-        : spot.zone?.toLowerCase().includes("prishtina parking")
-          ? "prishtina"
-          : "public";
+        : "public";
   const riskLevel: RiskLevel =
     spot.status === "TEMPORARILY_UNAVAILABLE"
       ? "high"
@@ -864,16 +922,28 @@ function CommunityMapPreview({
   items,
   selectedId,
   onSelect,
+  addMode,
+  pendingPoint,
+  onMapClick,
+  onMovePoint,
 }: {
   items: SpotSubmission[];
   selectedId: string;
   onSelect: (id: string) => void;
+  addMode: boolean;
+  pendingPoint: PendingPoint;
+  onMapClick: (point: { lat: number; lng: number }) => void;
+  onMovePoint: (id: string, point: { lat: number; lng: number }) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
   const onSelectRef = useRef(onSelect);
+  const onMapClickRef = useRef(onMapClick);
+  const onMovePointRef = useRef(onMovePoint);
   onSelectRef.current = onSelect;
+  onMapClickRef.current = onMapClick;
+  onMovePointRef.current = onMovePoint;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -892,6 +962,9 @@ function CommunityMapPreview({
       maxZoom: 19,
       attribution: "Harta: OpenStreetMap",
     }).addTo(map);
+    map.on("click", (event) => {
+      onMapClickRef.current({ lat: event.latlng.lat, lng: event.latlng.lng });
+    });
     layerRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
     window.setTimeout(() => map.invalidateSize(), 0);
@@ -920,8 +993,13 @@ function CommunityMapPreview({
       const marker = L.marker([item.lat, item.lng], {
         icon,
         title: `${item.id} · ${meta.label}`,
+        draggable: true,
       });
       marker.on("click", () => onSelectRef.current(item.id));
+      marker.on("dragend", () => {
+        const next = marker.getLatLng();
+        onMovePointRef.current(item.id, { lat: next.lat, lng: next.lng });
+      });
       marker.bindTooltip(
         Object.assign(document.createElement("span"), {
           textContent: `${item.id} · ${meta.label}`,
@@ -931,17 +1009,66 @@ function CommunityMapPreview({
       marker.addTo(layer);
       bounds.push([item.lat, item.lng]);
     });
+    if (pendingPoint) {
+      const icon = L.divIcon({
+        className: "",
+        html: `<span class="map-marker map-marker--active" style="background:#102033"></span>`,
+        iconSize: [34, 34],
+        iconAnchor: [17, 17],
+      });
+      L.marker([pendingPoint.lat, pendingPoint.lng], {
+        icon,
+        title: "Pika e re",
+      }).addTo(layer);
+      bounds.push([pendingPoint.lat, pendingPoint.lng]);
+    }
     if (bounds.length === 1) map.setView(bounds[0], 15, { animate: false });
     if (bounds.length > 1)
       map.fitBounds(bounds, { padding: [28, 28], maxZoom: 14, animate: false });
-  }, [items, selectedId]);
+  }, [items, selectedId, pendingPoint]);
 
   return (
     <div
       ref={containerRef}
       className="community-map"
-      aria-label="Harta e komunitetit me parkingje të raportuara"
+      aria-label={addMode ? "Kliko në hartë për të vendosur pikën" : "Harta e komunitetit me parkingje të raportuara"}
     />
+  );
+}
+
+function ParkingTypeSelector({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: ParkingCategory;
+  onChange: (value: ParkingCategory) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="type-picker" aria-label="LLOJI I PARKINGUT">
+      {(Object.keys(categoryMeta) as ParkingCategory[]).map((type) => {
+        const meta = categoryMeta[type];
+        return (
+          <button
+            key={type}
+            type="button"
+            className={`type-option ${value === type ? "active" : ""}`}
+            style={
+              {
+                "--pill-color": meta.color,
+                "--pill-soft": meta.soft,
+              } as React.CSSProperties
+            }
+            onClick={() => onChange(type)}
+            disabled={disabled}
+          >
+            <i className="queue-dot" style={{ background: meta.color }} />
+            {meta.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -964,6 +1091,10 @@ export default function AdminDashboard() {
   const [total, setTotal] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [success, setSuccess] = useState("");
+  const [addPointMode, setAddPointMode] = useState(false);
+  const [pendingPoint, setPendingPoint] = useState<PendingPoint>(null);
+  const [draftParkingType, setDraftParkingType] =
+    useState<ParkingCategory>("public");
   const requestVersion = useRef(0);
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -978,9 +1109,17 @@ export default function AdminDashboard() {
   const loadPendingSubmissions = useCallback(async () => {
     const version = ++requestVersion.current;
     setIsLoading(true);
-    setError("");
-    try {
-      if (!getAccessToken()) await restoreSession();
+      setError("");
+      try {
+      if (!getAccessToken()) {
+        try {
+          await restoreSession();
+        } catch {
+          setNeedsLogin(true);
+          setIsAdmin(false);
+          return;
+        }
+      }
       if (version !== requestVersion.current) return;
       if (!getAccessToken()) {
         setNeedsLogin(true);
@@ -1097,6 +1236,78 @@ export default function AdminDashboard() {
     }
   };
 
+  const saveNewPoint = async () => {
+    if (!pendingPoint || actionInProgress) return;
+    setActionInProgress(true);
+    setError("");
+    try {
+      const created = await createAdminParkingPoint({
+        latitude: pendingPoint.lat,
+        longitude: pendingPoint.lng,
+        parkingType: draftParkingType,
+      });
+      setSuccess("Pika e parkingut u ruajt në koordinatat e zgjedhura.");
+      setPendingPoint(null);
+      setAddPointMode(false);
+      await loadPendingSubmissions();
+      selectById(created.id);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Ruajtja e pikës dështoi.");
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  const changeSelectedPointType = async (parkingType: ParkingCategory) => {
+    if (!selectedSubmission || actionInProgress) return;
+    setActionInProgress(true);
+    setError("");
+    try {
+      await updateAdminParkingPoint(selectedSubmission.id, { parkingType });
+      setSuccess("Lloji i pikës u përditësua.");
+      await loadPendingSubmissions();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Përditësimi i llojit dështoi.");
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  const moveSelectedPoint = async (id: string, point: { lat: number; lng: number }) => {
+    if (actionInProgress) return;
+    setActionInProgress(true);
+    setError("");
+    try {
+      await updateAdminParkingPoint(id, {
+        latitude: point.lat,
+        longitude: point.lng,
+      });
+      setSuccess("Pika u zhvendos në koordinatat e reja.");
+      await loadPendingSubmissions();
+      selectById(id);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Zhvendosja e pikës dështoi.");
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  const deleteSelectedPoint = async () => {
+    if (!selectedSubmission || actionInProgress) return;
+    if (!window.confirm(`Fshi pikën ${selectedSubmission.address}?`)) return;
+    setActionInProgress(true);
+    setError("");
+    try {
+      await deleteAdminParkingPoint(selectedSubmission.id);
+      setSuccess("Pika u fshi.");
+      await loadPendingSubmissions();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Fshirja e pikës dështoi.");
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
   if (isLoading && !isAdmin)
     return (
       <div className="app-loading" role="status">
@@ -1119,7 +1330,7 @@ export default function AdminDashboard() {
         <button onClick={() => void loadPendingSubmissions()}>
           Provo përsëri
         </button>
-        <a href="?view=app">Kthehu te harta</a>
+        <a href="/">Kthehu te harta</a>
       </div>
     );
 
@@ -1136,7 +1347,7 @@ export default function AdminDashboard() {
           <div className="admin-actions" aria-label="Veprime të adminit">
             <a
               className="admin-button"
-              href="?view=app"
+              href="/"
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -1342,20 +1553,86 @@ export default function AdminDashboard() {
                 <section className="map-panel">
                   <div className="panel-header">
                     <h3>Harta Parko</h3>
-                    {selectedSubmission && (
+                    <button
+                      className={`admin-button ${addPointMode ? "admin-button--warning" : "admin-button--primary"}`}
+                      type="button"
+                      onClick={() => {
+                        setAddPointMode((value) => !value);
+                        setPendingPoint(null);
+                      }}
+                      disabled={actionInProgress}
+                    >
+                      {addPointMode ? "Anulo pikën" : "Add Parking Point"}
+                    </button>
+                  </div>
+                  <div className="point-toolbar">
+                    <small>
+                      {addPointMode
+                        ? pendingPoint
+                          ? `${pendingPoint.lat.toFixed(6)}, ${pendingPoint.lng.toFixed(6)}`
+                          : "Kliko lokacionin e saktë në hartë."
+                        : "Tërhiq markerin për ta zhvendosur pikën."}
+                    </small>
+                    {selectedSubmission && !addPointMode && (
                       <CategoryPill category={selectedSubmission.category} />
                     )}
                   </div>
-                  {selectedSubmission && (
+                  {addPointMode && pendingPoint && (
+                    <section className="point-editor" aria-label="LLOJI I PARKINGUT">
+                      <small>LLOJI I PARKINGUT</small>
+                      <ParkingTypeSelector
+                        value={draftParkingType}
+                        onChange={setDraftParkingType}
+                        disabled={actionInProgress}
+                      />
+                      <div className="point-editor__actions">
+                        <button
+                          className="admin-button admin-button--primary"
+                          type="button"
+                          onClick={() => void saveNewPoint()}
+                          disabled={actionInProgress}
+                        >
+                          Ruaj pikën
+                        </button>
+                      </div>
+                    </section>
+                  )}
+                  {selectedSubmission && !addPointMode && (
+                    <section className="point-editor" aria-label="Ndrysho pikën e parkingut">
+                      <small>LLOJI I PARKINGUT</small>
+                      <ParkingTypeSelector
+                        value={selectedSubmission.category}
+                        onChange={(type) => void changeSelectedPointType(type)}
+                        disabled={actionInProgress}
+                      />
+                      <div className="point-editor__actions">
+                        <button
+                          className="admin-button admin-button--danger"
+                          type="button"
+                          onClick={() => void deleteSelectedPoint()}
+                          disabled={actionInProgress}
+                        >
+                          Fshi pikën
+                        </button>
+                      </div>
+                    </section>
+                  )}
+                  {(selectedSubmission || addPointMode) && (
                     <CommunityMapPreview
                       items={filteredSubmissions}
-                      selectedId={selectedSubmission.id}
+                      selectedId={selectedSubmission?.id ?? ""}
                       onSelect={selectById}
+                      addMode={addPointMode}
+                      pendingPoint={pendingPoint}
+                      onMapClick={(point) => {
+                        if (addPointMode) setPendingPoint(point);
+                      }}
+                      onMovePoint={(id, point) => void moveSelectedPoint(id, point)}
                     />
                   )}
                   <div className="map-caption">
-                    Kontrollo lokacionin dhe qasjen para publikimit. Miratimi
-                    nuk konfirmon vende të lira.
+                    Pikat ruhen në koordinatat ekzakte ku klikon në hartë. Pa
+                    poligone, rreze ose lokacione GPS.
                   </div>
                 </section>
               </section>

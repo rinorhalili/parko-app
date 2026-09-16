@@ -1551,6 +1551,18 @@ function HomeView({
                   : "Ku jam"}
             </b>
           </MapFloatingControl>
+          <MapFloatingControl
+            className="map-action-button--admin"
+            onClick={() => {
+              window.location.assign("/admin");
+            }}
+            aria-label="Hap admin map për pika parkingu"
+          >
+            <span>
+              <AppIcon name="pin" />
+            </span>
+            <b>Admin point</b>
+          </MapFloatingControl>
         </div>
         {!pickingDestination && locationStatus !== "idle" && locationStatus !== "ready" && (
           <p

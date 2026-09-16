@@ -325,7 +325,7 @@ export default function LiveParkingMap({
         setBasemapError('MapLibre nuk mund të hapet. Po shfaqet harta rezervë.')
       }
     } else {
-      setBasemapError('Për hartën MapTiler, vendos VITE_MAPTILER_KEY në .env dhe rinis aplikacionin.')
+      setBasemapError(null)
     }
     const tiles = FALLBACK_TILES
     baseTileLayerRef.current = L.tileLayer(tiles.url, {

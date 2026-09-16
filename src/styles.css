@@ -1402,6 +1402,21 @@ input:focus-visible {
 .map-action-button--report span {
   color: #d97706;
 }
+
+.map-action-button--admin {
+  flex: 0.85;
+  border-color: rgba(36, 107, 253, 0.26);
+}
+
+.map-action-button--admin span {
+  color: #16a66c;
+}
+
+.map-action-button--admin b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .map-action-button--active {
   border-color: #8db4ff;
   background: #edf4ff;
