@@ -63,11 +63,6 @@ export async function listParking(page = 0) {
 
 export async function createParking(ownerId: string, input: Omit<Prisma.ParkingSpotUncheckedCreateInput, "ownerId" | "geoPoint">) {
   const spot = await parkingRepository.create({ ...input, ownerId });
-  await prisma.$executeRaw`
-    UPDATE "ParkingSpot"
-    SET "geoPoint" = ST_SetSRID(ST_MakePoint(${spot.longitude}, ${spot.latitude}), 4326)::geography
-    WHERE id = ${spot.id}
-  `;
   return prisma.parkingSpot.findUniqueOrThrow({ where: { id: spot.id } });
 }
 

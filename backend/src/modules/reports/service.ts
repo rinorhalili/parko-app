@@ -47,11 +47,6 @@ export async function createParkingReport(reporterId: string, input: {
         expiresAt: new Date(Date.now() + 30 * 60_000)
       }
     });
-    await tx.$executeRaw`
-      UPDATE "ParkingReport"
-      SET "geoPoint" = ST_SetSRID(ST_MakePoint(${created.longitude}, ${created.latitude}), 4326)::geography
-      WHERE id = ${created.id}
-    `;
     if (input.status !== "UNKNOWN") {
       const updated = await tx.parkingSpot.updateMany({
         where: { id: input.parkingSpotId, ...publicParkingWhere, status: { notIn: ["RESERVED", "TEMPORARILY_UNAVAILABLE"] as ParkingStatus[] } },
