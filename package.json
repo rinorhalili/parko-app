@@ -30,7 +30,7 @@
     "@vitejs/plugin-react": "latest",
     "leaflet": "^1.9.4",
     "leaflet.markercluster": "^1.5.3",
-    "maplibre-gl": "^6.9.0",
+    "maplibre-gl": "^6.9.1",
     "react": "latest",
     "react-dom": "latest",
     "socket.io-client": "^4.8.3",
@@ -38,6 +38,7 @@
     "vite": "latest"
   },
   "devDependencies": {
+    "@playwright/test": "^1.55.0",
     "@types/leaflet": "^1.9.22",
     "@types/leaflet.markercluster": "^1.5.4",
     "@types/node": "^26.3.0",
@@ -45,7 +46,6 @@
     "@types/react-dom": "latest",
     "electron": "^44.0.0",
     "jsdom": "^29.1.1",
-    "vitest": "^4.1.11",
-    "@playwright/test": "^1.55.0"
+    "vitest": "^4.1.11"
   }
 }
