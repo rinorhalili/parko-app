@@ -1826,7 +1826,7 @@ input:focus-visible {
   will-change: transform;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
+  scrollbar-width: none;
 }
 .parking-preview-sheet__handle {
   width: 58px;
@@ -2045,7 +2045,7 @@ input:focus-visible {
   gap: 9px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
+  scrollbar-width: none;
 }
 .list-limit-note {
   margin: 4px 8px 12px;
