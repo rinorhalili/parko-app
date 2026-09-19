@@ -7,9 +7,13 @@ import {
   createAdminParkingPoint,
   deleteAdminParkingPoint,
   listAdminParking,
+  listAdminUsersFull,
+  updateAdminUser,
   updateAdminParkingPoint,
   updateAdminParkingStatus,
+  updateAdminUserRole,
 } from "./api/adminService";
+import type { AdminUser } from "./api/adminService";
 
 type ParkingCategory = "public" | "street" | "prishtina" | "private";
 type NavKey = "queue" | "map" | "reports" | "users";
@@ -54,6 +58,7 @@ const sidebarItems: Array<{ key: NavKey; label: string }> = [
   { key: "queue", label: "Në pritje" },
   { key: "map", label: "Të gjitha parkimet" },
   { key: "reports", label: "Të çaktivizuara" },
+  { key: "users", label: "Përdoruesit" },
 ];
 const scopes: Record<NavKey, string> = {
   queue: "pending",
@@ -470,6 +475,10 @@ const styles = `
 
   .admin-main {
     overflow: hidden;
+  }
+
+  .admin-main--users {
+    grid-column: 1 / -1;
   }
 
   .main-grid {
@@ -1124,6 +1133,10 @@ export default function AdminDashboard() {
     useState<ParkingCategory>("public");
   const [draftPrivatePrice, setDraftPrivatePrice] = useState("");
   const [selectedPrivatePrice, setSelectedPrivatePrice] = useState("");
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersError, setUsersError] = useState("");
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const requestVersion = useRef(0);
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1158,9 +1171,11 @@ export default function AdminDashboard() {
       setNeedsLogin(false);
       const user = await me();
       if (version !== requestVersion.current) return;
+      setCurrentUserId(user.id);
       if (user.role !== "ADMIN")
         throw new ApiError(403, "Nuk ke leje administratori.");
       setIsAdmin(true);
+      if (activeTab === "users") return;
       const result = await listAdminParking(
         page,
         searchQuery,
@@ -1176,7 +1191,7 @@ export default function AdminDashboard() {
       try {
         const countEntries = await Promise.all(
           sidebarItems
-            .filter((item) => item.key !== activeTab)
+            .filter((item) => item.key !== activeTab && item.key !== "users")
             .map(
               async (item) =>
                 [
@@ -1211,11 +1226,103 @@ export default function AdminDashboard() {
   }, [page, searchQuery, activeTab]);
 
   useEffect(() => {
-    void loadPendingSubmissions();
+    if (activeTab !== "users") void loadPendingSubmissions();
     return () => {
       requestVersion.current++;
     };
   }, [loadPendingSubmissions]);
+
+  const loadUsers = useCallback(async () => {
+    const version = ++requestVersion.current;
+    setUsersLoading(true);
+    setUsersError("");
+    try {
+      if (!getAccessToken()) {
+        try {
+          await restoreSession();
+        } catch {
+          setNeedsLogin(true);
+          setIsAdmin(false);
+          return;
+        }
+      }
+      if (version !== requestVersion.current) return;
+      if (!getAccessToken()) {
+        setNeedsLogin(true);
+        setIsAdmin(false);
+        return;
+      }
+      setNeedsLogin(false);
+      const user = await me();
+      if (version !== requestVersion.current) return;
+      setCurrentUserId(user.id);
+      if (user.role !== "ADMIN")
+        throw new ApiError(403, "Nuk ke leje administratori.");
+      setIsAdmin(true);
+      const result = await listAdminUsersFull();
+      if (version !== requestVersion.current) return;
+      setUsers(result);
+      setTabCounts((counts) => ({ ...counts, users: result.length }));
+    } catch (reason) {
+      if (version !== requestVersion.current) return;
+      if (reason instanceof ApiError && [401, 403].includes(reason.status)) {
+        setIsAdmin(false);
+        setNeedsLogin(reason.status === 401);
+      }
+      setUsersError(
+        reason instanceof ApiError
+          ? reason.message
+          : reason instanceof Error
+            ? reason.message
+            : "Përdoruesit nuk u ngarkuan.",
+      );
+    } finally {
+      if (version === requestVersion.current) setUsersLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "users") void loadUsers();
+  }, [activeTab, loadUsers]);
+
+  const handleToggleActive = async (user: AdminUser) => {
+    try {
+      setUsersError("");
+      await updateAdminUser(user.id, { isActive: !user.isActive });
+      await loadUsers();
+    } catch (reason) {
+      setUsersError(
+        reason instanceof Error ? reason.message : "Përditësimi i përdoruesit dështoi.",
+      );
+    }
+  };
+
+  const handleToggleVerified = async (user: AdminUser) => {
+    try {
+      setUsersError("");
+      await updateAdminUser(user.id, { isVerified: !user.isVerified });
+      await loadUsers();
+    } catch (reason) {
+      setUsersError(
+        reason instanceof Error ? reason.message : "Përditësimi i përdoruesit dështoi.",
+      );
+    }
+  };
+
+  const handleRoleChange = async (
+    user: AdminUser,
+    role: AdminUser["role"],
+  ) => {
+    try {
+      setUsersError("");
+      await updateAdminUserRole(user.id, role);
+      await loadUsers();
+    } catch (reason) {
+      setUsersError(
+        reason instanceof Error ? reason.message : "Përditësimi i rolit dështoi.",
+      );
+    }
+  };
 
   const filteredSubmissions = submissions;
 
@@ -1386,7 +1493,7 @@ export default function AdminDashboard() {
       <Login
         onClose={() => {
           setNeedsLogin(false);
-          void loadPendingSubmissions();
+          void (activeTab === "users" ? loadUsers() : loadPendingSubmissions());
         }}
       />
     );
@@ -1394,7 +1501,11 @@ export default function AdminDashboard() {
     return (
       <div className="app-loading" role="alert">
         {error || "Nuk ke leje administratori."}
-        <button onClick={() => void loadPendingSubmissions()}>
+        <button
+          onClick={() =>
+            void (activeTab === "users" ? loadUsers() : loadPendingSubmissions())
+          }
+        >
           Provo përsëri
         </button>
         <a href="/">Kthehu te harta</a>
@@ -1434,10 +1545,22 @@ export default function AdminDashboard() {
             <button
               className="admin-button admin-button--primary"
               type="button"
-              onClick={() => void loadPendingSubmissions()}
-              disabled={isLoading || actionInProgress}
+              onClick={() =>
+                void (activeTab === "users" ? loadUsers() : loadPendingSubmissions())
+              }
+              disabled={
+                activeTab === "users"
+                  ? usersLoading
+                  : isLoading || actionInProgress
+              }
             >
-              {isLoading ? "Duke ngarkuar…" : "Rifresko"}
+              {activeTab === "users"
+                ? usersLoading
+                  ? "Duke ngarkuar…"
+                  : "Rifresko"
+                : isLoading
+                  ? "Duke ngarkuar…"
+                  : "Rifresko"}
             </button>
           </div>
         </header>
@@ -1485,6 +1608,8 @@ export default function AdminDashboard() {
         </section>
 
         <div className="admin-layout">
+          {activeTab !== "users" && (
+            <>
           <aside className="admin-sidebar">
             <nav className="nav-list" aria-label="Navigimi i adminit">
               {sidebarItems.map((item) => (
@@ -1787,6 +1912,87 @@ export default function AdminDashboard() {
               </button>
             </div>
           </main>
+            </>
+          )}
+          {activeTab === "users" && (
+            <main className="admin-main admin-main--users">
+              <section className="queue-panel" aria-label="Lista e përdoruesve">
+                <div className="queue-header">
+                  <h2>Përdoruesit</h2>
+                  <div className="admin-actions">
+                    <small>{users.length} përdorues</small>
+                    <button
+                      className="admin-button"
+                      type="button"
+                      onClick={() => setActiveTab("queue")}
+                    >
+                      Parkimet
+                    </button>
+                  </div>
+                </div>
+                {usersError && (
+                  <div className="error-message" role="alert">
+                    {usersError}
+                  </div>
+                )}
+                <div className="queue-list">
+                  {usersLoading ? (
+                    <div className="queue-card"><b>Duke ngarkuar…</b></div>
+                  ) : users.length === 0 ? (
+                    <div className="queue-card"><b>Nuk ka përdorues</b></div>
+                  ) : (
+                    users.map((user) => (
+                      <div className="queue-card" key={user.id}>
+                        <span className="queue-card__top">
+                          <span className="queue-card__identity">
+                            <span className="queue-avatar">
+                              {user.name.slice(0, 2).toUpperCase()}
+                            </span>
+                            <span>
+                              <strong>{user.name}</strong>
+                              <small>{user.email} · @{user.username}</small>
+                            </span>
+                          </span>
+                        </span>
+                        <div className="admin-actions">
+                          <select
+                            className="admin-input"
+                            value={user.role}
+                            disabled={user.id === currentUserId}
+                            onChange={(event) =>
+                              void handleRoleChange(
+                                user,
+                                event.target.value as AdminUser["role"],
+                              )
+                            }
+                          >
+                            <option value="USER">USER</option>
+                            <option value="MODERATOR">MODERATOR</option>
+                            <option value="ADMIN">ADMIN</option>
+                          </select>
+                          <button
+                            className="admin-button"
+                            type="button"
+                            onClick={() => void handleToggleVerified(user)}
+                          >
+                            {user.isVerified ? "Hiq verifikimin" : "Verifiko"}
+                          </button>
+                          <button
+                            className="admin-button"
+                            type="button"
+                            disabled={user.id === currentUserId}
+                            onClick={() => void handleToggleActive(user)}
+                          >
+                            {user.isActive ? "Çaktivizo" : "Aktivizo"}
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </section>
+            </main>
+          )}
         </div>
       </div>
     </div>
