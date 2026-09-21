@@ -47,8 +47,8 @@ const FALLBACK_TILES = {
     attribution: 'Harta: <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>',
 }
 
-function priceClass(price: number | null) {
-  if (price === null) return 'unknown'
+function priceClass(price: number | null | undefined) {
+  if (price == null) return 'unknown'
   if (price === 0) return 'free'
   if (price <= 0.5) return 'low'
   if (price <= 1) return 'medium'
@@ -65,14 +65,14 @@ function navigationPadding(map: L.Map) {
   return { paddingTopLeft: L.point(35, headerHeight + 35), paddingBottomRight: L.point(55, panelHeight + 35) }
 }
 
-function priceLabel(price: number | null) {
-  if (price === null) return 'Çmimi nuk dihet'
+function priceLabel(price: number | null | undefined) {
+  if (price == null) return 'Çmimi nuk dihet'
   if (price === 0) return 'Falas'
   return `${price.toFixed(2)} €/orë`
 }
 
-function priceAreaColor(price: number | null) {
-  if (price === null) return '#738195'
+function priceAreaColor(price: number | null | undefined) {
+  if (price == null) return '#738195'
   if (price === 0) return '#17b978'
   if (price <= 0.5) return '#2f6bff'
   if (price <= 1) return '#f59e0b'
@@ -181,7 +181,7 @@ export default function LiveParkingMap({
   const visibleParkings = useMemo(() => {
     const candidates = mode === 'navigation' || mode === 'walking' ? [selected] : parkings
     if (markerFilter === 'free') return candidates.filter((parking) => parking.pricePerHour === 0 && parking.pricingSource)
-    if (markerFilter === 'paid') return candidates.filter((parking) => parking.pricePerHour !== null && parking.pricePerHour > 0 && parking.pricingSource)
+    if (markerFilter === 'paid') return candidates.filter((parking) => parking.pricePerHour != null && parking.pricePerHour > 0 && parking.pricingSource)
     if (markerFilter === 'municipal') return candidates.filter((parking) => parking.municipalManaged)
     return candidates
   }, [markerFilter, mode, parkings, selected])
@@ -363,7 +363,7 @@ export default function LiveParkingMap({
     let processedParkingCount = 0
     visibleParkings.forEach((parking) => {
       if (!parking.geometry?.length && !mapSettings.showPointParking && mode === 'home') return
-      const usefulOverviewPoint = parking.pricePerHour !== null || parking.free || Boolean(parking.availabilitySource)
+      const usefulOverviewPoint = parking.pricePerHour != null || parking.free || Boolean(parking.availabilitySource)
       const detailedPointZoom = mapSettings.largePointMarkers ? (destination ? 13.5 : 14) : (destination ? 13.5 : 15)
       if (!parking.geometry?.length && mapZoom < detailedPointZoom && !usefulOverviewPoint) return
       processedParkingCount += 1

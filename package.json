@@ -17,6 +17,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "parking:extract:prishtina": "node scripts/extract-prishtina-parking-map.mjs",
+    "parking:extract:prishtina:write": "node scripts/extract-prishtina-parking-map.mjs --write",
     "backend:install": "npm install --prefix backend",
     "backend:dev": "npm run dev --prefix backend",
     "backend:build": "npm run build --prefix backend",
