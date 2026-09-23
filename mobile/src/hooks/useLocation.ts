@@ -15,9 +15,27 @@ export function useLocation() {
         setError("Lokacioni nuk u lejua");
         return null;
       }
-      const next = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const servicesEnabled = await Location.hasServicesEnabledAsync();
+      if (!servicesEnabled) {
+        setError("Aktivizo GPS/lokacionin ne telefon");
+        return null;
+      }
+
+      const lastKnown = await Location.getLastKnownPositionAsync({ maxAge: 60_000, requiredAccuracy: 100 });
+      const next = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+        mayShowUserSettingsDialog: true,
+        timeInterval: 1_000,
+      }).catch(async () => {
+        const fallback = lastKnown ?? await Location.getLastKnownPositionAsync({ maxAge: 10 * 60_000 });
+        if (fallback) return fallback;
+        throw new Error("Nuk u gjet lokacioni");
+      });
       setLocation(next);
       return next;
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Nuk u gjet lokacioni");
+      return null;
     } finally {
       setLoading(false);
     }

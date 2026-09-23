@@ -1,6 +1,11 @@
 import type { ApiErrorBody, ApiResponse, AuthTokens } from './types'
 import { Capacitor } from '@capacitor/core'
-import { SecureStorage } from '@aparajita/capacitor-secure-storage'
+
+type SecureStorageLike = {
+  getItem: (key: string) => Promise<string | null>
+  setItem: (key: string, value: string) => Promise<void>
+  removeItem: (key: string) => Promise<void>
+}
 
 export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '')
 export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || API_BASE_URL.replace(/\/api\/v1\/?$/, '') || window.location.origin
@@ -9,15 +14,31 @@ let accessToken: string | null = null
 let refreshPromise: Promise<string | null> | null = null
 const REFRESH_TOKEN_KEY = 'parko:refresh-token:v1'
 const isNative = Capacitor.isNativePlatform()
+let secureStorage: SecureStorageLike | null = null
+
+async function ensureSecureStorage() {
+  if (!isNative || secureStorage) return secureStorage
+  try {
+    const mod = await import('@aparajita/capacitor-secure-storage')
+    secureStorage = (mod as { SecureStorage?: SecureStorageLike }).SecureStorage ?? null
+  } catch {
+    secureStorage = null
+  }
+  return secureStorage
+}
 
 async function readNativeRefreshToken() {
   if (!isNative) return null
-  try { return await SecureStorage.getItem(REFRESH_TOKEN_KEY) } catch { return null }
+  const storage = await ensureSecureStorage()
+  if (!storage) return null
+  try { return await storage.getItem(REFRESH_TOKEN_KEY) } catch { return null }
 }
 
 async function writeNativeRefreshToken(token?: string) {
   if (!isNative || !token) return
-  await SecureStorage.setItem(REFRESH_TOKEN_KEY, token)
+  const storage = await ensureSecureStorage()
+  if (!storage) return
+  await storage.setItem(REFRESH_TOKEN_KEY, token)
 }
 
 export async function getNativeRefreshToken() {
@@ -26,7 +47,9 @@ export async function getNativeRefreshToken() {
 
 async function removeNativeRefreshToken() {
   if (!isNative) return
-  try { await SecureStorage.removeItem(REFRESH_TOKEN_KEY) } catch { /* Already absent or unavailable. */ }
+  const storage = await ensureSecureStorage()
+  if (!storage) return
+  try { await storage.removeItem(REFRESH_TOKEN_KEY) } catch { /* Already absent or unavailable. */ }
 }
 
 export class ApiError extends Error {

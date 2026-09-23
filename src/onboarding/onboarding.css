@@ -143,6 +143,14 @@
   color: var(--muted);
   margin-top: 4px;
 }
+.onboarding-tips {
+  display: grid;
+  gap: 4px;
+  margin-top: 24px;
+}
+.onboarding-tips .onboarding-location-benefit {
+  margin-top: 0;
+}
 .onboarding-note {
   font-size: 12px;
   line-height: 1.6;

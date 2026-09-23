@@ -10,6 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import MapView, { Marker, Region } from "react-native-maps";
 import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
@@ -41,6 +42,35 @@ const initialRegion: Region = {
   latitudeDelta: 0.08,
   longitudeDelta: 0.08,
 };
+
+const INTRO_KEY = "parko.mobile.intro.v1";
+const INTRO_STEPS = [
+  {
+    title: "Mire se erdhe ne Parko",
+    body: "Ketu gjen parkingje ne Prishtine, kontrollon lokacionin dhe zgjedh opsionin me te pershtatshem.",
+    action: "Vazhdo",
+  },
+  {
+    title: "Harta",
+    body: "Markerat tregojne parkingjet. Preke nje marker per adrese, status dhe rezervim kur parkingu eshte i verifikuar.",
+    action: "Tjetra",
+  },
+  {
+    title: "Lokacioni im",
+    body: "Butoni Perdor lokacionin tim e afron harten te vendndodhja jote. Nese GPS nuk punon, kontrollo lejen e lokacionit ne telefon.",
+    action: "Tjetra",
+  },
+  {
+    title: "Komuniteti",
+    body: "Te Komuniteti sheh njoftime dhe postime nga perdoruesit per parkingje, ndryshime dhe probleme ne terren.",
+    action: "Tjetra",
+  },
+  {
+    title: "Rezervimet dhe Njoftimet",
+    body: "Rezervimet ruajne parkingjet aktive. Njoftimet te lajmerojne per ndryshime, rezervime dhe aktivitet te rendesishem.",
+    action: "Perfundo",
+  },
+] as const;
 
 async function registerForPushNotifications() {
   if (!Device.isDevice) return null;
@@ -81,6 +111,9 @@ export default function App() {
   );
   const [booking, setBooking] = useState(false);
   const [region, setRegion] = useState(initialRegion);
+  const [introReady, setIntroReady] = useState(false);
+  const [showIntro, setShowIntro] = useState(false);
+  const [introStep, setIntroStep] = useState(0);
   const [tab, setTab] = useState<
     "map" | "community" | "reservations" | "notifications"
   >("map");
@@ -105,6 +138,18 @@ export default function App() {
       setUser(Boolean(token));
       setReady(true);
     });
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem(INTRO_KEY)
+      .then((value) => {
+        setShowIntro(value !== "done");
+        setIntroReady(true);
+      })
+      .catch(() => {
+        setShowIntro(true);
+        setIntroReady(true);
+      });
   }, []);
 
   useEffect(() => {
@@ -167,6 +212,11 @@ export default function App() {
           ? await login(email, password)
           : await register({ name, username, email, password });
       setUser(Boolean(data.accessToken));
+      const introDone = await AsyncStorage.getItem(INTRO_KEY).catch(() => null);
+      if (introDone !== "done") {
+        setIntroStep(0);
+        setShowIntro(true);
+      }
     } catch (next) {
       setError(next instanceof Error ? next.message : "Hyrja dështoi");
     }
@@ -218,7 +268,13 @@ export default function App() {
     }
   }
 
-  if (!ready)
+  async function finishIntro() {
+    setShowIntro(false);
+    setIntroStep(0);
+    await AsyncStorage.setItem(INTRO_KEY, "done").catch(() => undefined);
+  }
+
+  if (!ready || !introReady)
     return (
       <SafeAreaView style={styles.center}>
         <ActivityIndicator />
@@ -278,6 +334,42 @@ export default function App() {
           onPress={() => logout().then(() => setUser(false))}
         />
       </View>
+      {showIntro && (
+        <View style={styles.introOverlay}>
+          <View style={styles.introCard}>
+            <Text style={styles.introCounter}>
+              {introStep + 1} / {INTRO_STEPS.length}
+            </Text>
+            <Text style={styles.introTitle}>{INTRO_STEPS[introStep].title}</Text>
+            <Text style={styles.introBody}>{INTRO_STEPS[introStep].body}</Text>
+            <View style={styles.introDots}>
+              {INTRO_STEPS.map((step) => (
+                <View
+                  key={step.title}
+                  style={[
+                    styles.introDot,
+                    step.title === INTRO_STEPS[introStep].title &&
+                      styles.introDotActive,
+                  ]}
+                />
+              ))}
+            </View>
+            <View style={styles.introActions}>
+              <Button title="Kalo" onPress={finishIntro} />
+              <Button
+                title={INTRO_STEPS[introStep].action}
+                onPress={() => {
+                  if (introStep === INTRO_STEPS.length - 1) {
+                    void finishIntro();
+                    return;
+                  }
+                  setIntroStep((current) => current + 1);
+                }}
+              />
+            </View>
+          </View>
+        </View>
+      )}
       {tab === "map" && (
         <>
           <MapView
@@ -438,4 +530,56 @@ const styles = StyleSheet.create({
   booking: { padding: 16, borderTopWidth: 1, borderColor: "#d7e1ec", gap: 8 },
   bookingNote: { color: "#52667a" },
   buttonRow: { flexDirection: "row", justifyContent: "space-between" },
+  introOverlay: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 20,
+    backgroundColor: "rgba(15, 23, 42, 0.48)",
+    justifyContent: "center",
+    padding: 24,
+  },
+  introCard: {
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    padding: 20,
+    gap: 12,
+  },
+  introCounter: {
+    color: "#246bfd",
+    fontWeight: "700",
+    textAlign: "right",
+  },
+  introTitle: {
+    color: "#18324b",
+    fontSize: 24,
+    fontWeight: "800",
+  },
+  introBody: {
+    color: "#3f5368",
+    fontSize: 16,
+    lineHeight: 23,
+  },
+  introDots: {
+    flexDirection: "row",
+    gap: 6,
+    paddingVertical: 4,
+  },
+  introDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#d7e1ec",
+  },
+  introDotActive: {
+    width: 22,
+    backgroundColor: "#246bfd",
+  },
+  introActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 12,
+  },
 });

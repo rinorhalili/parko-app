@@ -792,8 +792,9 @@ const styles = `
   }
 `;
 
-function formatPrice(price: number | null) {
-  if (price === null) return "Çmimi i panjohur";
+export function formatPrice(price: number | null | undefined) {
+  if (price === null || price === undefined) return "Çmimi i panjohur";
+  if (!Number.isFinite(price)) return "Çmimi i panjohur";
   return price === 0 ? "Falas" : `${price.toFixed(2)} €/orë`;
 }
 

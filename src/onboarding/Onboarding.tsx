@@ -12,7 +12,7 @@ type Props = {
   onCancel: () => void
 }
 
-function Icon({ kind }: { kind: OnboardingPreference | 'location' | 'check' }) {
+function Icon({ kind }: { kind: OnboardingPreference | 'location' | 'check' | 'map' | 'community' | 'settings' }) {
   return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     {kind === 'closest' && <><path d="M12 21s6-5.4 6-11a6 6 0 0 0-12 0c0 5.6 6 11 6 11Z" /><circle cx="12" cy="10" r="2" /></>}
     {kind === 'cheapest' && <><path d="M18 5a7 7 0 1 0 0 14M4 10h10M4 14h9" /></>}
@@ -20,6 +20,9 @@ function Icon({ kind }: { kind: OnboardingPreference | 'location' | 'check' }) {
     {kind === 'covered' && <><path d="m3 10 9-6 9 6M5 10v10h14V10M9 20v-7h6v7" /></>}
     {kind === 'location' && <><circle cx="12" cy="12" r="7" /><circle cx="12" cy="12" r="2" /><path d="M12 2v3m0 14v3M2 12h3m14 0h3" /></>}
     {kind === 'check' && <path d="m5 12 4 4L19 6" />}
+    {kind === 'map' && <><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Z" /><path d="M9 3v15M15 6v15" /></>}
+    {kind === 'community' && <><path d="M16 11a4 4 0 1 0-8 0" /><path d="M4 20a8 8 0 0 1 16 0" /><path d="M18 8h3m-1.5-1.5v3" /></>}
+    {kind === 'settings' && <><circle cx="12" cy="12" r="3" /><path d="M12 2v3m0 14v3m8.7-15-2.6 1.5M5.9 17.5 3.3 19m17.4 0-2.6-1.5M5.9 6.5 3.3 5" /></>}
   </svg>
 }
 
@@ -54,11 +57,12 @@ export default function Onboarding({ mode, preferences, storageAvailable, locati
     }
   }, [locationStatus, requested, step])
 
-  const title = ['Parkimi në Prishtinë, më i thjeshtë.', 'Gjej parking pranë teje', 'Çfarë ka më shumë rëndësi për ty?', 'Je gati të parkosh.'][step]
+  const title = ['Parkimi në Prishtinë, më i thjeshtë.', 'Gjej parking pranë teje', 'Çfarë ka më shumë rëndësi për ty?', 'Butonat kryesorë', 'Je gati të parkosh.'][step]
   const description = [
     'Gjej parkingje të lira, krahaso opsionet dhe mbërrij pa humbur kohë.',
     'Përdor vendndodhjen për të parë parkingjet aty pranë dhe për të marrë udhëzime të sakta.',
     'Mund t’i ndryshosh këto preferenca kurdo.',
+    'Këto janë veprimet që do t’i përdorësh më shpesh sapo të hysh në app.',
     'Le ta gjejmë opsionin më të mirë të parkingut për ty.',
   ][step]
   const pending = requested && locationStatus === 'locating'
@@ -68,7 +72,7 @@ export default function Onboarding({ mode, preferences, storageAvailable, locati
       ? 'Nuk mundëm ta gjejmë lokacionin. Provo përsëri, ose vazhdo dhe zgjidh një vend në hartë.'
       : pending ? 'Po e gjejmë lokacionin… Mund të vazhdosh edhe pa të.' : ''
   const next = () => {
-    if (step === 3 || editing) { onFinish(selected); return }
+    if (step === 4 || editing) { onFinish(selected); return }
     if (step === 1) {
       if (locationStatus === 'ready' || locationStatus === 'outside') { setStep(2); return }
       setRequested(true)
@@ -79,7 +83,7 @@ export default function Onboarding({ mode, preferences, storageAvailable, locati
   }
   const primaryLabel = editing ? 'Ruaj preferencat' : step === 0 ? 'Fillo' : step === 1
     ? pending ? 'Po kërkojmë…' : locationStatus === 'ready' || locationStatus === 'outside' ? 'Vazhdo' : requested ? 'Provo përsëri' : 'Lejo lokacionin'
-    : step === 2 ? 'Vazhdo' : 'Gjej parking'
+    : step === 4 ? 'Gjej parking' : 'Vazhdo'
 
   return <section className="onboarding" lang="sq" aria-label={editing ? 'Preferencat e parkingut' : 'Mirë se vjen në Parko'}>
     <header className="onboarding-header">
@@ -88,14 +92,14 @@ export default function Onboarding({ mode, preferences, storageAvailable, locati
         setRequested(false)
         setStep(step - 1)
       }}>←</button> : <span className="onboarding-brand">Parko<span>.</span></span>}
-      {!editing && step < 3 && <span className="onboarding-progress" aria-label={`Hapi ${step + 1} nga 3`}><span aria-hidden="true">{[0, 1, 2].map(index => <i key={index} className={index <= step ? 'is-complete' : ''} />)}</span>{step + 1} / 3</span>}
-      {!editing && step === 3 && <span className="onboarding-eyebrow">GJITHÇKA GATI</span>}
+      {!editing && step < 4 && <span className="onboarding-progress" aria-label={`Hapi ${step + 1} nga 4`}><span aria-hidden="true">{[0, 1, 2, 3].map(index => <i key={index} className={index <= step ? 'is-complete' : ''} />)}</span>{step + 1} / 4</span>}
+      {!editing && step === 4 && <span className="onboarding-eyebrow">GJITHÇKA GATI</span>}
     </header>
     <div className="onboarding-content" ref={content}>
       <div key={step} className="onboarding-step">
         {step === 0 && <ParkingVisual />}
         {step === 1 && <span className="onboarding-symbol"><Icon kind="location" /></span>}
-        {step === 3 && <span className="onboarding-symbol onboarding-symbol--ready"><Icon kind="check" /></span>}
+        {step === 4 && <span className="onboarding-symbol onboarding-symbol--ready"><Icon kind="check" /></span>}
         <h1 ref={heading} tabIndex={-1}>{title}</h1>
         <p className="onboarding-description">{description}</p>
         {step === 0 && <p className="onboarding-note">Disponueshmëria shfaqet vetëm aty ku është raportuar.</p>}
@@ -112,7 +116,13 @@ export default function Onboarding({ mode, preferences, storageAvailable, locati
           </fieldset>
           <p className="onboarding-note">Ruhet në këtë pajisje për personalizim në të ardhmen. Filtrat dhe renditja e hartës mbeten të pandryshuara.</p>
         </>}
-        {step === 3 && <div className="onboarding-location-benefit"><Icon kind="closest" /><span>Fillo me një destinacion<small>Kërko një vend ose prek hartën për të parë parkingjet aty pranë.</small></span></div>}
+        {step === 3 && <div className="onboarding-tips" aria-label="Udhëzime për butonat kryesorë">
+          <div className="onboarding-location-benefit"><Icon kind="map" /><span>Harta<small>Kërko lokacion, zgjidh destinacion ose prek markerin e parkingut.</small></span></div>
+          <div className="onboarding-location-benefit"><Icon kind="location" /><span>GPS<small>Butoni i lokacionit të afron te vendndodhja jote dhe ndihmon me rrugën.</small></span></div>
+          <div className="onboarding-location-benefit"><Icon kind="community" /><span>Komuniteti<small>Raporto gjendjen e parkingut dhe shiko sinjalet nga përdoruesit.</small></span></div>
+          <div className="onboarding-location-benefit"><Icon kind="settings" /><span>Cilësimet<small>Ndrysho preferencat, pamjen e hartës dhe rihap këtë udhëzues.</small></span></div>
+        </div>}
+        {step === 4 && <div className="onboarding-location-benefit"><Icon kind="closest" /><span>Fillo me një destinacion<small>Kërko një vend ose prek hartën për të parë parkingjet aty pranë.</small></span></div>}
       </div>
     </div>
     <footer className="onboarding-footer">
