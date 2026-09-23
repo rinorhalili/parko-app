@@ -43,7 +43,7 @@
     "@capacitor/splash-screen": "^8.0.2",
     "@capacitor/status-bar": "^8.0.3",
     "@maplibre/maplibre-gl-leaflet": "^0.1.4",
-    "@supabase/supabase-js": "2.112.4",
+    "@supabase/supabase-js": "2.116.0",
     "@vitejs/plugin-react": "latest",
     "leaflet": "^1.9.4",
     "leaflet.markercluster": "^1.5.3",
