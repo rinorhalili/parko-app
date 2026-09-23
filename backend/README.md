@@ -31,7 +31,7 @@ The API runs at `http://127.0.0.1:4000` and initializes the local schema automat
 
 For native scripts, `.env` needs `DATABASE_URL` pointing to `127.0.0.1:5433` and `REDIS_URL` to `127.0.0.1:6379`. Include the exact frontend origin in `CORS_ORIGIN` (for example `http://localhost:5173,http://127.0.0.1:5173`). Database, Redis, and API ports are bound to this computer only; phone testing should use Vite's LAN address and API proxy.
 
-`npm run import:parking` imports the versioned OpenStreetMap snapshot and official municipal markers used by the web map. It is safe to run again: records retain their stable identifiers so map reports and backend records match. Availability remains unknown until reported; the import does not invent live availability or prices. Do not use the demo seed for real parking data.
+`npm run import:parking` imports the versioned OpenStreetMap snapshot, official municipal markers, and manually verified Google Maps parking points used by the web map. It is safe to run again: records retain their stable identifiers so map reports and backend records match. Availability remains unknown until reported. Do not use the demo seed for real parking data.
 
 ## API
 

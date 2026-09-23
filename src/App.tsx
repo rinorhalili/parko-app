@@ -361,10 +361,14 @@ function parkingTrust(parking: Parking) {
       label:
         parking.source === "openstreetmap"
           ? "OSM · e dokumentuar"
+          : parking.source === "google-maps"
+            ? "Google Maps · e verifikuar"
           : "E verifikuar",
       detail:
         parking.source === "openstreetmap"
           ? "Lokacioni dhe konturi janë të hartuar; disponueshmëria nuk është live."
+          : parking.source === "google-maps"
+            ? "Lokacioni dhe lloji i parkingut janë kontrolluar në listimin publik të Google Maps."
           : "Lokacioni është pranuar si parking i verifikuar.",
     };
   if (parking.confidence === "medium")
@@ -479,6 +483,7 @@ function verifiedPriceLabel(parking: Parking) {
 
 function parkingSourceLabel(parking: Parking) {
   if (parking.municipalManaged) return "Prishtina Parking";
+  if (parking.source === "google-maps") return "Google Maps · e verifikuar";
   if (parking.source === "openstreetmap" && parking.confidence !== "low")
     return "OpenStreetMap";
   if (parking.confidence !== "low") return "Parko · e verifikuar";
@@ -3088,12 +3093,30 @@ function DetailsView({
         ) : (
           <p className="unverified-parking-note">
             <strong>Jo e konfirmuar si Prishtina Parking.</strong>{" "}
-            {parking.pricingSource === "osm-sign"
+            {parking.pricingSource === "google-maps-verified"
+              ? parking.type === "private"
+                ? "Parking privat i verifikuar në Google Maps; tarifa e aplikuar është 1 €/orë."
+                : "Parking publik i qendrës tregtare, i verifikuar në Google Maps dhe i shënuar pa pagesë."
+              : parking.pricingSource === "osm-sign"
               ? "Tarifa e shfaqur vjen nga OpenStreetMap; zona zyrtare dhe orari nuk dihen."
               : parking.pricingSource === "admin"
                 ? "Tarifa e shfaqur është vendosur nga administratori; zona zyrtare dhe orari nuk dihen."
               : "Çmimi, zona zyrtare dhe orari nuk plotësohen pa burim të verifikueshëm."}
           </p>
+        )}
+        {parking.googleMapsUrl && (
+          <a
+            className="parking-source-link"
+            href={parking.googleMapsUrl}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(event) => {
+              event.preventDefault();
+              void handleOpenExternal(parking.googleMapsUrl!);
+            }}
+          >
+            Shiko listimin në Google Maps
+          </a>
         )}
         {destination && smartMatch && (
           <p className="walk-after-parking">

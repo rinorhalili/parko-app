@@ -5,10 +5,12 @@ import { PrismaClient, type ParkingType } from "@prisma/client";
 
 type SnapshotItem = [kind: "node" | "way" | "relation", id: number, lat: number, lng: number, tags: Record<string, string>];
 type OfficialMarker = { markerId: string; code: string | null; title: string; address: string; lat: number; lng: number; capacity: number | null; pricePerHour: number | null; category: string };
+type GoogleMarker = { markerId: string; title: string; address: string; lat: number; lng: number; pricePerHour: 0 | 1; type: "private" | "public"; covered: boolean };
 
 const prisma = new PrismaClient();
 const snapshotPath = fileURLToPath(new URL("../../src/osmParkingSnapshot.ts", import.meta.url));
 const officialMarkersPath = fileURLToPath(new URL("../../src/officialPrishtinaParking.ts", import.meta.url));
+const googleMarkersPath = fileURLToPath(new URL("../../src/verifiedGoogleParking.ts", import.meta.url));
 
 function parkingType(tags: Record<string, string>): ParkingType {
   if (["private", "customers", "permit"].includes(tags.access?.toLowerCase())) return "PRIVATE";
@@ -36,8 +38,15 @@ async function loadOfficialMarkers(): Promise<OfficialMarker[]> {
   return JSON.parse(`[${match[1].replace(/,\s*$/, "")}]`) as OfficialMarker[];
 }
 
+async function loadGoogleMarkers(): Promise<GoogleMarker[]> {
+  const source = await readFile(googleMarkersPath, "utf8");
+  const match = source.match(/VERIFIED_GOOGLE_PARKINGS: VerifiedGoogleParkingMarker\[\] = \[([\s\S]*?)\n\]/);
+  if (!match) throw new Error("Could not read the verified Google Maps parking markers.");
+  return JSON.parse(`[${match[1].replace(/,\s*$/, "")}]`) as GoogleMarker[];
+}
+
 async function main() {
-  const [rows, officialMarkers] = await Promise.all([loadSnapshot(), loadOfficialMarkers()]);
+  const [rows, officialMarkers, googleMarkers] = await Promise.all([loadSnapshot(), loadOfficialMarkers(), loadGoogleMarkers()]);
   let imported = 0;
   for (const [kind, osmId, latitude, longitude, tags] of rows) {
     const id = `osm-${kind}-${osmId}`;
@@ -62,6 +71,21 @@ async function main() {
       where: { id },
       create: { id, title: marker.title, latitude: marker.lat, longitude: marker.lng, address: marker.address, zone: marker.code ? `Prishtina Parking ${marker.code}` : "Prishtina Parking", type: marker.category === "barrier" ? "GARAGE" : "STREET", capacity: marker.capacity, pricePerHour: marker.pricePerHour, status: "UNKNOWN" },
       update: { title: marker.title, latitude: marker.lat, longitude: marker.lng, address: marker.address, zone: marker.code ? `Prishtina Parking ${marker.code}` : "Prishtina Parking", type: marker.category === "barrier" ? "GARAGE" : "STREET", capacity: marker.capacity, pricePerHour: marker.pricePerHour }
+    });
+    await prisma.$executeRaw`
+      UPDATE "ParkingSpot"
+      SET "geoPoint" = ST_SetSRID(ST_MakePoint(${marker.lng}, ${marker.lat}), 4326)::geography
+      WHERE id = ${id}
+    `;
+    imported += 1;
+  }
+  for (const marker of googleMarkers) {
+    const id = `google-maps-${marker.markerId}`;
+    const type: ParkingType = marker.type === "private" ? "PRIVATE" : marker.covered ? "GARAGE" : "LOT";
+    await prisma.parkingSpot.upsert({
+      where: { id },
+      create: { id, title: marker.title, latitude: marker.lat, longitude: marker.lng, address: marker.address, zone: marker.type === "private" ? "Parking privat" : "Parking publik", type, pricePerHour: marker.pricePerHour, status: "UNKNOWN" },
+      update: { title: marker.title, latitude: marker.lat, longitude: marker.lng, address: marker.address, zone: marker.type === "private" ? "Parking privat" : "Parking publik", type, pricePerHour: marker.pricePerHour }
     });
     await prisma.$executeRaw`
       UPDATE "ParkingSpot"

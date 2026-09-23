@@ -1,4 +1,5 @@
 import { OFFICIAL_PRISHTINA_PARKING_MARKERS } from "./officialPrishtinaParking";
+import { VERIFIED_GOOGLE_PARKINGS } from "./verifiedGoogleParking";
 import { deriveMunicipalParkingData } from "./prishtinaParkingRules";
 import { listParking } from "./api/parkingService";
 import type { Parking, ParkingAccess } from "./types";
@@ -18,7 +19,7 @@ const PRISHTINA_PARKING_BOUNDS = "42.625,21.115,42.690,21.215";
 const USER_LOCATION = { lat: 42.6582, lng: 21.1585 };
 
 function isBundledParkingId(id: string) {
-  return id.startsWith("osm-") || id.startsWith("prishtina-parking-");
+  return id.startsWith("osm-") || id.startsWith("prishtina-parking-") || id.startsWith("google-maps-");
 }
 
 export function isWithinPrishtinaMap(coordinates: Parking["coordinates"]) {
@@ -225,6 +226,46 @@ function categoryLabel(category: NonNullable<Parking["municipalCategory"]>) {
   if (category === "commercial") return "Parking komercial";
   if (category === "combined") return "Parking i kombinuar";
   return "Parking rezidencial";
+}
+
+function fromVerifiedGoogleParkingMarker(
+  marker: (typeof VERIFIED_GOOGLE_PARKINGS)[number],
+): Parking {
+  const coordinates = { lat: marker.lat, lng: marker.lng };
+  const distance = distanceMeters(USER_LOCATION, coordinates);
+  return {
+    id: `google-maps-${marker.markerId}`,
+    name: marker.title,
+    zone: marker.type === "private" ? "Parking privat" : "Parking publik",
+    address: marker.address,
+    capacity: null,
+    spaces: null,
+    status: "unknown",
+    pricePerHour: marker.pricePerHour,
+    distanceMeters: distance,
+    driveMinutes: Math.max(2, Math.round(distance / 230)),
+    confidence: "high",
+    updatedMinutesAgo: 0,
+    type: marker.type,
+    open24h: marker.open24h,
+    covered: marker.covered,
+    cardPayment: false,
+    evCharging: false,
+    accessible: marker.accessible,
+    free: marker.pricePerHour === 0,
+    coordinates,
+    access: marker.type === "private" ? "private" : "public",
+    googleMapsUrl: marker.googleMapsUrl,
+    source: "google-maps",
+    operator: null,
+    openingHours: marker.open24h ? "24/7" : null,
+    municipalManaged: false,
+    municipalCode: null,
+    municipalCategory: null,
+    municipalZone: null,
+    usageHours: marker.open24h ? "24/7" : null,
+    pricingSource: "google-maps-verified",
+  };
 }
 
 function fromOfficialPrishtinaParkingMarker(
@@ -595,9 +636,17 @@ export async function loadParkingGeometry(
 }
 
 export function getPrishtinaParkingSnapshot() {
-  return OFFICIAL_PRISHTINA_PARKING_MARKERS.map(
+  const officialParkings = OFFICIAL_PRISHTINA_PARKING_MARKERS.map(
     fromOfficialPrishtinaParkingMarker,
-  ).sort((a, b) => a.distanceMeters - b.distanceMeters);
+  );
+  const googleParkings = withoutDuplicates(
+    VERIFIED_GOOGLE_PARKINGS.map(fromVerifiedGoogleParkingMarker),
+    officialParkings,
+    30,
+  );
+  return [...officialParkings, ...googleParkings].sort(
+    (a, b) => a.distanceMeters - b.distanceMeters,
+  );
 }
 
 export { USER_LOCATION };

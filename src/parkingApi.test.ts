@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { clampToPrishtinaMap, getPrishtinaParkingSnapshot, isWithinPrishtinaMap } from './parkingApi'
 
 describe('Prishtina parking snapshot', () => {
-  it('includes only the official Prishtina Parking map locations', () => {
+  it('includes official and manually verified Google Maps locations', () => {
     const parkings = getPrishtinaParkingSnapshot()
 
-    expect(parkings).toHaveLength(90)
-    expect(parkings.every((parking) => parking.source === 'municipal')).toBe(true)
-    expect(parkings.every((parking) => parking.municipalManaged)).toBe(true)
+    expect(parkings).toHaveLength(105)
+    expect(parkings.filter((parking) => parking.source === 'municipal')).toHaveLength(90)
+    expect(parkings.filter((parking) => parking.source === 'google-maps')).toHaveLength(15)
+    expect(parkings.filter((parking) => parking.source === 'google-maps' && parking.type === 'private' && parking.pricePerHour === 1)).toHaveLength(11)
+    expect(parkings.filter((parking) => parking.source === 'google-maps' && parking.type === 'public' && parking.pricePerHour === 0)).toHaveLength(4)
     expect(parkings.every((parking) => parking.pricePerHour !== null)).toBe(true)
     expect(parkings.some((parking) => parking.municipalCode === 'X1' && parking.pricePerHour === 0.5)).toBe(true)
     expect(parkings.some((parking) => parking.municipalCode === 'K1' && parking.pricePerHour === 1)).toBe(true)

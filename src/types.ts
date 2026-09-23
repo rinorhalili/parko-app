@@ -40,7 +40,8 @@ export type Parking = {
   geometry?: MapCoordinate[][]
   access: ParkingAccess
   osmUrl?: string
-  source: 'openstreetmap' | 'municipal' | 'community'
+  googleMapsUrl?: string
+  source: 'openstreetmap' | 'google-maps' | 'municipal' | 'community'
   availabilitySource?: string
   availabilityUpdatedAt?: string
   accessPoint?: MapCoordinate
@@ -51,7 +52,7 @@ export type Parking = {
   municipalCategory?: MunicipalParkingCategory | null
   municipalZone?: 1 | 2 | 3 | null
   usageHours?: string | null
-  pricingSource?: 'official-zone' | 'osm-sign' | 'admin' | null
+  pricingSource?: 'official-zone' | 'osm-sign' | 'google-maps-verified' | 'admin' | null
 }
 
 export type ParkingLoadStatus = 'loading' | 'live' | 'fallback'

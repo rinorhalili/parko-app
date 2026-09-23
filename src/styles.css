@@ -3465,6 +3465,14 @@ input:focus-visible {
 .unverified-parking-note strong {
   color: #435167;
 }
+.parking-source-link {
+  display: inline-flex;
+  margin: -7px 0 15px;
+  color: #2458d3;
+  font-size: 10px;
+  font-weight: 900;
+  text-decoration: none;
+}
 .details-actions {
   position: absolute;
   z-index: 24;

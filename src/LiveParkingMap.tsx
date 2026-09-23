@@ -653,7 +653,7 @@ export default function LiveParkingMap({
           ) : mapSettings.parkingPalette === 'operator' ? (
             <>
               <span><i className="price-dot price-dot--municipal" />Prishtina Parking</span>
-              <span><i className="price-dot price-dot--parking" />OSM publik / rrugë</span>
+              <span><i className="price-dot price-dot--parking" />Publik / rrugë</span>
               <span><i className="price-dot price-dot--private" />Privat</span>
             </>
           ) : (
