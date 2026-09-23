@@ -3,6 +3,8 @@ function goHome() {
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
+const supportEmail = import.meta.env.VITE_SUPPORT_EMAIL || "support@parko.app";
+
 export default function PrivacyPolicy() {
   return (
     <div className="screen settings-screen">
@@ -20,7 +22,7 @@ export default function PrivacyPolicy() {
           <small>Parko</small>
           <h1>Parko Privacy Policy</h1>
           <p>
-            <em>Last updated: [add date when published]</em>
+            <em>Last updated: 23 September 2026</em>
           </p>
         </div>
       </header>
@@ -138,12 +140,9 @@ export default function PrivacyPolicy() {
               your profile information from the app&apos;s Profile screen.
             </li>
             <li>
-              <strong>Deletion:</strong> to delete your account and associated
-              data, contact us at [support email].{" "}
-              <em>
-                (Note: Parko doesn&apos;t yet have a self-serve "delete my
-                account" button in the app — see the note below.)
-              </em>
+              <strong>Deletion:</strong> you can permanently delete your account
+              from Profile → Account → Delete account, or start the process on
+              our <a href="/delete-account">account deletion page</a>.
             </li>
           </ul>
 
@@ -170,7 +169,7 @@ export default function PrivacyPolicy() {
           </p>
 
           <h2>9. Contact</h2>
-          <p>Questions about this policy or your data: [support email]</p>
+          <p>Questions about this policy or your data: <a href={`mailto:${supportEmail}`}>{supportEmail}</a></p>
         </section>
       </main>
     </div>

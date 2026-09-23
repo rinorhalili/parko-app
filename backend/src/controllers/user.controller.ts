@@ -114,6 +114,40 @@ export const userController = {
       next(error);
     }
   },
+  async listBlocks(req: Request, res: Response, next: NextFunction) {
+    try {
+      const blocks = await prisma.userBlock.findMany({
+        where: { blockerId: req.user!.id },
+        select: { blockedId: true, createdAt: true },
+        orderBy: { createdAt: "desc" },
+      });
+      ok(res, blocks);
+    } catch (error) {
+      next(error);
+    }
+  },
+  async blockUser(req: Request, res: Response, next: NextFunction) {
+    try {
+      const blockedId = String(req.params.id);
+      if (blockedId === req.user!.id) throw badRequest("You cannot block your own account");
+      const block = await prisma.userBlock.upsert({
+        where: { blockerId_blockedId: { blockerId: req.user!.id, blockedId } },
+        create: { blockerId: req.user!.id, blockedId },
+        update: {},
+      });
+      ok(res, block);
+    } catch (error) {
+      next(error);
+    }
+  },
+  async unblockUser(req: Request, res: Response, next: NextFunction) {
+    try {
+      await prisma.userBlock.deleteMany({ where: { blockerId: req.user!.id, blockedId: String(req.params.id) } });
+      ok(res, { removed: true });
+    } catch (error) {
+      next(error);
+    }
+  },
   async publicReputation(req: Request, res: Response, next: NextFunction) {
     try {
       ok(res, await getUserReputation(req.params.id as string));

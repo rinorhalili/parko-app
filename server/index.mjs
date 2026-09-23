@@ -8,6 +8,12 @@ const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const dist = join(root, "dist");
 const port = Number(process.env.PORT || 4173);
 const cache = new Map();
+const nativeOrigins = new Set(
+  (process.env.PARKO_NATIVE_ORIGINS || "https://localhost")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean),
+);
 
 const upstreams = {
   "/api/overpass": ["https://overpass-api.de/api/interpreter", 5 * 60_000],
@@ -183,6 +189,14 @@ createServer(async (request, response) => {
       return send(response, 301, "", { Location: url.toString() });
     }
     const pathname = new URL(request.url, "http://localhost").pathname;
+    const origin = request.headers.origin;
+    if (pathname.startsWith("/api/") && typeof origin === "string" && nativeOrigins.has(origin)) {
+      response.setHeader("Access-Control-Allow-Origin", origin);
+      response.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+      response.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization,X-Parko-Client");
+      response.setHeader("Vary", "Origin");
+      if (request.method === "OPTIONS") return send(response, 204);
+    }
     if (pathname.startsWith("/api/v1/") || pathname.startsWith("/socket.io/"))
       return proxyBackend(request, response);
     if (pathname === "/api/occupancy")

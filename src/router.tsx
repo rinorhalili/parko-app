@@ -17,6 +17,7 @@ const ModerationPage = lazy(() => import("./pages/ModerationPage"));
 const AdminDashboard = lazy(() => import("./AdminDashboard"));
 const PrivacyPolicy = lazy(() => import("./PrivacyPolicy"));
 const Terms = lazy(() => import("./Terms"));
+const DeleteAccountPage = lazy(() => import("./DeleteAccountPage"));
 const NotFound = lazy(() => import("./NotFound"));
 
 function normalizePathname(pathname: string) {
@@ -33,6 +34,7 @@ function routeFor(rawPathname: string) {
   if (view === "dashboard" || adminFlag === "1" || adminFlag === "true" || pathname === "/admin" || pathname === "/dashboard") return <AdminDashboard />;
   if (view === "privacy" || pathname === "/privacy") return <PrivacyPolicy />;
   if (view === "terms" || pathname === "/terms") return <Terms />;
+  if (pathname === "/delete-account") return <DeleteAccountPage />;
   if (pathname === "/" || pathname === "") return window.electronAPI ? <AdminDashboard /> : <HomePage />;
   if (pathname.startsWith("/parking/")) return <ParkingDetailsPage />;
   if (pathname === "/community") return <CommunityFeedPage />;
@@ -58,6 +60,7 @@ export default function Router() {
       "/dashboard": "Paneli i Administratës - Parko",
       "/privacy": "Politika e Privatësisë - Parko",
       "/terms": "Kushtet e Përdorimit - Parko",
+      "/delete-account": "Fshij llogarinë - Parko",
       "/community": "Komuniteti - Parko",
       "/profile": "Profili - Parko",
       "/settings": "Cilësimet - Parko",

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Parko</string>
+    <string name="title_activity_main">Parko</string>
+    <string name="package_name">com.parko.app</string>
+    <string name="custom_url_scheme">com.parko.app</string>
+</resources>

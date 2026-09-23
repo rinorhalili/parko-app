@@ -21,6 +21,9 @@ export function listSessions() { return apiRequest<Session[]>('/users/me/session
 export function revokeSession(sessionId: string) { return apiRequest<{ revoked: boolean }>(`/users/me/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }) }
 export function getUserActivity(userId: string) { return apiRequest<{ items: Array<{ type: string; id: string; createdAt: string }> }>(`/users/${encodeURIComponent(userId)}/activity`) }
 export function getLeaderboard() { return apiRequest<{ items: Array<{ rank: number; id: string; name: string; username: string; avatar: string | null; reputationScore: number; isVerified: boolean }> }>('/users/leaderboard/top') }
+export function listBlockedUsers() { return apiRequest<Array<{ blockedId: string; createdAt: string }>>('/users/me/blocks') }
+export function blockUser(userId: string) { return apiRequest<{ id: string; blockedId: string }>(`/users/me/blocks/${encodeURIComponent(userId)}`, { method: 'PUT' }) }
+export function unblockUser(userId: string) { return apiRequest<{ removed: boolean }>(`/users/me/blocks/${encodeURIComponent(userId)}`, { method: 'DELETE' }) }
 
 export async function downloadMyData() {
   const { getAccessToken, API_BASE_URL } = await import('./client')

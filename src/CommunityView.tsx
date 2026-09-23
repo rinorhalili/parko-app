@@ -6,6 +6,8 @@ import { listFavorites, listZoneAlerts, removePostFavorite, removeZoneAlert, sav
 import type { CommunityPost } from './api/types'
 import { useSocket } from './hooks/useSocket'
 import { prepareImageAttachment } from './imageAttachment'
+import { reportContent } from './api/moderationService'
+import { blockUser, listBlockedUsers } from './api/userService'
 
 type Props = { onBack: () => void; onLogin: () => void }
 
@@ -25,19 +27,24 @@ export default function CommunityView({ onBack, onLogin }: Props) {
   const [zoneAlerts, setZoneAlerts] = useState<ZoneAlert[]>([])
   const [zone, setZone] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [acceptedGuidelines, setAcceptedGuidelines] = useState(false)
+  const [blockedUserIds, setBlockedUserIds] = useState<string[]>([])
+  const [notice, setNotice] = useState('')
   const authenticated = Boolean(getAccessToken())
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
     try {
-      const [nextPosts, nextNotifications, favorites, alerts] = await Promise.all([
+      const [nextPosts, nextNotifications, favorites, alerts, blocks] = await Promise.all([
         listPosts(),
         authenticated ? listNotifications() : Promise.resolve([]),
         authenticated ? listFavorites() : Promise.resolve({ parkingIds: [], postIds: [] }),
         authenticated ? listZoneAlerts() : Promise.resolve([]),
+        authenticated ? listBlockedUsers() : Promise.resolve([]),
       ])
       setPosts(nextPosts); setNotifications(nextNotifications)
       setFavoritePostIds(favorites.postIds); setZoneAlerts(alerts)
+      setBlockedUserIds(blocks.map((block) => block.blockedId))
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Të dhënat e komunitetit nuk u ngarkuan.')
     } finally { setLoading(false) }
@@ -57,12 +64,17 @@ export default function CommunityView({ onBack, onLogin }: Props) {
       setError('Titulli dhe përmbajtja nuk mund të jenë vetëm hapësira.')
       return
     }
+    if (!acceptedGuidelines) {
+      setError('Prano rregullat e komunitetit para publikimit.')
+      return
+    }
     setSubmitting(true); setError('')
     try {
       const media = photoUrl.trim() ? [{ url: photoUrl.trim(), type: 'image' as const }] : undefined
       const post = await createPost({ title: title.trim(), content: content.trim(), media })
       setPosts((current) => [post, ...current.filter((item) => item.id !== post.id)])
       setTitle(''); setContent(''); setPhotoUrl('')
+      setAcceptedGuidelines(false)
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : 'Postimi nuk u publikua.')
     } finally { setSubmitting(false) }
@@ -81,6 +93,29 @@ export default function CommunityView({ onBack, onLogin }: Props) {
       if (saved) { await removePostFavorite(postId); setFavoritePostIds((current) => current.filter((id) => id !== postId)) }
       else { await savePostFavorite(postId); setFavoritePostIds((current) => [...current, postId]) }
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Postimi nuk u ruajt.') }
+  }
+
+  const reportPost = async (postId: string) => {
+    if (!authenticated) { onLogin(); return }
+    const reason = window.prompt('Pse po e raporton këtë postim? (p.sh. informacion i rremë, spam, përmbajtje fyese)')?.trim()
+    if (!reason) return
+    if (reason.length < 5) { setError('Arsyeja e raportimit duhet të ketë së paku 5 karaktere.'); return }
+    try {
+      await reportContent('POST', postId, reason)
+      setNotice('Raportimi u dërgua për shqyrtim. Faleminderit.')
+      setError('')
+    } catch (reasonError) { setError(reasonError instanceof Error ? reasonError.message : 'Raportimi nuk u dërgua.') }
+  }
+
+  const blockAuthor = async (userId: string, username: string) => {
+    if (!authenticated) { onLogin(); return }
+    if (!window.confirm(`Ta bllokojmë @${username}? Postimet e këtij përdoruesi nuk do të shfaqen më.`)) return
+    try {
+      await blockUser(userId)
+      setBlockedUserIds((current) => [...new Set([...current, userId])])
+      setNotice(`@${username} u bllokua.`)
+      setError('')
+    } catch (reasonError) { setError(reasonError instanceof Error ? reasonError.message : 'Përdoruesi nuk u bllokua.') }
   }
 
   const addZoneAlert = async (event: FormEvent) => {
@@ -104,6 +139,7 @@ export default function CommunityView({ onBack, onLogin }: Props) {
     <header className="settings-header"><button className="floating-back community-back" onClick={onBack} aria-label="Kthehu">‹</button><div><small>Parko</small><h1>Komuniteti</h1><p>Raportime dhe njoftime nga API-ja Parko.</p></div></header>
     <main className="settings-content">
       {error && <div className="app-feedback" role="alert"><span>{error}</span><button onClick={() => void load()}>Provo përsëri</button></div>}
+      {notice && <div className="community-notice" role="status"><span>{notice}</span><button type="button" onClick={() => setNotice('')} aria-label="Mbyll njoftimin">×</button></div>}
       <section className="settings-section">
         <div className="settings-section__heading"><span><small>Diskutim</small><h2>Postime</h2></span></div>
         <form className="login-form" onSubmit={(event) => void publish(event)}>
@@ -111,9 +147,10 @@ export default function CommunityView({ onBack, onLogin }: Props) {
           <textarea className="form-input" value={content} onChange={(event) => setContent(event.target.value)} maxLength={5000} placeholder="Ndaj një përditësim për parkingun" required disabled={submitting} />
           <label className="image-attachment-control">📷 <span>{photoUrl ? 'Foto e bashkëngjitur' : 'Shto foto'}</span><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; void choosePhoto(file) }} disabled={submitting} /></label>
           {photoUrl && <><img className="community-post-photo" src={photoUrl} alt="Pamja paraprake e fotos" /><button type="button" className="text-button" onClick={() => setPhotoUrl('')}>Hiq foton</button></>}
-          <button className="login-button" disabled={submitting}>{authenticated ? (submitting ? 'Duke publikuar…' : 'Publiko') : 'Hyr për të publikuar'}</button>
+          {authenticated && <label className="legal-consent"><input type="checkbox" checked={acceptedGuidelines} onChange={(event) => setAcceptedGuidelines(event.target.checked)} disabled={submitting} required /><span>Ky postim respekton <a href="/terms" target="_blank" rel="noreferrer">rregullat e komunitetit</a>.</span></label>}
+          <button className="login-button" disabled={submitting || (authenticated && !acceptedGuidelines)}>{authenticated ? (submitting ? 'Duke publikuar…' : 'Publiko') : 'Hyr për të publikuar'}</button>
         </form>
-        {loading ? <p role="status">Duke ngarkuar postimet…</p> : posts.length === 0 ? <p>Nuk ka ende postime. Bëhu i pari që ndan një përditësim.</p> : <div className="queue-list">{posts.map((post) => <article className="queue-card" key={post.id}><b>{post.title}</b><small>{post.author?.username ?? 'Përdorues Parko'} · {dateLabel(post.createdAt)}</small><p>{post.content}</p>{post.media?.map((item) => <img className="community-post-photo" key={item.url} src={item.url} alt={`Foto nga ${post.title}`} loading="lazy" />)}<div className="queue-card__footer"><small>{post._count?.comments ?? 0} komente · {post._count?.reactions ?? 0} reagime</small><button type="button" onClick={() => void toggleFavorite(post.id)} aria-pressed={favoritePostIds.includes(post.id)}>{favoritePostIds.includes(post.id) ? '★ Ruajtur' : '☆ Ruaj'}</button></div></article>)}</div>}
+        {loading ? <p role="status">Duke ngarkuar postimet…</p> : posts.filter((post) => !blockedUserIds.includes(post.authorId)).length === 0 ? <p>Nuk ka ende postime të dukshme.</p> : <div className="queue-list">{posts.filter((post) => !blockedUserIds.includes(post.authorId)).map((post) => <article className="queue-card" key={post.id}><b>{post.title}</b><small>{post.author?.username ?? 'Përdorues Parko'} · {dateLabel(post.createdAt)}</small><p>{post.content}</p>{post.media?.map((item) => <img className="community-post-photo" key={item.url} src={item.url} alt={`Foto nga ${post.title}`} loading="lazy" />)}<div className="queue-card__footer"><small>{post._count?.comments ?? 0} komente · {post._count?.reactions ?? 0} reagime</small><span className="community-actions"><button type="button" onClick={() => void toggleFavorite(post.id)} aria-pressed={favoritePostIds.includes(post.id)}>{favoritePostIds.includes(post.id) ? '★ Ruajtur' : '☆ Ruaj'}</button><button type="button" onClick={() => void reportPost(post.id)}>Raporto</button>{post.author && <button type="button" onClick={() => void blockAuthor(post.author!.id, post.author!.username)}>Blloko</button>}</span></div></article>)}</div>}
       </section>
       {authenticated && <section className="settings-section">
         <div className="settings-section__heading"><span><small>Alertet</small><h2>Zona të ruajtura</h2></span></div>

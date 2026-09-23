@@ -1,6 +1,7 @@
 import { PRISHTINA_DESTINATIONS } from './destinations'
 import { PRISHTINA_MAP_BOUNDS, isWithinPrishtinaMap } from './parkingApi'
 import type { Destination, DestinationCategory } from './types'
+import { proxyUrl } from './runtimeUrls'
 
 type NominatimResult = {
   place_id: number
@@ -118,7 +119,7 @@ export async function searchDestinationOnline(query: string, signal?: AbortSigna
     bounded: '1',
     'accept-language': 'sq,en',
   })
-  const response = await fetch(`/api/geocode?${params}`, { signal })
+  const response = await fetch(proxyUrl(`/api/geocode?${params}`), { signal })
   if (!response.ok) throw new Error(`Geocoder returned ${response.status}`)
   const destinations = (await response.json() as NominatimResult[])
     .map(fromNominatim)
@@ -136,7 +137,7 @@ export async function reverseGeocodeLocation(coordinates: { lat: number; lng: nu
     zoom: '18',
     'accept-language': 'sq,en',
   })
-  const response = await fetch(`/api/reverse?${params}`, { signal })
+  const response = await fetch(proxyUrl(`/api/reverse?${params}`), { signal })
   if (!response.ok) throw new Error(`Reverse geocoder returned ${response.status}`)
   const result = await response.json() as NominatimReverseResult
   const address = result.address ?? {}

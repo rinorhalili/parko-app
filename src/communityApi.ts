@@ -54,6 +54,7 @@ export type ParkingObservation = {
   availability?: CommunityAvailability
   payment?: 'free' | 'paid'
   policeRisk?: boolean
+  description?: string
   media?: Array<{ url: string; type: 'image' }>
 }
 
@@ -65,6 +66,7 @@ export async function submitParkingObservation(parking: Parking, observation: Pa
     latitude: parking.coordinates.lat,
     longitude: parking.coordinates.lng,
     confidence: 60,
+    description: observation.description,
     payment: observation.payment === 'free' ? 'FREE' : observation.payment === 'paid' ? 'PAID' : undefined,
     policeRisk: observation.policeRisk,
     media: observation.media,

@@ -3,9 +3,10 @@ import { VERIFIED_GOOGLE_PARKINGS } from "./verifiedGoogleParking";
 import { deriveMunicipalParkingData } from "./prishtinaParkingRules";
 import { listParking } from "./api/parkingService";
 import type { Parking, ParkingAccess } from "./types";
+import { proxyUrl } from "./runtimeUrls";
 
 const OVERPASS_URLS = [
-  "/api/overpass",
+  proxyUrl("/api/overpass"),
   "https://overpass.kumi.systems/api/interpreter",
 ];
 export const PRISHTINA_CENTER = { lat: 42.6608, lng: 21.1608 } as const;
@@ -564,7 +565,7 @@ export async function loadParkingGeometry(
   if (!match || match[1] === "node")
     return { geometry: parking.geometry, accessPoint: parking.accessPoint };
   const [, type, id] = match;
-  const response = await fetch(`/api/osm/${type}/${id}/full.json`, { signal });
+  const response = await fetch(proxyUrl(`/api/osm/${type}/${id}/full.json`), { signal });
   if (!response.ok) throw new Error(`OSM geometry returned ${response.status}`);
   const payload = (await response.json()) as { elements?: OsmApiElement[] };
   const elements = payload.elements ?? [];

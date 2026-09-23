@@ -1,10 +1,33 @@
 import type { ApiErrorBody, ApiResponse, AuthTokens } from './types'
+import { Capacitor } from '@capacitor/core'
+import { SecureStorage } from '@aparajita/capacitor-secure-storage'
 
 export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '')
 export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || API_BASE_URL.replace(/\/api\/v1\/?$/, '') || window.location.origin
 
 let accessToken: string | null = null
 let refreshPromise: Promise<string | null> | null = null
+const REFRESH_TOKEN_KEY = 'parko:refresh-token:v1'
+const isNative = Capacitor.isNativePlatform()
+
+async function readNativeRefreshToken() {
+  if (!isNative) return null
+  try { return await SecureStorage.getItem(REFRESH_TOKEN_KEY) } catch { return null }
+}
+
+async function writeNativeRefreshToken(token?: string) {
+  if (!isNative || !token) return
+  await SecureStorage.setItem(REFRESH_TOKEN_KEY, token)
+}
+
+export async function getNativeRefreshToken() {
+  return readNativeRefreshToken()
+}
+
+async function removeNativeRefreshToken() {
+  if (!isNative) return
+  try { await SecureStorage.removeItem(REFRESH_TOKEN_KEY) } catch { /* Already absent or unavailable. */ }
+}
 
 export class ApiError extends Error {
   readonly status: number
@@ -22,6 +45,7 @@ export function getAccessToken() { return accessToken }
 
 export function setAuthTokens(tokens: AuthTokens) {
   accessToken = tokens.accessToken
+  void writeNativeRefreshToken(tokens.refreshToken).catch(() => { /* Login remains usable; refresh will require signing in again. */ })
   // Remove the legacy persisted token if a previous build created one.
   try { localStorage.removeItem('parko:access-token:v1') } catch { /* Storage may be disabled. */ }
   window.dispatchEvent(new Event('parko:auth-changed'))
@@ -29,6 +53,7 @@ export function setAuthTokens(tokens: AuthTokens) {
 
 export function clearAuthTokens() {
   accessToken = null
+  void removeNativeRefreshToken()
   try { localStorage.removeItem('parko:access-token:v1') } catch { /* Storage may be disabled. */ }
   window.dispatchEvent(new Event('parko:auth-changed'))
 }
@@ -38,15 +63,19 @@ function notifyAuthExpired() {
 }
 
 async function refreshAccessToken() {
+  const nativeRefreshToken = await readNativeRefreshToken()
   let response: Response
   try {
     response = await fetch(`${API_BASE_URL}/auth/refresh`, {
       method: 'POST',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      // The refresh token lives only in the HTTP-only cookie issued by the API.
-      // This keeps it out of JavaScript-accessible storage.
-      body: JSON.stringify({}),
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...(isNative ? { 'x-parko-client': 'native' } : {})
+      },
+      // Web uses the HTTP-only refresh cookie; Android uses encrypted Keystore storage.
+      body: JSON.stringify(nativeRefreshToken ? { refreshToken: nativeRefreshToken } : {}),
       signal: AbortSignal.timeout(12_000)
     })
   } catch {
@@ -88,6 +117,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}, retry 
   if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
   const accessToken = getAccessToken()
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`)
+  if (isNative) headers.set('x-parko-client', 'native')
 
   let response: Response
   try {

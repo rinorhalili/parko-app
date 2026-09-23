@@ -26,6 +26,12 @@ userRoutes.get("/me/export", authenticate, userController.exportData);
 
 userRoutes.delete("/me", authenticate, validate({ body: deleteAccountSchema }), userController.deleteAccount);
 
+userRoutes.get("/me/blocks", authenticate, userController.listBlocks);
+
+userRoutes.put("/me/blocks/:id", authenticate, validate({ params: idParams }), userController.blockUser);
+
+userRoutes.delete("/me/blocks/:id", authenticate, validate({ params: idParams }), userController.unblockUser);
+
 userRoutes.get("/:id", validate({ params: idParams }), userController.profile);
 
 userRoutes.get("/:id/reputation", validate({ params: idParams }), userController.publicReputation);

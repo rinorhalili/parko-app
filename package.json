@@ -13,6 +13,14 @@
     "desktop": "node scripts/electron-launcher.mjs",
     "build:desktop": "npm run build && npm run desktop",
     "dev:desktop": "node scripts/electron-launcher.mjs --dev",
+    "android:add": "npm run build:android:web && cap add android",
+    "android:sync": "npm run build:android:web && cap sync android",
+    "android:open": "cap open android",
+    "android:check": "node scripts/check-android-release.mjs",
+    "android:assets": "node scripts/generate-android-assets.mjs",
+    "android:screenshots": "node scripts/capture-play-store-screenshots.mjs",
+    "android:bundle": "npm run android:check && npm run android:sync && cd android && gradlew.bat bundleRelease",
+    "build:android:web": "tsc -b && vite build --mode android",
     "check": "tsc -b --pretty false",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -27,6 +35,13 @@
     "backend:prisma:generate": "npm run prisma:generate --prefix backend"
   },
   "dependencies": {
+    "@aparajita/capacitor-secure-storage": "^8.0.1",
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/geolocation": "^8.2.2",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3",
     "@maplibre/maplibre-gl-leaflet": "^0.1.4",
     "@supabase/supabase-js": "2.112.4",
     "@vitejs/plugin-react": "latest",
@@ -40,6 +55,7 @@
     "vite": "latest"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.4.3",
     "@playwright/test": "^1.55.0",
     "@types/leaflet": "^1.9.22",
     "@types/leaflet.markercluster": "^1.5.4",
@@ -48,6 +64,7 @@
     "@types/react-dom": "latest",
     "electron": "^44.0.0",
     "jsdom": "^29.1.1",
+    "sharp": "^0.35.4",
     "vitest": "^4.1.11"
   }
 }

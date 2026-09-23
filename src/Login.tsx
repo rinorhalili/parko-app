@@ -42,6 +42,7 @@ export default function Login({ onClose }: LoginProps) {
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [turnstileToken, setTurnstileToken] = useState('')
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
   const turnstileContainerRef = useRef<HTMLDivElement>(null)
   const turnstileWidgetRef = useRef<TurnstileWidgetId | null>(null)
 
@@ -122,6 +123,10 @@ export default function Login({ onClose }: LoginProps) {
     }
     if (mode === 'register' && !/^[a-zA-Z0-9_]{3,40}$/.test(username.trim())) {
       setError('Username duhet të ketë 3–40 karaktere: shkronja, numra ose _.')
+      return
+    }
+    if (mode === 'register' && !acceptedTerms) {
+      setError('Duhet t’i pranosh Kushtet dhe Politikën e Privatësisë.')
       return
     }
 
@@ -449,10 +454,17 @@ export default function Login({ onClose }: LoginProps) {
             </div>
           )}
 
+          {mode === 'register' && (
+            <label className="legal-consent">
+              <input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} disabled={isLoading} required />
+              <span>Pranoj <a href="/terms" target="_blank" rel="noreferrer">Kushtet e Përdorimit</a> dhe <a href="/privacy" target="_blank" rel="noreferrer">Politikën e Privatësisë</a>.</span>
+            </label>
+          )}
+
           <button
             type="submit"
             className="login-button"
-            disabled={isLoading}
+            disabled={isLoading || (mode === 'register' && !acceptedTerms)}
           >
             {isLoading ? 'Duke pritur…' : mode === 'login' ? 'Hyr' : 'Krijo llogari'}
           </button>

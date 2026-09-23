@@ -1,4 +1,5 @@
 import type { Availability, Parking } from "./types";
+import { proxyUrl } from "./runtimeUrls";
 
 export type AvailabilityEntry = {
   id?: string;
@@ -68,7 +69,7 @@ export function mergeVerifiedAvailability(
 export async function loadVerifiedAvailability(
   signal?: AbortSignal,
 ): Promise<AvailabilityFeed | null> {
-  const response = await fetch("/api/occupancy", {
+  const response = await fetch(proxyUrl("/api/occupancy"), {
     signal,
     headers: { Accept: "application/json" },
   });
@@ -80,3 +81,4 @@ export async function loadVerifiedAvailability(
     throw new Error("Invalid occupancy feed");
   return payload as AvailabilityFeed;
 }
+

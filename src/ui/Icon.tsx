@@ -12,6 +12,7 @@ export type AppIconName =
   | "street"
   | "chevron"
   | "more"
+  | "report"
   | "mute"
   | "recenter";
 
@@ -113,6 +114,12 @@ export function AppIcon({ name, size = 20 }: { name: AppIconName; size?: number 
           <circle cx="5" cy="12" r="1.2" fill="currentColor" />
           <circle cx="12" cy="12" r="1.2" fill="currentColor" />
           <circle cx="19" cy="12" r="1.2" fill="currentColor" />
+        </>
+      )}
+      {name === "report" && (
+        <>
+          <path d="M5 4h14v11H9l-4 4V4Z" {...common} />
+          <path d="M12 7v4M12 13.5h.01" {...common} />
         </>
       )}
       {name === "mute" && (

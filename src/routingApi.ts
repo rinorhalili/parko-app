@@ -1,4 +1,5 @@
 import type { DrivingRoute, Parking, RouteStep } from "./types";
+import { proxyUrl } from "./runtimeUrls";
 
 type Coordinate = Parking["coordinates"];
 
@@ -141,7 +142,7 @@ export async function loadWalkingRoute(
   const forwardAbort = () => timeoutController.abort();
   signal?.addEventListener("abort", forwardAbort, { once: true });
   try {
-    const response = await fetch("/api/walking-route", {
+    const response = await fetch(proxyUrl("/api/walking-route"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -193,7 +194,7 @@ export async function loadDrivingRoute(
   const query =
     "?alternatives=false&steps=true&overview=full&geometries=geojson";
   const endpoints = [
-    `/api/route/${coordinates}${query}`,
+    proxyUrl(`/api/route/${coordinates}${query}`),
     `https://router.project-osrm.org/route/v1/driving/${coordinates}${query}`,
   ];
 
@@ -248,7 +249,7 @@ export async function loadDrivingMatrix(
   const destinationIndexes = candidates.map((_, index) => index + 1).join(";");
   const query = `?sources=0&destinations=${destinationIndexes}&annotations=duration,distance`;
   const endpoints = [
-    `/api/table/${coordinates}${query}`,
+    proxyUrl(`/api/table/${coordinates}${query}`),
     `https://router.project-osrm.org/table/v1/driving/${coordinates}${query}`,
   ];
 
@@ -277,3 +278,4 @@ export async function loadDrivingMatrix(
     distanceMeters: parking.distanceMeters,
   }));
 }
+

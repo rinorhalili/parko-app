@@ -1,4 +1,4 @@
-import { apiRequest, clearAuthTokens, setAuthTokens } from './client'
+import { apiRequest, clearAuthTokens, getNativeRefreshToken, setAuthTokens } from './client'
 import type { AuthTokens, LoginInput, RegisterInput, User } from './types'
 
 export async function login(input: LoginInput) {
@@ -25,7 +25,8 @@ export function verifyEmail(token: string) {
 
 export async function logout() {
   try {
-    await apiRequest('/auth/logout', { method: 'POST', body: JSON.stringify({}) }, false)
+    const refreshToken = await getNativeRefreshToken()
+    await apiRequest('/auth/logout', { method: 'POST', body: JSON.stringify(refreshToken ? { refreshToken } : {}) }, false)
   } finally {
     clearAuthTokens()
   }

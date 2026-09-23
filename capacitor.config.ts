@@ -1,0 +1,32 @@
+import type { CapacitorConfig } from "@capacitor/cli";
+
+const config: CapacitorConfig = {
+  appId: "com.parko.app",
+  appName: "Parko",
+  webDir: "dist",
+  android: {
+    path: "android",
+    backgroundColor: "#f3f7fb",
+    allowMixedContent: false,
+  },
+  server: {
+    androidScheme: "https",
+    cleartext: false,
+  },
+  plugins: {
+    SplashScreen: {
+      launchShowDuration: 1200,
+      launchAutoHide: true,
+      backgroundColor: "#f3f7fb",
+      androidScaleType: "CENTER_CROP",
+      showSpinner: false,
+    },
+    StatusBar: {
+      style: "LIGHT",
+      backgroundColor: "#f3f7fb",
+      overlaysWebView: false,
+    },
+  },
+};
+
+export default config;

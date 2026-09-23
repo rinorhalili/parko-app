@@ -1,5 +1,6 @@
 import NavigationView from "./NavigationView";
 import { AppIcon } from "./ui/Icon";
+import QuickParkingReportSheet, { type QuickParkingReportValue } from "./QuickParkingReportSheet";
 import { BottomSheet, SheetHandle, MapFloatingControl, ParkingActions, PrimaryButton, StatusBadge, InfoRow } from "./ui/components";
 import { useRoutingOrigin } from "./hooks/useRoutingOrigin";
 import Onboarding from "./onboarding/Onboarding";
@@ -150,7 +151,7 @@ type ParkingReport = CommunityParkingReport;
 type ParkingReportPatch = Pick<
   ParkingReport,
   "availability" | "payment" | "policeRisk" | "media"
->;
+> & { description?: string };
 
 function reportAgeLabel(report?: ParkingReport) {
   if (!report) return "";
@@ -983,6 +984,9 @@ function HomeView({
   mapMarkerFilter,
   onMapMarkerFilter,
   loadStatus,
+  canReport,
+  onRequireLogin,
+  onReport,
 }: {
   mapParkings: Parking[];
   selected: Parking;
@@ -1036,9 +1040,13 @@ function HomeView({
   mapMarkerCounts: Record<MapMarkerFilter, number>;
   onMapMarkerFilter: (filter: MapMarkerFilter) => void;
   loadStatus: ParkingLoadStatus;
+  canReport: boolean;
+  onRequireLogin: () => void;
+  onReport: (parkingId: string, patch: ParkingReportPatch) => Promise<void>;
 }) {
   const [sheetState, setSheetState] = useState<SheetState>("medium");
   const [plannerOpen, setPlannerOpen] = useState(false);
+  const [quickReportOpen, setQuickReportOpen] = useState(false);
   const [longPressLocation, setLongPressLocation] = useState<{
     lat: number;
     lng: number;
@@ -1594,16 +1602,19 @@ function HomeView({
             </b>
           </MapFloatingControl>
           <MapFloatingControl
-            className="map-action-button--admin"
+            className={`map-action-button--report ${quickReportOpen ? "map-action-button--active" : ""}`}
             onClick={() => {
-              window.location.assign("/admin");
+              setPlannerOpen(false);
+              onCloseSearch();
+              setQuickReportOpen(true);
             }}
-            aria-label="Hap admin map për pika parkingu"
+            aria-expanded={quickReportOpen}
+            aria-label="Hap raportimet e komunitetit"
           >
             <span>
-              <AppIcon name="pin" />
+              <AppIcon name="report" />
             </span>
-            <b>Admin point</b>
+            <b>Raporto</b>
           </MapFloatingControl>
         </div>
         {!pickingDestination && locationStatus !== "idle" && locationStatus !== "ready" && (
@@ -2005,6 +2016,19 @@ function HomeView({
             )}
           </div>
         </BottomSheet>
+      )}
+
+      {quickReportOpen && (
+        <QuickParkingReportSheet
+          parking={selected}
+          canReport={canReport}
+          onClose={() => setQuickReportOpen(false)}
+          onRequireLogin={() => {
+            setQuickReportOpen(false);
+            onRequireLogin();
+          }}
+          onSubmit={(value: QuickParkingReportValue) => onReport(selected.id, value)}
+        />
       )}
 
       <BottomNav onProfile={onProfile} onSettings={onSettings} />
@@ -4013,6 +4037,7 @@ export default function App() {
                   : undefined,
         payment: patch.payment ?? previous?.payment,
         policeRisk: patch.policeRisk ?? previous?.policeRisk,
+        description: patch.description,
         media: patch.media,
       });
       setParkingReports((current) => {
@@ -4367,6 +4392,9 @@ export default function App() {
               setFilters((current) => ({ ...current, mapMarkerFilter }))
             }
             loadStatus={loadStatus}
+            canReport={Boolean(user)}
+            onRequireLogin={() => setShowLoginModal(true)}
+            onReport={reportParking}
           />
         )}
         {screen === "profile" && (

@@ -1,3 +1,5 @@
+import { proxyUrl } from "./runtimeUrls";
+
 type TelemetryDetails = Record<
   string,
   string | number | boolean | null | undefined
@@ -31,7 +33,7 @@ export function captureEvent(name: string, details: TelemetryDetails = {}) {
   } catch {
     /* Telemetry must never break the app. */
   }
-  void fetch("/api/telemetry", {
+  void fetch(proxyUrl("/api/telemetry"), {
     method: "POST", 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(event),
@@ -47,3 +49,4 @@ export function initTelemetry() {
     captureEvent("unhandled_rejection", { message: String(event.reason) }),
   );
 }
+

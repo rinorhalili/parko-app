@@ -3,6 +3,8 @@ function goHome() {
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
+const supportEmail = import.meta.env.VITE_SUPPORT_EMAIL || "support@parko.app";
+
 export default function Terms() {
   return (
     <div className="screen settings-screen">
@@ -20,7 +22,7 @@ export default function Terms() {
           <small>Parko</small>
           <h1>Parko Terms &amp; Conditions</h1>
           <p>
-            <em>Last updated: [add date when published]</em>
+            <em>Last updated: 23 September 2026</em>
           </p>
         </div>
       </header>
@@ -62,6 +64,14 @@ export default function Terms() {
             abusive material, unsafe content, or content that violates another
             person&apos;s rights. Parko may remove or moderate content that does
             not meet these standards.
+          </p>
+          <p>
+            Prohibited community content includes harassment, hate speech,
+            sexual or violent content, threats, spam, fraud, impersonation,
+            personal data shared without permission, and deliberately false or
+            unsafe parking information. Use the in-app Report and Block controls
+            when you encounter abuse. Repeated or serious violations can result
+            in content removal or account suspension.
           </p>
 
           <h2>5. Prohibited uses</h2>
@@ -105,8 +115,8 @@ export default function Terms() {
           <h2>10. Changes and contact</h2>
           <p>
             We may update these Terms from time to time. The current version
-            will show its publication date above. Questions about these Terms:
-            [support email]
+            will show its publication date above. Questions about these Terms: {" "}
+            <a href={`mailto:${supportEmail}`}>{supportEmail}</a>
           </p>
         </section>
       </main>

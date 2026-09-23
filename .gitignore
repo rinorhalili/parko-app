@@ -5,3 +5,7 @@ dist/
 .env.*
 !.env.example
 !.env.docker.example
+!.env.android.example
+android/keystore.properties
+*.jks
+*.keystore
