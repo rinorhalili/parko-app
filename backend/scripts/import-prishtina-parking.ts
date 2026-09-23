@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { PrismaClient, type ParkingType } from "@prisma/client";
 
 type SnapshotItem = [kind: "node" | "way" | "relation", id: number, lat: number, lng: number, tags: Record<string, string>];
-type OfficialMarker = { markerId: string; code: string | null; title: string; address: string; lat: number; lng: number; capacity: number | null; category: string };
+type OfficialMarker = { markerId: string; code: string | null; title: string; address: string; lat: number; lng: number; capacity: number | null; pricePerHour: number | null; category: string };
 
 const prisma = new PrismaClient();
 const snapshotPath = fileURLToPath(new URL("../../src/osmParkingSnapshot.ts", import.meta.url));
@@ -60,8 +60,8 @@ async function main() {
     const id = `prishtina-parking-${marker.markerId}`;
     await prisma.parkingSpot.upsert({
       where: { id },
-      create: { id, title: marker.title, latitude: marker.lat, longitude: marker.lng, address: marker.address, zone: marker.code ? `Prishtina Parking ${marker.code}` : "Prishtina Parking", type: marker.category === "barrier" ? "GARAGE" : "STREET", capacity: marker.capacity, status: "UNKNOWN" },
-      update: { title: marker.title, latitude: marker.lat, longitude: marker.lng, address: marker.address, zone: marker.code ? `Prishtina Parking ${marker.code}` : "Prishtina Parking", type: marker.category === "barrier" ? "GARAGE" : "STREET", capacity: marker.capacity }
+      create: { id, title: marker.title, latitude: marker.lat, longitude: marker.lng, address: marker.address, zone: marker.code ? `Prishtina Parking ${marker.code}` : "Prishtina Parking", type: marker.category === "barrier" ? "GARAGE" : "STREET", capacity: marker.capacity, pricePerHour: marker.pricePerHour, status: "UNKNOWN" },
+      update: { title: marker.title, latitude: marker.lat, longitude: marker.lng, address: marker.address, zone: marker.code ? `Prishtina Parking ${marker.code}` : "Prishtina Parking", type: marker.category === "barrier" ? "GARAGE" : "STREET", capacity: marker.capacity, pricePerHour: marker.pricePerHour }
     });
     await prisma.$executeRaw`
       UPDATE "ParkingSpot"

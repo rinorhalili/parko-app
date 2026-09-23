@@ -27,16 +27,21 @@ const knownCapacities = new Map([
   ["129", 224],
 ]);
 
-const knownPrices = new Map([
-  ["110", 0.5],
-  ["111", 1],
-  ["112", 1],
-  ["113", 1],
-  ["119", 1],
-  ["125", 0.5],
-  ["127", 0.5],
-  ["129", 0.5],
-]);
+// The municipal tariff is 1 €/hour in Zone 1 and 0.50 €/hour in Zone 2.
+// A codes are explicitly documented as Zone 1; B, D, U and P locations are
+// Zone 2. Commercial and barrier codes span both zones, so keep their Zone 1
+// locations explicit. X1 (Dritan Hoxha) is the published 0.50 €/hour exception.
+// Sources:
+// - https://prishtinaparking.net/leje-tjera/
+// - https://prishtinaparking.net/rreth-nesh/
+// - marker descriptions embedded in https://prishtinaparking.net/harta/
+const zoneOneCodes = new Set(["K1", "K2", "K3", "X2", "X3", "X6"]);
+
+function visitorPrice(marker) {
+  const code = markerCode(marker.title);
+  if (code?.startsWith("A") || zoneOneCodes.has(code)) return 1;
+  return 0.5;
+}
 
 function unescapeHtmlJson(value) {
   return value
@@ -118,7 +123,7 @@ function toOfficialMarker(marker) {
     lat: Number(marker.coord_x),
     lng: Number(marker.coord_y),
     capacity: knownCapacities.get(String(marker.id)) ?? null,
-    pricePerHour: knownPrices.get(String(marker.id)) ?? null,
+    pricePerHour: visitorPrice(marker),
     category: markerCategory(marker),
   };
 }

@@ -8,8 +8,11 @@ describe('Prishtina parking snapshot', () => {
     expect(parkings).toHaveLength(90)
     expect(parkings.every((parking) => parking.source === 'municipal')).toBe(true)
     expect(parkings.every((parking) => parking.municipalManaged)).toBe(true)
+    expect(parkings.every((parking) => parking.pricePerHour !== null)).toBe(true)
     expect(parkings.some((parking) => parking.municipalCode === 'X1' && parking.pricePerHour === 0.5)).toBe(true)
-    expect(parkings.some((parking) => parking.municipalCode === 'K13')).toBe(true)
+    expect(parkings.some((parking) => parking.municipalCode === 'K1' && parking.pricePerHour === 1)).toBe(true)
+    expect(parkings.some((parking) => parking.municipalCode === 'K13' && parking.pricePerHour === 0.5)).toBe(true)
+    expect(parkings.some((parking) => parking.municipalCode === 'X6' && parking.pricePerHour === 1)).toBe(true)
   })
 
   it('keeps interactive map coordinates inside Prishtina', () => {
