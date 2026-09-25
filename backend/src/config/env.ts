@@ -1,6 +1,13 @@
 import "dotenv/config";
 import { z } from "zod";
 
+const mediaStorageConfigured = Boolean(
+  process.env.S3_ENDPOINT &&
+  process.env.S3_ACCESS_KEY_ID &&
+  process.env.S3_SECRET_ACCESS_KEY &&
+  process.env.CLAMAV_HOST,
+);
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(4000),
@@ -26,7 +33,7 @@ const envSchema = z.object({
   VAPID_PRIVATE_KEY: z.string().min(1).optional(),
   VAPID_SUBJECT: z.string().min(1).default("mailto:support@parko.app"),
   TURNSTILE_SECRET_KEY: z.string().min(1).optional()
-  ,MEDIA_UPLOADS_ENABLED: z.coerce.boolean().default(false)
+  ,MEDIA_UPLOADS_ENABLED: z.preprocess(() => process.env.MEDIA_UPLOADS_ENABLED === "true" && mediaStorageConfigured, z.boolean().default(false))
   ,S3_ENDPOINT: z.string().url().optional()
   ,S3_REGION: z.string().min(1).default("us-east-1")
   ,S3_BUCKET: z.string().min(3).max(63).default("parko-media")
@@ -47,11 +54,6 @@ const envSchema = z.object({
   }
   if (value.CORS_ORIGIN.split(",").some((origin) => origin.trim() === "*")) {
     context.addIssue({ code: "custom", path: ["CORS_ORIGIN"], message: "cannot include wildcard origins in production" });
-  }
-  if (value.MEDIA_UPLOADS_ENABLED) {
-    for (const key of ["S3_ENDPOINT", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY", "CLAMAV_HOST"] as const) {
-      if (!value[key]) context.addIssue({ code: "custom", path: [key], message: "is required when media uploads are enabled in production" });
-    }
   }
 });
 
