@@ -46,18 +46,18 @@ const initialRegion: Region = {
 const INTRO_KEY = "parko.mobile.intro.v1";
 const INTRO_STEPS = [
   {
-    title: "Mire se erdhe ne Parko",
+    title: "Mirë se erdhe në Parko",
     body: "Ketu gjen parkingje ne Prishtine, kontrollon lokacionin dhe zgjedh opsionin me te pershtatshem.",
     action: "Vazhdo",
   },
   {
     title: "Harta",
-    body: "Markerat tregojne parkingjet. Preke nje marker per adrese, status dhe rezervim kur parkingu eshte i verifikuar.",
+    body: "Markerat tregojnë parkingjet. Preke një marker për adresë, status dhe rezervim kur parkingu është i verifikuar.",
     action: "Tjetra",
   },
   {
     title: "Lokacioni im",
-    body: "Butoni Perdor lokacionin tim e afron harten te vendndodhja jote. Nese GPS nuk punon, kontrollo lejen e lokacionit ne telefon.",
+    body: "Butoni Përdor lokacionin tim e afron hartën te vendndodhja jote. Nëse GPS nuk punon, kontrollo lejen e lokacionit në telefon.",
     action: "Tjetra",
   },
   {

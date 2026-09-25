@@ -79,7 +79,7 @@ export function MapScreen({ onSelect }: { onSelect?: (parking: MobileParking) =>
           autoCorrect={false}
           clearButtonMode="while-editing"
           onChangeText={setQuery}
-          placeholder="Kerko lokacion ne Prishtine"
+          placeholder="Kërko lokacion në Prishtinë"
           returnKeyType="search"
           style={styles.searchInput}
           value={query}
@@ -102,7 +102,7 @@ export function MapScreen({ onSelect }: { onSelect?: (parking: MobileParking) =>
       </View>
       {!!error && <Text style={styles.locationError}>{error}</Text>}
       <View style={styles.locationButton}>
-        <Button title={loading ? "Duke kerkuar..." : "Perdor lokacionin tim"} onPress={centerOnUser} disabled={loading} />
+        <Button title={loading ? "Duke kërkuar..." : "Përdor lokacionin tim"} onPress={centerOnUser} disabled={loading} />
       </View>
     </View>
   );

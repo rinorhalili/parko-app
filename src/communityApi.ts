@@ -59,7 +59,7 @@ export type ParkingObservation = {
 }
 
 export async function submitParkingObservation(parking: Parking, observation: ParkingObservation) {
-  if (!getAccessToken()) throw new Error('Ky veprim kerkon hyrje ne llogari.')
+  if (!getAccessToken()) throw new Error('Ky veprim kërkon hyrje në llogari.')
   const report = await createParkingReport({
     parkingSpotId: parking.id,
     status: observation.availability ?? 'UNKNOWN',
