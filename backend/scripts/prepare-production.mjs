@@ -12,6 +12,9 @@ try {
   await prisma.$disconnect();
 }
 
-await run("npx", ["prisma", "migrate", "deploy"], { stdio: "inherit" });
+// The repository contains additive migrations without a historical baseline.
+// Sync the fresh Render database from the checked-in schema first; later
+// additive migrations remain available for environments with a baseline.
+await run("npx", ["prisma", "db", "push", "--skip-generate"], { stdio: "inherit" });
 await run("npm", ["run", "import:parking"], { stdio: "inherit" });
 await run("node", ["dist/src/server.js"], { stdio: "inherit" });
