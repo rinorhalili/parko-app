@@ -2,11 +2,11 @@
 
 ## Kredencialet dhe build-i
 
-- [ ] Kopjo `.env.android.example` në `.env.android` dhe vendos URL-të reale HTTPS.
-- [ ] Vendos email real të suportit në `VITE_SUPPORT_EMAIL`.
-- [ ] Krijo upload keystore dhe `android/keystore.properties` nga shembulli.
-- [ ] Ekzekuto `npm run android:assets`.
-- [ ] Ekzekuto `npm run android:bundle`; rezultati pritet te `android/app/build/outputs/bundle/release/app-release.aab`.
+- [x] `.env.android` përdor URL-të reale HTTPS të Render dhe emailin real të suportit.
+- [x] `VITE_SUPPORT_EMAIL=doriangalaxyeu@gmail.com`.
+- [x] Upload keystore dhe `android/keystore.properties` u krijuan lokalisht dhe janë të përjashtuara nga Git.
+- [x] `npm run android:assets` kaloi.
+- [x] `npm run android:bundle` kaloi; AAB: `android/app/build/outputs/bundle/release/app-release.aab`.
 - [ ] Ruaj keystore-in dhe fjalëkalimet në password manager/backup të sigurt.
 
 ## Testimi
@@ -28,3 +28,10 @@
 - [ ] Vendos Privacy Policy dhe Account deletion URL publike HTTPS.
 - [ ] Deklaro lejen e lokacionit vetëm për përdorim foreground; app-i nuk kërkon background location.
 - [ ] Për llogari personale të reja: përfundo closed test me së paku 12 testues për 14 ditë para production access.
+
+## URL-të e prodhimit
+
+- Web: https://parko-app.vercel.app
+- API: https://parko-api-mz8b.onrender.com
+- Privacy: https://parko-app.vercel.app/privacy
+- Account deletion: https://parko-app.vercel.app/delete-account
