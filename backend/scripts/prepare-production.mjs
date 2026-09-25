@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
 import { PrismaClient } from "@prisma/client";
 
@@ -32,4 +32,4 @@ const schemaArgs = hasBaseSchema
   : ["prisma", "db", "push", "--force-reset", "--skip-generate"];
 await run("npx", schemaArgs, { stdio: "inherit" });
 await run("npm", ["run", "import:parking"], { stdio: "inherit" });
-await run("node", ["dist/src/server.js"], { stdio: "inherit" });
+execFileSync("node", ["dist/src/server.js"], { stdio: "inherit" });
