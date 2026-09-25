@@ -9,7 +9,7 @@ let hasBaseSchema = false;
 try {
   await prisma.$connect();
   await prisma.$executeRawUnsafe("CREATE EXTENSION IF NOT EXISTS postgis");
-  const rows = await prisma.$queryRawUnsafe(`SELECT to_regclass('public."User"') AS table_name`);
+  const rows = await prisma.$queryRawUnsafe(`SELECT to_regclass('public."User"')::text AS table_name`);
   hasBaseSchema = Boolean(rows[0]?.table_name);
 } finally {
   await prisma.$disconnect();
