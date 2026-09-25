@@ -48,9 +48,6 @@ const envSchema = z.object({
   if (value.CORS_ORIGIN.split(",").some((origin) => origin.trim() === "*")) {
     context.addIssue({ code: "custom", path: ["CORS_ORIGIN"], message: "cannot include wildcard origins in production" });
   }
-  if (!value.TURNSTILE_SECRET_KEY) {
-    context.addIssue({ code: "custom", path: ["TURNSTILE_SECRET_KEY"], message: "is required in production" });
-  }
   if (value.MEDIA_UPLOADS_ENABLED) {
     for (const key of ["S3_ENDPOINT", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY", "CLAMAV_HOST"] as const) {
       if (!value[key]) context.addIssue({ code: "custom", path: [key], message: "is required when media uploads are enabled in production" });

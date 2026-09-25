@@ -10,7 +10,7 @@ Parko can run without Docker on a hosted Node.js service. Provision a PostgreSQL
 - `PORT` — supplied by the host when applicable
 - `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` — VAPID key pair for browser push notifications
 - `VAPID_SUBJECT` — contact URI for the VAPID identity (defaults to `mailto:support@parko.app`)
-- `TURNSTILE_SECRET_KEY` — Cloudflare Turnstile secret key; it is required in production
+- `TURNSTILE_SECRET_KEY` — optional Cloudflare Turnstile secret key; set it only with the matching web site key
 
 Before the first deploy, run `npm run db:deploy`, `npm run seed`, and `npm run import:parking` against the hosted database. Every future schema change must ship as a reviewed Prisma migration and be applied with `npm run db:deploy`; never use `prisma db push` in production. Deploy the API with `npm run build` followed by `npm start`. Set the web app's `VITE_API_BASE_URL` and `VITE_SOCKET_URL` to the API's HTTPS URL, then rebuild the web app.
 

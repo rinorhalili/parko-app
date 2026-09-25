@@ -24,8 +24,6 @@ services:
         generateValue: true
       - key: CORS_ORIGIN
         sync: false
-      - key: TURNSTILE_SECRET_KEY
-        sync: false
       - key: MEDIA_UPLOADS_ENABLED
         value: false
       - key: EXPO_PUSH_ENABLED
