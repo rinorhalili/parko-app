@@ -12,6 +12,15 @@ const snapshotPath = fileURLToPath(new URL("../../src/osmParkingSnapshot.ts", im
 const officialMarkersPath = fileURLToPath(new URL("../../src/officialPrishtinaParking.ts", import.meta.url));
 const googleMarkersPath = fileURLToPath(new URL("../../src/verifiedGoogleParking.ts", import.meta.url));
 
+function parseTypeScriptArray(source: string, marker: string): unknown[] {
+  const match = source.match(new RegExp(`${marker}[^=]*= \\[([\\s\\S]*?)\\n\\]`));
+  if (!match) throw new Error(`Could not read ${marker}.`);
+  const json = `[${match[1]
+    .replace(/,\\s*$/, "")
+    .replace(/([{,]\\s*)([A-Za-z_$][\\w$]*)(\\s*:)/g, '$1"$2"$3')}]`;
+  return JSON.parse(json) as unknown[];
+}
+
 function parkingType(tags: Record<string, string>): ParkingType {
   if (["private", "customers", "permit"].includes(tags.access?.toLowerCase())) return "PRIVATE";
   if (["multi-storey", "underground"].includes(tags.parking)) return "GARAGE";
@@ -26,23 +35,17 @@ function capacity(tags: Record<string, string>) {
 
 async function loadSnapshot(): Promise<SnapshotItem[]> {
   const source = await readFile(snapshotPath, "utf8");
-  const match = source.match(/OSM_PARKING_SNAPSHOT: OsmParkingSnapshotItem\[\] = \[([\s\S]*?)\n\]/);
-  if (!match) throw new Error("Could not read the bundled OSM parking snapshot.");
-  return JSON.parse(`[${match[1].replace(/,\s*$/, "")}]`) as SnapshotItem[];
+  return parseTypeScriptArray(source, "OSM_PARKING_SNAPSHOT") as SnapshotItem[];
 }
 
 async function loadOfficialMarkers(): Promise<OfficialMarker[]> {
   const source = await readFile(officialMarkersPath, "utf8");
-  const match = source.match(/OFFICIAL_PRISHTINA_PARKING_MARKERS: OfficialPrishtinaParkingMarker\[\] = \[([\s\S]*?)\n\]/);
-  if (!match) throw new Error("Could not read the bundled municipal parking markers.");
-  return JSON.parse(`[${match[1].replace(/,\s*$/, "")}]`) as OfficialMarker[];
+  return parseTypeScriptArray(source, "OFFICIAL_PRISHTINA_PARKING_MARKERS") as OfficialMarker[];
 }
 
 async function loadGoogleMarkers(): Promise<GoogleMarker[]> {
   const source = await readFile(googleMarkersPath, "utf8");
-  const match = source.match(/VERIFIED_GOOGLE_PARKINGS: VerifiedGoogleParkingMarker\[\] = \[([\s\S]*?)\n\]/);
-  if (!match) throw new Error("Could not read the verified Google Maps parking markers.");
-  return JSON.parse(`[${match[1].replace(/,\s*$/, "")}]`) as GoogleMarker[];
+  return parseTypeScriptArray(source, "VERIFIED_GOOGLE_PARKINGS") as GoogleMarker[];
 }
 
 async function main() {
