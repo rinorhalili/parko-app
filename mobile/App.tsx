@@ -47,7 +47,7 @@ const INTRO_KEY = "parko.mobile.intro.v1";
 const INTRO_STEPS = [
   {
     title: "Mirë se erdhe në Parko",
-    body: "Ketu gjen parkingje ne Prishtine, kontrollon lokacionin dhe zgjedh opsionin me te pershtatshem.",
+    body: "Këtu gjen parkingje në Prishtinë, kontrollon lokacionin dhe zgjedh opsionin më të përshtatshëm.",
     action: "Vazhdo",
   },
   {
@@ -62,13 +62,13 @@ const INTRO_STEPS = [
   },
   {
     title: "Komuniteti",
-    body: "Te Komuniteti sheh njoftime dhe postime nga perdoruesit per parkingje, ndryshime dhe probleme ne terren.",
+    body: "Te Komuniteti sheh njoftime dhe postime nga përdoruesit për parkingje, ndryshime dhe probleme në terren.",
     action: "Tjetra",
   },
   {
     title: "Rezervimet dhe Njoftimet",
-    body: "Rezervimet ruajne parkingjet aktive. Njoftimet te lajmerojne per ndryshime, rezervime dhe aktivitet te rendesishem.",
-    action: "Perfundo",
+    body: "Rezervimet ruajnë parkingjet aktive. Njoftimet të lajmërojnë për ndryshime, rezervime dhe aktivitet të rëndësishëm.",
+    action: "Përfundo",
   },
 ] as const;
 

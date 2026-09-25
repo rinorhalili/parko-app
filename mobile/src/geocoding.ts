@@ -15,20 +15,20 @@ const PRISHTINA_BOUNDS = {
 } as const;
 
 const LOCAL_DESTINATIONS: Destination[] = [
-  { id: "nene-tereza", name: "Sheshi Nene Tereza", subtitle: "Qender, Prishtine", latitude: 42.66291, longitude: 21.16551, source: "local" },
-  { id: "zahir-pajaziti", name: "Sheshi Zahir Pajaziti", subtitle: "Qender, Prishtine", latitude: 42.66076, longitude: 21.16345, source: "local" },
-  { id: "biblioteka", name: "Biblioteka Kombetare", subtitle: "Rr. Agim Ramadani", latitude: 42.65754, longitude: 21.16281, source: "local" },
-  { id: "katedralja", name: "Katedralja Nene Tereza", subtitle: "Rr. Justiniani, Prishtine", latitude: 42.65766, longitude: 21.15939, source: "local" },
+  { id: "nene-tereza", name: "Sheshi Nënë Tereza", subtitle: "Qendër, Prishtinë", latitude: 42.66291, longitude: 21.16551, source: "local" },
+  { id: "zahir-pajaziti", name: "Sheshi Zahir Pajaziti", subtitle: "Qendër, Prishtinë", latitude: 42.66076, longitude: 21.16345, source: "local" },
+  { id: "biblioteka", name: "Biblioteka Kombëtare", subtitle: "Rr. Agim Ramadani", latitude: 42.65754, longitude: 21.16281, source: "local" },
+  { id: "katedralja", name: "Katedralja Nënë Tereza", subtitle: "Rr. Justiniani, Prishtinë", latitude: 42.65766, longitude: 21.15939, source: "local" },
   { id: "qkuk", name: "QKUK", subtitle: "Qendra Klinike Universitare", latitude: 42.64891, longitude: 21.16482, source: "local" },
-  { id: "albi-mall", name: "Albi Mall", subtitle: "Veternik, Prishtine", latitude: 42.62341, longitude: 21.15331, source: "local" },
-  { id: "stacioni-autobuseve", name: "Stacioni i Autobuseve", subtitle: "Dardani, Prishtine", latitude: 42.64583, longitude: 21.15092, source: "local" },
-  { id: "germia", name: "Parku i Germise", subtitle: "Germi, Prishtine", latitude: 42.67496, longitude: 21.20072, source: "local" },
-  { id: "rruga-b", name: "Rruga B", subtitle: "Mati 1, Prishtine", latitude: 42.65563, longitude: 21.17618, source: "local" },
-  { id: "dardania", name: "Dardania", subtitle: "Lagje, Prishtine", latitude: 42.65048, longitude: 21.15192, source: "local" },
-  { id: "ulpiana", name: "Ulpiana", subtitle: "Lagje, Prishtine", latitude: 42.65186, longitude: 21.16518, source: "local" },
-  { id: "bregu-diellit", name: "Bregu i Diellit", subtitle: "Lagje, Prishtine", latitude: 42.65694, longitude: 21.17921, source: "local" },
-  { id: "arberia", name: "Arberia", subtitle: "Lagje, Prishtine", latitude: 42.65937, longitude: 21.14481, source: "local" },
-  { id: "mati-1", name: "Mati 1", subtitle: "Lagje, Prishtine", latitude: 42.65385, longitude: 21.18142, source: "local" },
+  { id: "albi-mall", name: "Albi Mall", subtitle: "Veternik, Prishtinë", latitude: 42.62341, longitude: 21.15331, source: "local" },
+  { id: "stacioni-autobuseve", name: "Stacioni i Autobuseve", subtitle: "Dardani, Prishtinë", latitude: 42.64583, longitude: 21.15092, source: "local" },
+  { id: "germia", name: "Parku i Gërmisë", subtitle: "Gërmi, Prishtinë", latitude: 42.67496, longitude: 21.20072, source: "local" },
+  { id: "rruga-b", name: "Rruga B", subtitle: "Mati 1, Prishtinë", latitude: 42.65563, longitude: 21.17618, source: "local" },
+  { id: "dardania", name: "Dardania", subtitle: "Lagje, Prishtinë", latitude: 42.65048, longitude: 21.15192, source: "local" },
+  { id: "ulpiana", name: "Ulpiana", subtitle: "Lagje, Prishtinë", latitude: 42.65186, longitude: 21.16518, source: "local" },
+  { id: "bregu-diellit", name: "Bregu i Diellit", subtitle: "Lagje, Prishtinë", latitude: 42.65694, longitude: 21.17921, source: "local" },
+  { id: "arberia", name: "Arbëria", subtitle: "Lagje, Prishtinë", latitude: 42.65937, longitude: 21.14481, source: "local" },
+  { id: "mati-1", name: "Mati 1", subtitle: "Lagje, Prishtinë", latitude: 42.65385, longitude: 21.18142, source: "local" },
 ];
 
 type NominatimResult = {
@@ -79,11 +79,11 @@ function fromNominatim(result: NominatimResult): Destination | null {
   }
   const address = result.address ?? {};
   const name = result.name ?? address.amenity ?? address.road ?? result.display_name.split(",")[0] ?? "Lokacion";
-  const subtitle = [address.road, address.neighbourhood ?? address.suburb, address.city ?? "Prishtine"].filter(Boolean).join(", ");
+  const subtitle = [address.road, address.neighbourhood ?? address.suburb, address.city ?? "Prishtinë"].filter(Boolean).join(", ");
   return {
     id: `geo-${result.place_id}`,
     name,
-    subtitle: subtitle || "Prishtine",
+    subtitle: subtitle || "Prishtinë",
     latitude,
     longitude,
     source: "geocoder",
@@ -96,7 +96,7 @@ export async function searchPrishtinaDestinations(query: string, signal?: AbortS
   if (normalized.length < 2) return local;
 
   const params = new URLSearchParams({
-    q: `${query}, Prishtine, Kosovo`,
+    q: `${query}, Prishtinë, Kosovo`,
     format: "jsonv2",
     addressdetails: "1",
     namedetails: "1",
