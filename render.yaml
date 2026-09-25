@@ -27,9 +27,9 @@ services:
       - key: CORS_ORIGIN
         sync: false
       - key: MEDIA_UPLOADS_ENABLED
-        value: false
+        value: "false"
       - key: EXPO_PUSH_ENABLED
-        value: false
+        value: "false"
 
   - type: keyvalue
     name: parko-redis
