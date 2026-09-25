@@ -24,7 +24,7 @@
     "check": "tsc -b --pretty false",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test --workers=1",
     "parking:extract:prishtina": "node scripts/extract-prishtina-parking-map.mjs",
     "parking:extract:prishtina:write": "node scripts/extract-prishtina-parking-map.mjs --write",
     "backend:install": "npm install --prefix backend",
