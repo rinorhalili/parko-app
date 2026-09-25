@@ -17,6 +17,7 @@ function parseTypeScriptArray(source: string, marker: string): unknown[] {
   if (!match) throw new Error(`Could not read ${marker}.`);
   const json = `[${match[1]
     .replace(/,\s*([}\]])/g, "$1")
+    .replace(/,\s*$/, "")
     .replace(/'((?:\\.|[^'\\])*)'/g, (_whole, value: string) => JSON.stringify(value.replace(/\\'/g, "'")))
     .replace(/([{,]\s*)([A-Za-z_$][\w$]*)(\s*:)/g, '$1"$2"$3')}]`;
   return JSON.parse(json) as unknown[];
