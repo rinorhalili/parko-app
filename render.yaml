@@ -4,8 +4,7 @@ services:
     runtime: docker
     plan: free
     region: frankfurt
-    rootDir: backend
-    dockerfilePath: ./Dockerfile
+    dockerfilePath: backend/Dockerfile
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
