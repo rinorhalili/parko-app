@@ -26,6 +26,7 @@ const envSchema = z.object({
   VAPID_PRIVATE_KEY: z.string().min(1).optional(),
   VAPID_SUBJECT: z.string().min(1).default("mailto:support@parko.app"),
   TURNSTILE_SECRET_KEY: z.string().min(1).optional()
+  ,MEDIA_UPLOADS_ENABLED: z.coerce.boolean().default(false)
   ,S3_ENDPOINT: z.string().url().optional()
   ,S3_REGION: z.string().min(1).default("us-east-1")
   ,S3_BUCKET: z.string().min(3).max(63).default("parko-media")
@@ -50,8 +51,10 @@ const envSchema = z.object({
   if (!value.TURNSTILE_SECRET_KEY) {
     context.addIssue({ code: "custom", path: ["TURNSTILE_SECRET_KEY"], message: "is required in production" });
   }
-  for (const key of ["S3_ENDPOINT", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY", "CLAMAV_HOST"] as const) {
-    if (!value[key]) context.addIssue({ code: "custom", path: [key], message: "is required in production" });
+  if (value.MEDIA_UPLOADS_ENABLED) {
+    for (const key of ["S3_ENDPOINT", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY", "CLAMAV_HOST"] as const) {
+      if (!value[key]) context.addIssue({ code: "custom", path: [key], message: "is required when media uploads are enabled in production" });
+    }
   }
 });
 

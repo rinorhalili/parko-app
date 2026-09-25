@@ -77,7 +77,8 @@ export function createApp() {
   api.use(reactionRoutes);
   api.use("/notifications", notificationRoutes);
   api.use("/push-subscription", pushSubscriptionRoutes);
-  api.use("/media", mediaRoutes);
+  // Binary uploads remain disabled until storage and malware scanning are configured.
+  if (env.MEDIA_UPLOADS_ENABLED) api.use("/media", mediaRoutes);
   api.use("/zones", zoneRoutes);
   api.use("/search", searchRoutes);
   api.use("/analytics", analyticsRoutes);

@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: parko-api
+    runtime: docker
+    plan: free
+    region: frankfurt
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: parko-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: parko-redis
+          type: keyvalue
+          property: connectionString
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        sync: false
+      - key: TURNSTILE_SECRET_KEY
+        sync: false
+      - key: MEDIA_UPLOADS_ENABLED
+        value: false
+      - key: EXPO_PUSH_ENABLED
+        value: false
+
+  - type: keyvalue
+    name: parko-redis
+    plan: free
+    ipAllowList: []
+
+databases:
+  - name: parko-postgres
+    plan: free
+    databaseName: parko
+    user: parko
