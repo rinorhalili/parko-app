@@ -9,8 +9,9 @@ type SecureStorageLike = {
 
 const isNative = Capacitor.isNativePlatform()
 const configuredApiBase = import.meta.env.VITE_API_BASE_URL?.trim()
-const productionApiBase = isNative ? 'https://parko-api-mz8b.onrender.com/api/v1' : '/api/v1'
-export const API_BASE_URL = (configuredApiBase || (import.meta.env.PROD ? productionApiBase : '/api/v1')).replace(/\/$/, '')
+const nativeApiBase = configuredApiBase || 'https://parko-api-mz8b.onrender.com/api/v1'
+const webApiBase = import.meta.env.PROD ? '/api/v1' : configuredApiBase || '/api/v1'
+export const API_BASE_URL = (isNative ? nativeApiBase : webApiBase).replace(/\/$/, '')
 export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || API_BASE_URL.replace(/\/api\/v1\/?$/, '') || window.location.origin
 
 let accessToken: string | null = null
