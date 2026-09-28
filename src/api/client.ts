@@ -7,7 +7,9 @@ type SecureStorageLike = {
   removeItem: (key: string) => Promise<void>
 }
 
-export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '')
+const configuredApiBase = import.meta.env.VITE_API_BASE_URL?.trim()
+const productionApiBase = 'https://parko-api-mz8b.onrender.com/api/v1'
+export const API_BASE_URL = (configuredApiBase || (import.meta.env.PROD ? productionApiBase : '/api/v1')).replace(/\/$/, '')
 export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || API_BASE_URL.replace(/\/api\/v1\/?$/, '') || window.location.origin
 
 let accessToken: string | null = null
