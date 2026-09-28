@@ -5,8 +5,8 @@ describe('Prishtina parking snapshot', () => {
   it('includes official and manually verified Google Maps locations', () => {
     const parkings = getPrishtinaParkingSnapshot()
 
-    expect(parkings).toHaveLength(105)
-    expect(parkings.filter((parking) => parking.source === 'municipal')).toHaveLength(90)
+    expect(parkings).toHaveLength(121)
+    expect(parkings.filter((parking) => parking.source === 'municipal')).toHaveLength(106)
     expect(parkings.filter((parking) => parking.source === 'google-maps')).toHaveLength(15)
     expect(parkings.filter((parking) => parking.source === 'google-maps' && parking.type === 'private' && parking.pricePerHour === 1)).toHaveLength(11)
     expect(parkings.filter((parking) => parking.source === 'google-maps' && parking.type === 'public' && parking.pricePerHour === 0)).toHaveLength(4)

@@ -27,6 +27,7 @@
     "test:e2e": "playwright test --workers=1",
     "parking:extract:prishtina": "node scripts/extract-prishtina-parking-map.mjs",
     "parking:extract:prishtina:write": "node scripts/extract-prishtina-parking-map.mjs --write",
+    "parking:sync:official": "node scripts/sync-official-parking.mjs",
     "backend:install": "npm install --prefix backend",
     "backend:dev": "npm run dev --prefix backend",
     "backend:build": "npm run build --prefix backend",
