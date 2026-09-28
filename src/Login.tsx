@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import { Capacitor } from '@capacitor/core'
 import { ApiError } from './api/client'
-import { login, register } from './api/authService'
+import { googleLogin, login, register } from './api/authService'
 import { useDialogFocus } from './hooks/useDialogFocus'
 
 type TurnstileWidgetId = string | number
+type GoogleCredentialResponse = { credential?: string }
 
 declare global {
   interface Window {
@@ -17,10 +19,28 @@ declare global {
       reset: (widgetId?: TurnstileWidgetId) => void
       remove: (widgetId: TurnstileWidgetId) => void
     }
+    google?: {
+      accounts: {
+        id: {
+          initialize: (options: { client_id: string; callback: (response: GoogleCredentialResponse) => void }) => void
+          renderButton: (parent: HTMLElement, options: {
+            type: 'standard'
+            theme: 'outline'
+            size: 'large'
+            text: 'signin_with' | 'signup_with'
+            shape: 'rectangular'
+            logo_alignment: 'left'
+            width: number
+          }) => void
+        }
+      }
+    }
   }
 }
 
 const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim()
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim()
+let googleScriptPromise: Promise<void> | null = null
 
 type AuthMode = 'login' | 'register'
 
@@ -28,8 +48,38 @@ interface LoginProps {
   onClose: () => void
 }
 
+function loadGoogleIdentityScript() {
+  if (window.google?.accounts.id) return Promise.resolve()
+  if (googleScriptPromise) return googleScriptPromise
+
+  googleScriptPromise = new Promise<void>((resolve, reject) => {
+    const script = document.createElement('script')
+    script.src = 'https://accounts.google.com/gsi/client'
+    script.async = true
+    script.defer = true
+    script.dataset.parkoGoogleIdentity = 'true'
+    script.onload = () => {
+      if (window.google?.accounts.id) resolve()
+      else {
+        googleScriptPromise = null
+        reject(new Error('Google Identity Services did not initialize'))
+      }
+    }
+    script.onerror = () => {
+      googleScriptPromise = null
+      reject(new Error('Google Identity Services failed to load'))
+    }
+    document.head.appendChild(script)
+  })
+
+  return googleScriptPromise
+}
+
 export default function Login({ onClose }: LoginProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
+  const googleButtonRef = useRef<HTMLDivElement>(null)
+  const googleCredentialHandlerRef = useRef<(credential: string) => void>(() => undefined)
+  const googleInitializedRef = useRef(false)
   useDialogFocus(dialogRef)
   const [mode, setMode] = useState<AuthMode>('login')
   const [email, setEmail] = useState('')
@@ -40,7 +90,10 @@ export default function Login({ onClose }: LoginProps) {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [error, setError] = useState('')
+  const [googleError, setGoogleError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
+  const [googleReady, setGoogleReady] = useState(false)
   const [turnstileToken, setTurnstileToken] = useState('')
   const [acceptedTerms, setAcceptedTerms] = useState(false)
   const turnstileContainerRef = useRef<HTMLDivElement>(null)
@@ -93,36 +146,98 @@ export default function Login({ onClose }: LoginProps) {
     if (turnstileWidgetRef.current !== null) window.turnstile?.reset(turnstileWidgetRef.current)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleGoogleCredential = async (credential: string) => {
+    setError('')
+    setGoogleError('')
+    if (mode === 'register' && !acceptedTerms) {
+      setError('Prano Kushtet e Përdorimit dhe Politikën e Privatësisë para se të krijosh llogari.')
+      return
+    }
+    setGoogleLoading(true)
+    try {
+      const tokens = await googleLogin(credential, mode)
+      if (tokens.user.role === 'ADMIN') {
+        const url = new URL(window.location.href)
+        url.searchParams.set('view', 'dashboard')
+        window.history.replaceState({}, '', url)
+        window.dispatchEvent(new PopStateEvent('popstate'))
+      }
+      onClose()
+    } catch (authError) {
+      setError(authError instanceof ApiError ? authError.message : 'Hyrja me Google dështoi. Provo përsëri.')
+    } finally {
+      setGoogleLoading(false)
+    }
+  }
+
+  googleCredentialHandlerRef.current = (credential) => { void handleGoogleCredential(credential) }
+
+  useEffect(() => {
+    if (!googleClientId || Capacitor.isNativePlatform() || !googleButtonRef.current) return
+    let cancelled = false
+
+    void loadGoogleIdentityScript().then(() => {
+      const parent = googleButtonRef.current
+      if (cancelled || !parent || !window.google) return
+      if (!googleInitializedRef.current) {
+        window.google.accounts.id.initialize({
+          client_id: googleClientId,
+          callback: (response) => {
+            if (response.credential) googleCredentialHandlerRef.current(response.credential)
+            else setError('Google nuk ktheu kredencialet e hyrjes. Provo përsëri.')
+          },
+        })
+        googleInitializedRef.current = true
+      }
+      parent.replaceChildren()
+      window.google.accounts.id.renderButton(parent, {
+        type: 'standard',
+        theme: 'outline',
+        size: 'large',
+        text: mode === 'login' ? 'signin_with' : 'signup_with',
+        shape: 'rectangular',
+        logo_alignment: 'left',
+        width: Math.max(220, Math.min(360, Math.floor(parent.getBoundingClientRect().width))),
+      })
+      setGoogleReady(true)
+      setGoogleError('')
+    }).catch(() => {
+      if (!cancelled) setGoogleError('Nuk u ngarkua hyrja me Google. Kontrollo lidhjen dhe provo përsëri.')
+    })
+
+    return () => {
+      cancelled = true
+      setGoogleReady(false)
+      googleButtonRef.current?.replaceChildren()
+    }
+  }, [mode])
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
     setError('')
 
     if (!email || !password) {
       setError('Plotëso emailin dhe fjalëkalimin.')
       return
     }
-
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      setError('Ju lutem vendosni një adresë emaili të vlefshme.')
+      setError('Vendos një adresë emaili të vlefshme.')
       return
     }
-
     if (turnstileSiteKey && !turnstileToken) {
       setError('Përfundo verifikimin e sigurisë para se të vazhdosh.')
       return
     }
-
     if (mode === 'register' && password !== confirmPassword) {
       setError('Fjalëkalimet nuk përputhen.')
       return
     }
-
     if (mode === 'register' && (password.length < 12 || password.length > 128)) {
       setError('Fjalëkalimi duhet të ketë 12–128 karaktere.')
       return
     }
     if (mode === 'register' && !/^[a-zA-Z0-9_]{3,40}$/.test(username.trim())) {
-      setError('Username duhet të ketë 3–40 karaktere: shkronja, numra ose _.')
+      setError('Emri i përdoruesit duhet të ketë 3–40 karaktere: shkronja, numra ose _.')
       return
     }
     if (mode === 'register' && !acceptedTerms) {
@@ -161,226 +276,103 @@ export default function Login({ onClose }: LoginProps) {
     <div className="login-modal-overlay" onClick={onClose}>
       <style>{`
         .login-modal-overlay {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0, 0, 0, 0.5);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 9999;
-          backdrop-filter: blur(4px);
+          position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center;
+          justify-content: center; overflow-y: auto; padding: 16px;
+          background: rgba(13, 24, 37, .56); backdrop-filter: blur(5px);
         }
-
-        .login-modal {
-          background: white;
-          border-radius: 12px;
-          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-          padding: 40px;
-          width: 100%;
-          max-width: 400px;
-          animation: slideUp 0.3s ease-out;
-          max-height: 90vh;
-          overflow-y: auto;
+        .login-modal-overlay .login-modal {
+          position: relative; width: min(100%, 430px); max-height: calc(100vh - 32px);
+          max-height: calc(100dvh - 32px); overflow-y: auto; padding: 28px;
+          border: 1px solid #e3e9ef; border-radius: 8px; background: #fff;
+          box-shadow: 0 22px 64px rgba(16, 32, 48, .24); animation: login-in .18s ease-out;
         }
-
-        .login-modal::-webkit-scrollbar {
-          width: 6px;
-        }
-
-        .login-modal::-webkit-scrollbar-track {
-          background: var(--surface-soft);
-          border-radius: 10px;
-        }
-
-        .login-modal::-webkit-scrollbar-thumb {
-          background: var(--muted);
-          border-radius: 10px;
-        }
-
-        .login-modal::-webkit-scrollbar-thumb:hover {
-          background: var(--ink);
-        }
-
-        @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
+        @keyframes login-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         .login-close-btn {
-          position: absolute;
-          top: 16px;
-          right: 16px;
-          background: none;
-          border: none;
-          font-size: 24px;
-          cursor: pointer;
-          color: var(--muted);
-          padding: 0;
-          width: 32px;
-          height: 32px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 6px;
-          transition: all 0.2s ease;
+          position: absolute; top: 14px; right: 14px; display: grid; width: 44px; height: 44px;
+          place-items: center; padding: 0; border: 0; border-radius: 6px; background: transparent;
+          color: #667588; font-size: 23px; cursor: pointer;
         }
-
-        .login-close-btn:hover {
-          background: var(--surface-soft);
-          color: var(--ink);
-        }
-
-        .login-modal {
-          position: relative;
-        }
-
-        .login-header {
-          text-align: center;
-          margin-bottom: 32px;
-        }
-
-        .login-title {
-          font-size: 24px;
-          font-weight: 700;
-          color: var(--ink);
-          margin: 0 0 8px 0;
-        }
-
-        .login-tabs {
-          display: flex;
-          gap: 16px;
-          margin-bottom: 24px;
-          border-bottom: 1px solid var(--line);
-        }
-
-        .login-tab {
-          padding: 12px 16px;
-          border: none;
-          background: none;
-          cursor: pointer;
-          font-size: 14px;
-          font-weight: 600;
-          color: var(--muted);
-          transition: all 0.2s ease;
-          border-bottom: 2px solid transparent;
-          position: relative;
-          bottom: -1px;
-        }
-
-        .login-tab.active {
-          color: var(--primary);
-          border-bottom-color: var(--primary);
-        }
-
-        .login-form {
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-        }
-
-        .form-group {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-        }
-
-        .form-label {
-          font-size: 14px;
-          font-weight: 600;
-          color: var(--ink);
-        }
-
-        .form-input {
-          padding: 12px 16px;
-          border: 1px solid var(--line);
-          border-radius: 8px;
-          font-size: 14px;
-          transition: all 0.2s ease;
-          font-family: inherit;
-        }
-
-        .form-input:focus {
-          outline: none;
-          border-color: var(--primary);
-          box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 10%, transparent);
-        }
-
-        .form-input::placeholder {
-          color: var(--muted);
-        }
-
-        .error-message {
-          padding: 12px 16px;
-          background: #fed7d7;
-          border: 1px solid #fc8181;
-          border-radius: 8px;
-          color: #c53030;
-          font-size: 14px;
-          margin-bottom: 8px;
-        }
-
-        .login-button {
-          padding: 12px 24px;
-          background: var(--primary);
-          color: white;
-          border: none;
-          border-radius: 8px;
-          font-size: 16px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.3s ease;
-          margin-top: 8px;
-        }
-
-        .login-button:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 10px 20px color-mix(in srgb, var(--primary) 30%, transparent);
-        }
-
-        .login-button:active:not(:disabled) {
-          transform: translateY(0);
-        }
-
-        .login-button:disabled {
-          opacity: 0.7;
-          cursor: not-allowed;
-        }
-
+        .login-close-btn:hover { background: #f2f5f8; color: #1d2b3a; }
+        .login-header { display: flex; align-items: center; gap: 12px; margin: 0 38px 22px 0; text-align: left; }
+        .login-brand-mark { display: grid; flex: 0 0 40px; width: 40px; height: 40px; place-items: center; border-radius: 8px; background: #e8f0fe; color: #2563eb; font-size: 21px; font-weight: 800; }
+        .login-brand-copy { min-width: 0; }
+        .login-brand-name { margin: 0; color: #1c2a39; font-size: 16px; font-weight: 750; }
+        .login-title { margin: 2px 0 0; color: #435367; font-size: 13px; font-weight: 500; }
+        .login-tabs { display: flex; gap: 20px; margin-bottom: 18px; border-bottom: 1px solid #e4e9ef; }
+        .login-tab { min-height: 42px; padding: 0 5px 10px; border: 0; border-bottom: 2px solid transparent; background: none; color: #67778a; font-size: 14px; font-weight: 650; cursor: pointer; }
+        .login-tab.active { border-bottom-color: #2563eb; color: #1d5fd2; }
+        .google-login-area { margin-bottom: 18px; }
+        .google-button-host { display: flex; min-height: 44px; justify-content: center; width: 100%; }
+        .google-button-host > div { max-width: 100%; }
+        .google-login-area--busy { opacity: .65; pointer-events: none; }
+        .google-auth-note { margin: 0; padding: 10px 12px; border: 1px solid #e4e9ef; border-radius: 6px; color: #65758a; background: #f7f9fb; font-size: 12px; line-height: 1.45; }
+        .login-divider { display: flex; align-items: center; gap: 12px; margin: 0 0 18px; color: #7a8796; font-size: 11px; font-weight: 650; }
+        .login-divider::before, .login-divider::after { flex: 1; height: 1px; background: #e5eaf0; content: ''; }
+        .login-form { display: flex; flex-direction: column; gap: 14px; }
+        .form-group { display: flex; flex-direction: column; gap: 6px; }
+        .form-label { color: #26374a; font-size: 13px; font-weight: 650; }
+        .form-input { box-sizing: border-box; width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #d9e1e9; border-radius: 6px; background: #fff; color: #142536; font: inherit; font-size: 14px; }
+        .form-input:focus { outline: 2px solid rgba(37, 99, 235, .2); border-color: #2563eb; }
+        .form-input::placeholder { color: #8996a5; }
         .password-input-wrap { position: relative; }
-        .password-input-wrap .form-input { box-sizing: border-box; width: 100%; padding-right: 48px; }
-        .password-toggle { position: absolute; top: 50%; right: 12px; display: grid; width: 24px; height: 24px; padding: 0; border: 0; background: transparent; color: var(--muted); cursor: pointer; transform: translateY(-50%); place-items: center; }
+        .password-input-wrap .form-input { padding-right: 48px; }
+        .password-toggle { position: absolute; top: 50%; right: 8px; display: grid; width: 32px; height: 32px; place-items: center; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #67778a; cursor: pointer; transform: translateY(-50%); }
+        .password-toggle:hover { background: #f2f5f8; }
+        .error-message { margin: 0; padding: 10px 12px; border: 1px solid #f3b8b7; border-radius: 6px; background: #fff1f0; color: #a52b27; font-size: 13px; line-height: 1.45; }
+        .login-button { min-height: 46px; margin-top: 2px; padding: 11px 16px; border: 0; border-radius: 6px; background: #2563eb; color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; }
+        .login-button:hover:not(:disabled) { background: #1e55cf; }
+        .login-button:disabled { opacity: .6; cursor: not-allowed; }
+        .legal-consent { display: flex; align-items: flex-start; gap: 9px; color: #56677a; font-size: 12px; line-height: 1.5; }
+        .legal-consent--before-google { margin: 0 0 16px; }
+        .legal-consent input { margin: 3px 0 0; accent-color: #2563eb; }
+        .legal-consent a, .login-legal a { color: #1d5fd2; text-decoration: underline; text-underline-offset: 2px; }
+        .login-legal { margin: 18px 0 0; color: #7a8796; font-size: 11px; line-height: 1.5; text-align: center; }
+        @media (max-width: 480px) {
+          .login-modal-overlay { align-items: center; padding: 12px; }
+          .login-modal-overlay .login-modal { padding: 24px 20px; max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); }
+        }
+        @media (prefers-reduced-motion: reduce) { .login-modal-overlay .login-modal { animation: none; } }
       `}</style>
 
-      <div className="login-modal" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="login-title" tabIndex={-1} onClick={(e) => e.stopPropagation()}>
-        <button className="login-close-btn" onClick={onClose} aria-label="Mbyll hyrjen">×</button>
+      <div className="login-modal" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="login-title" tabIndex={-1} onClick={(event) => event.stopPropagation()}>
+        <button type="button" className="login-close-btn" onClick={onClose} aria-label="Mbyll hyrjen">×</button>
 
-        <div className="login-header">
-          <h2 className="login-title" id="login-title">{mode === 'login' ? 'Hyr në Parko' : 'Krijo llogari'}</h2>
+        <header className="login-header">
+          <div className="login-brand-mark" aria-hidden="true">P</div>
+          <div className="login-brand-copy">
+            <p className="login-brand-name">Parko</p>
+            <h2 className="login-title" id="login-title">{mode === 'login' ? 'Hyr në llogarinë tënde' : 'Krijo llogari në Parko'}</h2>
+          </div>
+        </header>
+
+        <div className="login-tabs" aria-label="Veprimi i llogarisë">
+          <button type="button" aria-pressed={mode === 'login'} className={`login-tab ${mode === 'login' ? 'active' : ''}`} onClick={() => { setMode('login'); setError('') }}>Hyr</button>
+          <button type="button" aria-pressed={mode === 'register'} className={`login-tab ${mode === 'register' ? 'active' : ''}`} onClick={() => { setMode('register'); setError('') }}>Regjistrohu</button>
         </div>
 
-        <div className="login-tabs">
-          <button
-            className={`login-tab ${mode === 'login' ? 'active' : ''}`}
-            onClick={() => { setMode('login'); setError('') }}
-          >
-            Hyr
-          </button>
-          <button
-            className={`login-tab ${mode === 'register' ? 'active' : ''}`}
-            onClick={() => { setMode('register'); setError('') }}
-          >
-            Regjistrohu
-          </button>
+        {mode === 'register' && <label className="legal-consent legal-consent--before-google">
+          <input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} disabled={isLoading || googleLoading} required />
+          <span>Pranoj <a href="/terms" target="_blank" rel="noreferrer">Kushtet e Përdorimit</a> dhe <a href="/privacy" target="_blank" rel="noreferrer">Politikën e Privatësisë</a>.</span>
+        </label>}
+
+        <div className={`google-login-area${googleLoading ? ' google-login-area--busy' : ''}`} aria-busy={googleLoading}>
+          {Capacitor.isNativePlatform() ? (
+            <p className="google-auth-note">Hyrja me Google është e disponueshme në web. Në aplikacion përdor hyrjen me email.</p>
+          ) : mode === 'register' && !acceptedTerms ? (
+            <p className="google-auth-note" role="status">Prano kushtet më sipër për të vazhduar me Google.</p>
+          ) : !googleClientId ? (
+            <p className="google-auth-note" role="status">Hyrja me Google aktivizohet sapo të konfigurohet OAuth Client ID.</p>
+          ) : (
+            <>
+              <div ref={googleButtonRef} className="google-button-host" aria-label={mode === 'login' ? 'Hyr me Google' : 'Regjistrohu me Google'} />
+              {googleError && <p className="google-auth-note" role="status">{googleError}</p>}
+              {googleLoading && <p className="google-auth-note" role="status">Duke verifikuar llogarinë Google…</p>}
+              {!googleReady && !googleError && <p className="google-auth-note" role="status">Duke ngarkuar hyrjen me Google…</p>}
+            </>
+          )}
         </div>
+
+        <div className="login-divider" aria-hidden="true">OSE VAZHDO ME EMAIL</div>
 
         <form className="login-form" onSubmit={handleSubmit}>
           {error && <div className="error-message" role="alert">{error}</div>}
@@ -388,27 +380,17 @@ export default function Login({ onClose }: LoginProps) {
           {mode === 'register' && <>
             <div className="form-group">
               <label className="form-label" htmlFor="name">Emri</label>
-              <input id="name" className="form-input" value={name} onChange={(e) => setName(e.target.value)} disabled={isLoading} autoComplete="name" required />
+              <input id="name" className="form-input" value={name} onChange={(event) => setName(event.target.value)} disabled={isLoading || googleLoading} autoComplete="name" required />
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="username">Emri i përdoruesit</label>
-              <input id="username" className="form-input" value={username} onChange={(e) => setUsername(e.target.value.replace(/\s/g, ''))} disabled={isLoading} autoComplete="username" required />
+              <input id="username" className="form-input" value={username} onChange={(event) => setUsername(event.target.value.replace(/\s/g, ''))} disabled={isLoading || googleLoading} autoComplete="username" required />
             </div>
           </>}
 
           <div className="form-group">
             <label className="form-label" htmlFor="email">Email</label>
-            <input
-              id="email"
-              type="email"
-              className="form-input"
-              placeholder="your@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={isLoading}
-              autoComplete="email"
-              required
-            />
+            <input id="email" type="email" className="form-input" placeholder="emri@shembull.com" value={email} onChange={(event) => setEmail(event.target.value)} disabled={isLoading || googleLoading} autoComplete="email" required />
           </div>
 
           {turnstileSiteKey && <div ref={turnstileContainerRef} aria-label="Verifikimi i sigurisë" />}
@@ -416,59 +398,31 @@ export default function Login({ onClose }: LoginProps) {
           <div className="form-group">
             <label className="form-label" htmlFor="password">Fjalëkalimi</label>
             <div className="password-input-wrap">
-              <input
-                id="password"
-                type={showPassword ? 'text' : 'password'}
-                className="form-input"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={isLoading}
-                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                required
-              />
+              <input id="password" type={showPassword ? 'text' : 'password'} className="form-input" placeholder="Fjalëkalimi" value={password} onChange={(event) => setPassword(event.target.value)} disabled={isLoading || googleLoading} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required />
               <button type="button" className="password-toggle" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Fshih fjalëkalimin' : 'Shfaq fjalëkalimin'}>
                 {showPassword ? <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 4.2A10.7 10.7 0 0 1 12 4c5.5 0 9.3 4.5 10 8-.3 1.3-1 2.7-2 3.9M6.2 6.2C4.4 7.7 3.3 9.8 3 12c.7 3.5 4.5 8 9 8 1.3 0 2.5-.3 3.6-.8" /></svg> : <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 12s3.3-8 9-8 9 8 9 8-3.3 8-9 8-9-8-9-8Z" /><circle cx="12" cy="12" r="3" /></svg>}
               </button>
             </div>
           </div>
 
-          {mode === 'register' && (
+          {mode === 'register' && <>
             <div className="form-group">
               <label className="form-label" htmlFor="confirmPassword">Konfirmo fjalëkalimin</label>
               <div className="password-input-wrap">
-                <input
-                  id="confirmPassword"
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  className="form-input"
-                  placeholder="••••••••"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  disabled={isLoading}
-                  required
-                />
+                <input id="confirmPassword" type={showConfirmPassword ? 'text' : 'password'} className="form-input" placeholder="Konfirmo fjalëkalimin" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} disabled={isLoading || googleLoading} required />
                 <button type="button" className="password-toggle" onClick={() => setShowConfirmPassword((visible) => !visible)} aria-label={showConfirmPassword ? 'Fshih fjalëkalimin' : 'Shfaq fjalëkalimin'}>
                   {showConfirmPassword ? <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 4.2A10.7 10.7 0 0 1 12 4c5.5 0 9.3 4.5 10 8-.3 1.3-1 2.7-2 3.9M6.2 6.2C4.4 7.7 3.3 9.8 3 12c.7 3.5 4.5 8 9 8 1.3 0 2.5-.3 3.6-.8" /></svg> : <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 12s3.3-8 9-8 9 8 9 8-3.3 8-9 8-9-8-9-8Z" /><circle cx="12" cy="12" r="3" /></svg>}
                 </button>
               </div>
             </div>
-          )}
+          </>}
 
-          {mode === 'register' && (
-            <label className="legal-consent">
-              <input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} disabled={isLoading} required />
-              <span>Pranoj <a href="/terms" target="_blank" rel="noreferrer">Kushtet e Përdorimit</a> dhe <a href="/privacy" target="_blank" rel="noreferrer">Politikën e Privatësisë</a>.</span>
-            </label>
-          )}
-
-          <button
-            type="submit"
-            className="login-button"
-            disabled={isLoading || (mode === 'register' && !acceptedTerms)}
-          >
-            {isLoading ? 'Duke pritur…' : mode === 'login' ? 'Hyr' : 'Krijo llogari'}
+          <button type="submit" className="login-button" disabled={isLoading || googleLoading || (mode === 'register' && !acceptedTerms)}>
+            {isLoading ? 'Duke pritur…' : mode === 'login' ? 'Hyr me email' : 'Krijo llogari'}
           </button>
         </form>
+
+        <p className="login-legal">Duke vazhduar, përdorimi yt i Parko-s rregullohet nga <a href="/terms" target="_blank" rel="noreferrer">Kushtet</a> dhe <a href="/privacy" target="_blank" rel="noreferrer">Privatësia</a>.</p>
       </div>
     </div>
   )

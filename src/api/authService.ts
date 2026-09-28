@@ -7,6 +7,12 @@ export async function login(input: LoginInput) {
   return tokens
 }
 
+export async function googleLogin(credential: string, intent: 'login' | 'register') {
+  const tokens = await apiRequest<AuthTokens>('/auth/google', { method: 'POST', body: JSON.stringify({ credential, intent }) })
+  setAuthTokens(tokens)
+  return tokens
+}
+
 export async function register(input: RegisterInput) {
   const tokens = await apiRequest<AuthTokens>('/auth/register', { method: 'POST', body: JSON.stringify(input) })
   setAuthTokens(tokens)

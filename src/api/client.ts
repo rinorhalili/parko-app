@@ -154,7 +154,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}, retry 
     if (init.signal?.aborted) throw error
     throw new ApiError(0, 'Serveri nuk përgjigjet. Provo përsëri.', 'NETWORK_ERROR')
   }
-  if (response.status === 401 && retry && !['/auth/refresh', '/auth/login', '/auth/register'].includes(path)) {
+  if (response.status === 401 && retry && !['/auth/refresh', '/auth/login', '/auth/register', '/auth/google'].includes(path)) {
     const refreshedToken = await refreshOnce()
     if (refreshedToken) return apiRequest<T>(path, init, false)
   }

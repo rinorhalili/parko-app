@@ -101,6 +101,7 @@ export const userController = {
             email: `deleted-${user.id}@parko.invalid`,
             username: `deleted-${user.id}`,
             name: "Përdorues i fshirë",
+            googleId: null,
             avatar: null,
             bio: null,
             passwordHash: await hashPassword(randomUUID()),

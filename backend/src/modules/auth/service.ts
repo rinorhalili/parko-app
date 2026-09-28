@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { Prisma, type Role } from "@prisma/client";
+import { OAuth2Client, type TokenPayload } from "google-auth-library";
 import { env } from "../../config/env.js";
 import { prisma } from "../../database/prisma.js";
 import { conflict, serviceUnavailable, unauthorized } from "../../utils/errors.js";
@@ -11,6 +12,7 @@ const hashToken = (token: string) => crypto.createHash("sha256").update(token).d
 const refreshDays = 30;
 const passwordResetLifetimeMs = 60 * 60 * 1000;
 const emailVerificationLifetimeMs = 24 * 60 * 60 * 1000;
+const googleOAuthClient = new OAuth2Client();
 
 function publicUser(user: { id: string; name: string; username: string; email: string; role: Role; reputationScore: number; avatar: string | null; bio: string | null; isVerified: boolean }) {
   return {
@@ -46,6 +48,77 @@ export async function login(input: { email: string; password: string }, meta?: {
   if (!user || !user.isActive) throw unauthorized("Invalid credentials");
   const ok = await verifyPassword(user.passwordHash, input.password);
   if (!ok) throw unauthorized("Invalid credentials");
+  return issueTokens(user, meta);
+}
+
+function googleUsername(name: string, email: string, subject: string) {
+  const source = name || email.split("@")[0] || "parko";
+  const stem = source.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9_]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "").slice(0, 30) || "parko";
+  const suffix = crypto.createHash("sha256").update(subject).digest("hex").slice(0, 8);
+  return `${stem}_${suffix}`;
+}
+
+function googleAvatar(picture?: string) {
+  if (!picture) return null;
+  try { return new URL(picture).protocol === "https:" ? picture : null; } catch { return null; }
+}
+
+export async function loginWithGoogle(credential: string, intent: "login" | "register", meta?: { ip?: string; userAgent?: string }) {
+  if (!env.GOOGLE_CLIENT_ID) throw serviceUnavailable("Hyrja me Google nuk është konfiguruar ende.");
+
+  let payload: TokenPayload | undefined;
+  try {
+    const ticket = await googleOAuthClient.verifyIdToken({ idToken: credential, audience: env.GOOGLE_CLIENT_ID });
+    payload = ticket.getPayload();
+  } catch {
+    throw unauthorized("Hyrja me Google nuk u verifikua. Provo përsëri.");
+  }
+
+  const email = payload?.email?.trim().toLowerCase();
+  const subject = payload?.sub;
+  if (!payload || !email || !subject || payload.email_verified !== true) {
+    throw unauthorized("Google duhet të konfirmojë adresën e emailit për të vazhduar.");
+  }
+
+  const picture = googleAvatar(payload.picture);
+  let user = await prisma.user.findUnique({ where: { googleId: subject } });
+  if (user && !user.isActive) throw unauthorized("Kjo llogari nuk është aktive.");
+
+  if (!user) {
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      if (!existing.isActive || (existing.googleId && existing.googleId !== subject)) {
+        throw unauthorized("Kjo llogari nuk mund të lidhet me këtë profil Google.");
+      }
+      user = existing.googleId ? existing : await prisma.user.update({
+        where: { id: existing.id },
+        data: { googleId: subject, isVerified: true, ...(existing.avatar ? {} : picture ? { avatar: picture } : {}) }
+      });
+    } else {
+      if (intent === "login") throw unauthorized("Nuk ka ende llogari Parko me këtë email. Zgjidh Regjistrohu për ta krijuar.");
+      const name = (payload.name?.trim() || email.split("@")[0] || "Përdorues Parko").slice(0, 80);
+      try {
+        user = await prisma.user.create({
+          data: {
+            name: name.length >= 2 ? name : "Përdorues Parko",
+            username: googleUsername(name, email, subject),
+            email,
+            googleId: subject,
+            passwordHash: await hashPassword(crypto.randomBytes(32).toString("base64url")),
+            avatar: picture,
+            isVerified: true
+          }
+        });
+      } catch (error) {
+        if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") throw error;
+        user = await prisma.user.findUnique({ where: { googleId: subject } }) ?? await prisma.user.findUnique({ where: { email } });
+        if (!user || !user.isActive || (user.googleId && user.googleId !== subject)) throw unauthorized("Kjo llogari nuk mund të lidhet me këtë profil Google.");
+        if (!user.googleId) user = await prisma.user.update({ where: { id: user.id }, data: { googleId: subject, isVerified: true } });
+      }
+    }
+  }
+
+  if (!user || !user.isActive) throw unauthorized("Kjo llogari nuk është aktive.");
   return issueTokens(user, meta);
 }
 

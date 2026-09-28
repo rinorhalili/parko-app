@@ -7,7 +7,7 @@ import { requireTrustedCookieOrigin } from "../../middleware/csrfOrigin.js";
 import { authRateLimit, sessionRateLimit } from "../../middleware/rateLimit.js";
 import { validate } from "../../middleware/validate.js";
 import { badRequest } from "../../utils/errors.js";
-import { loginSchema, registerSchema, resetPasswordSchema, resetRequestSchema, verifyEmailSchema } from "./validation.js";
+import { googleLoginSchema, loginSchema, registerSchema, resetPasswordSchema, resetRequestSchema, verifyEmailSchema } from "./validation.js";
 
 async function verifyTurnstile(req: Request, _res: Response, next: NextFunction) {
   if (!TURNSTILE_ENABLED) return next();
@@ -38,6 +38,8 @@ export const authRoutes = Router();
 authRoutes.post("/register", authRateLimit, validate({ body: registerSchema }), verifyTurnstile, authController.register);
 
 authRoutes.post("/login", authRateLimit, validate({ body: loginSchema }), verifyTurnstile, authController.login);
+
+authRoutes.post("/google", authRateLimit, validate({ body: googleLoginSchema }), authController.google);
 
 authRoutes.post("/refresh", sessionRateLimit, requireTrustedCookieOrigin, authController.refresh);
 

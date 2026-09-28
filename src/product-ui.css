@@ -912,37 +912,6 @@ button:not(:disabled):active {
 .parking-area--selected {
   filter: drop-shadow(0 0 2px #fff) !important;
 }
-.login-modal-overlay .login-modal {
-  border-radius: 12px;
-  padding: 28px 24px;
-  box-shadow: 0 12px 40px #10203326;
-}
-.login-modal-overlay {
-  backdrop-filter: none !important;
-}
-.login-modal-overlay .login-title {
-  font-size: 23px;
-  font-weight: 600;
-}
-.login-modal-overlay .login-button {
-  min-height: 48px;
-  border-radius: 8px;
-  background: var(--primary);
-}
-.login-modal-overlay .login-tab.active {
-  color: var(--primary);
-  border-color: var(--primary);
-}
-.login-modal-overlay .form-input {
-  min-height: 46px;
-  border-radius: 6px;
-  font-size: 16px;
-}
-.login-modal-overlay .login-close-btn,
-.login-modal-overlay .password-toggle {
-  min-width: 44px;
-  min-height: 44px;
-}
 .screen--top-panel-open .map-action-row {
   visibility: hidden;
 }
@@ -1804,22 +1773,6 @@ button:not(:disabled):active {
   min-height: 52px;
   border-radius: 16px;
   background: var(--primary);
-}
-.login-modal-overlay .login-modal {
-  border-radius: 24px;
-  padding: 32px 24px;
-}
-.login-modal-overlay .login-title {
-  font-size: 26px;
-  letter-spacing: -0.035em;
-}
-.login-modal-overlay .login-button {
-  min-height: 52px;
-  border-radius: 14px;
-}
-.login-modal-overlay .form-input {
-  min-height: 48px;
-  border-radius: 12px;
 }
 .community-spot-card {
   border-radius: 16px;

@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { env } from "../config/env.js";
-import { login, logout, me, refresh, register, requestEmailVerification, requestPasswordReset, resetPassword, verifyEmail } from "../modules/auth/service.js";
+import { login, loginWithGoogle, logout, me, refresh, register, requestEmailVerification, requestPasswordReset, resetPassword, verifyEmail } from "../modules/auth/service.js";
 import { ok } from "../utils/apiResponse.js";
 
 const cookieOptions = { httpOnly: true, secure: env.NODE_ENV === "production", sameSite: "strict" as const, path: "/api" };
@@ -25,6 +25,13 @@ export const authController = {
   async login(req: Request, res: Response, next: NextFunction) {
     try {
       sendSession(res, await login(req.body, { ip: req.ip, userAgent: req.get("user-agent") }), isNativeClient(req.get("x-parko-client")));
+    } catch (error) {
+      next(error);
+    }
+  },
+  async google(req: Request, res: Response, next: NextFunction) {
+    try {
+      sendSession(res, await loginWithGoogle(req.body.credential, req.body.intent, { ip: req.ip, userAgent: req.get("user-agent") }), isNativeClient(req.get("x-parko-client")));
     } catch (error) {
       next(error);
     }

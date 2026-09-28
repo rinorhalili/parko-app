@@ -16,6 +16,11 @@ export const loginSchema = z.object({
   turnstileToken: turnstileTokenSchema
 });
 
+export const googleLoginSchema = z.object({
+  credential: z.string().min(1).max(8192),
+  intent: z.enum(["login", "register"]).default("login")
+});
+
 export const refreshSchema = z.object({
   refreshToken: z.string().min(20)
 });

@@ -20,6 +20,7 @@ const envSchema = z.object({
   JWT_ISSUER: z.string().min(1).default("parko-api"),
   JWT_AUDIENCE: z.string().min(1).default("parko-clients"),
   CORS_ORIGIN: z.string().min(1).default("http://localhost:5173"),
+  GOOGLE_CLIENT_ID: z.string().min(1).optional(),
   LOG_LEVEL: z.string().default("info"),
   PASSWORD_RESET_WEB_URL: z.string().url().optional(),
   EMAIL_VERIFICATION_WEB_URL: z.string().url().optional(),

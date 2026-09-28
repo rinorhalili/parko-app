@@ -9,115 +9,49 @@ export default function Terms() {
   return (
     <div className="screen settings-screen">
       <header className="settings-header">
-        <a
-          href="/"
-          onClick={(event) => {
-            event.preventDefault();
-            goHome();
-          }}
-        >
-          Back
+        <a href="/" onClick={(event) => { event.preventDefault(); goHome(); }}>
+          Kthehu
         </a>
         <div>
           <small>Parko</small>
-          <h1>Parko Terms &amp; Conditions</h1>
-          <p>
-            <em>Last updated: 23 September 2026</em>
-          </p>
+          <h1>Kushtet e Përdorimit</h1>
+          <p><em>Përditësuar më: 28 shtator 2026</em></p>
         </div>
       </header>
       <main className="settings-content">
         <section className="settings-section">
-          <p>
-            These Terms &amp; Conditions govern your use of Parko, a service
-            that helps people find parking in Prishtina, Kosovo.
-          </p>
+          <p>Këto kushte rregullojnë përdorimin e Parko-s, shërbimit që ndihmon në gjetjen dhe raportimin e parkingjeve në Prishtinë.</p>
 
-          <h2>1. Acceptance of these terms</h2>
-          <p>
-            By accessing or using Parko, you agree to these Terms. If you do not
-            agree, please do not use the service.
-          </p>
+          <h2>1. Pranimi i kushteve</h2>
+          <p>Duke hyrë ose përdorur Parko-n, pajtohesh me këto kushte dhe me <a href="/privacy">Politikën e Privatësisë</a>. Nëse nuk pajtohesh, mos e përdor shërbimin.</p>
 
-          <h2>2. The Parko service</h2>
-          <p>
-            Parko provides parking information, including real-time and
-            community-supplied availability reports. It is an informational
-            parking-finder service, not a booking, reservation, or payment
-            service. We do not guarantee that a parking space will be available,
-            lawful to use, or suitable when you arrive.
-          </p>
+          <h2>2. Shërbimi Parko</h2>
+          <p>Parko shfaq informacione për parkingjet, përfshirë raportime nga komuniteti. Informacioni është ndihmës dhe mund të jetë i pasaktë ose i vjetruar. Parko nuk garanton se një vendparkim do të jetë i lirë, i ligjshëm për përdorim ose i përshtatshëm kur të mbërrish. Veçoritë e rezervimit, kur ofrohen, vlejnë vetëm sipas konfirmimit dhe kushteve të paraqitura për atë vend.</p>
 
-          <h2>3. Accounts and security</h2>
-          <p>
-            You are responsible for the accuracy of the information you provide
-            and for keeping your account credentials confidential. You must tell
-            us promptly if you believe your account has been used without
-            permission.
-          </p>
+          <h2>3. Llogaria dhe siguria</h2>
+          <p>Jep të dhëna të sakta dhe ruaji të sigurta kredencialet e llogarisë. Je përgjegjës për veprimet e kryera përmes llogarisë sate. Na njofto nëse dyshon se dikush e ka përdorur pa leje.</p>
 
-          <h2>4. Community content</h2>
-          <p>
-            When you publish a report, photo, post, comment, or other content,
-            you are responsible for it. Community content must be accurate,
-            lawful, and respectful. Do not submit misleading parking reports,
-            abusive material, unsafe content, or content that violates another
-            person&apos;s rights. Parko may remove or moderate content that does
-            not meet these standards.
-          </p>
-          <p>
-            Prohibited community content includes harassment, hate speech,
-            sexual or violent content, threats, spam, fraud, impersonation,
-            personal data shared without permission, and deliberately false or
-            unsafe parking information. Use the in-app Report and Block controls
-            when you encounter abuse. Repeated or serious violations can result
-            in content removal or account suspension.
-          </p>
+          <h2>4. Përmbajtja e komunitetit</h2>
+          <p>Je përgjegjës për raportimet, fotografitë, postimet, komentet dhe përmbajtjet e tjera që publikon. Përmbajtja duhet të jetë e ligjshme, e saktë dhe respektuese. Mos publiko ngacmime, kërcënime, gjuhë urrejtjeje, mashtrime, spam, imitim të personave të tjerë ose të dhëna personale pa leje.</p>
+          <p>Parko mund të shqyrtojë, kufizojë ose heqë përmbajtjen që shkel këto kushte. Shkeljet e përsëritura ose serioze mund të çojnë në pezullimin e llogarisë. Përdor funksionet Raporto dhe Blloko kur has përmbajtje ose sjellje të papërshtatshme.</p>
 
-          <h2>5. Prohibited uses</h2>
-          <p>
-            You may not misuse Parko, interfere with the service, attempt
-            unauthorized access, scrape or overload the service, impersonate
-            another person, submit false information, or use Parko for unlawful
-            activity.
-          </p>
+          <h2>5. Përdorimi i ndaluar</h2>
+          <p>Nuk lejohet keqpërdorimi i shërbimit, ndërhyrja në funksionimin e tij, qasja e paautorizuar, mbledhja automatike e të dhënave pa leje, mbingarkimi i sistemit, imitimi i një personi tjetër ose përdorimi për veprimtari të paligjshme.</p>
 
-          <h2>6. Parking decisions</h2>
-          <p>
-            You remain responsible for checking signs, local rules, payment
-            requirements, access restrictions, and the safety of any place you
-            choose to park. Parko is not responsible for parking tickets,
-            towing, fines, damage, loss, or other consequences of parking
-            decisions made using the service.
-          </p>
+          <h2>6. Vendimet për parkim</h2>
+          <p>Para parkimit, kontrollo vetë tabelat, rregullat lokale, tarifat, kufizimet e qasjes dhe sigurinë. Ti je përgjegjës për vendimin ku parkon dhe për pasojat që lidhen me të. Mos u mbështet vetëm në disponueshmërinë e raportuar në Parko.</p>
 
-          <h2>7. Disclaimer of warranty</h2>
-          <p>
-            Parko is provided on an &quot;as is&quot; and &quot;as
-            available&quot; basis. To the extent permitted by law, we make no
-            warranty that information will be complete, accurate, current,
-            uninterrupted, or error-free.
-          </p>
+          <h2>7. Disponueshmëria dhe garancitë</h2>
+          <p>Parko ofrohet sipas gjendjes së momentit dhe mund të ndërpritet ose të përmbajë gabime. Në masën e lejuar nga ligji, nuk garantojmë që informacioni të jetë i plotë, i saktë, aktual ose pa ndërprerje.</p>
 
-          <h2>8. Limitation of liability</h2>
-          <p>
-            To the extent permitted by law, Parko will not be liable for
-            indirect, incidental, special, consequential, or punitive damages
-            arising from your use of, or inability to use, the service.
-          </p>
+          <h2>8. Përgjegjësia</h2>
+          <p>Në masën e lejuar nga ligji, Parko nuk mban përgjegjësi për dëme të tërthorta ose pasojat e vendimeve të parkimit të marra duke u bazuar në informacionin e shërbimit.</p>
 
-          <h2>9. Governing law</h2>
-          <p>
-            These Terms are governed by the laws of Kosovo. Any dispute related
-            to these Terms will be handled by the competent courts of Kosovo.
-          </p>
+          <h2>9. Ligji i zbatueshëm</h2>
+          <p>Këto kushte interpretohen sipas ligjeve të Kosovës. Mosmarrëveshjet trajtohen nga gjykatat kompetente të Kosovës.</p>
 
-          <h2>10. Changes and contact</h2>
-          <p>
-            We may update these Terms from time to time. The current version
-            will show its publication date above. Questions about these Terms: {" "}
-            <a href={`mailto:${supportEmail}`}>{supportEmail}</a>
-          </p>
+          <h2>10. Ndryshimet dhe kontakti</h2>
+          <p>Mund t’i përditësojmë këto kushte; versioni aktual do të shfaqë datën e përditësimit. Për pyetje, na shkruaj në <a href={`mailto:${supportEmail}`}>{supportEmail}</a>.</p>
         </section>
       </main>
     </div>
