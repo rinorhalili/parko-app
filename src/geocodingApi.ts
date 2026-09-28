@@ -14,6 +14,20 @@ type NominatimResult = {
   address?: Record<string, string>
 }
 
+type PhotonFeature = {
+  geometry: { coordinates: [number, number] }
+  properties: {
+    osm_type?: string
+    osm_id?: number
+    osm_key?: string
+    type?: string
+    name?: string
+    street?: string
+    district?: string
+    city?: string
+  }
+}
+
 type NominatimReverseResult = Omit<NominatimResult, 'place_id' | 'lat' | 'lon' | 'type' | 'class'> & {
   place_id?: number
   lat: string
@@ -97,10 +111,56 @@ function fromNominatim(result: NominatimResult): Destination {
   }
 }
 
+export function fromPhoton(result: PhotonFeature): Destination {
+  const properties = result.properties
+  const [lng, lat] = result.geometry.coordinates
+  const name = properties.name ?? properties.street ?? 'Vend në Prishtinë'
+  const subtitle = [properties.street, properties.district, properties.city]
+    .filter((value, index, values) => value && values.indexOf(value) === index && value !== name)
+    .join(', ') || 'Prishtinë'
+  const key = properties.osm_key ?? ''
+  const type = properties.type ?? ''
+  const category: DestinationCategory =
+    ['highway', 'street', 'road'].includes(key) || ['street', 'road'].includes(type)
+      ? 'street'
+      : ['place', 'district', 'locality', 'borough'].includes(key || type)
+        ? 'area'
+        : ['amenity', 'shop', 'building', 'office', 'leisure', 'tourism', 'healthcare', 'education'].includes(key)
+          ? 'building'
+          : 'place'
+
+  return {
+    id: `photon-${properties.osm_type ?? 'place'}-${properties.osm_id ?? `${lat}-${lng}`}`,
+    name,
+    subtitle,
+    category,
+    coordinates: { lat, lng },
+    aliases: [name, [name, subtitle].filter(Boolean).join(', ')],
+    source: 'geocoder',
+  }
+}
+
+async function searchPhoton(query: string, signal?: AbortSignal) {
+  const params = new URLSearchParams({
+    q: `${query}, Prishtinë`,
+    lat: '42.6608',
+    lon: '21.1608',
+    limit: '8',
+    lang: 'en',
+    bbox: `${PRISHTINA_MAP_BOUNDS.west},${PRISHTINA_MAP_BOUNDS.south},${PRISHTINA_MAP_BOUNDS.east},${PRISHTINA_MAP_BOUNDS.north}`,
+  })
+  const response = await fetch(`https://photon.komoot.io/api/?${params}`, { signal })
+  if (!response.ok) throw new Error(`Photon geocoder returned ${response.status}`)
+  const payload = await response.json() as { features?: PhotonFeature[] }
+  return (payload.features ?? [])
+    .map(fromPhoton)
+    .filter((destination) => isWithinPrishtinaMap(destination.coordinates))
+}
+
 export async function searchDestinationOnline(query: string, signal?: AbortSignal) {
   const normalized = normalizeSearch(query)
   if (normalized.length < 2) return []
-  const cacheKey = `parko-geocode:${normalized}`
+  const cacheKey = `parko-geocode:v2:${normalized}`
   const cached = localStorage.getItem(cacheKey)
   if (cached) return JSON.parse(cached) as Destination[]
 
@@ -119,11 +179,25 @@ export async function searchDestinationOnline(query: string, signal?: AbortSigna
     bounded: '1',
     'accept-language': 'sq,en',
   })
-  const response = await fetch(proxyUrl(`/api/geocode?${params}`), { signal })
-  if (!response.ok) throw new Error(`Geocoder returned ${response.status}`)
-  const destinations = (await response.json() as NominatimResult[])
-    .map(fromNominatim)
-    .filter((destination) => isWithinPrishtinaMap(destination.coordinates))
+  let destinations: Destination[] = []
+  let primaryFailed = false
+  try {
+    const response = await fetch(proxyUrl(`/api/geocode?${params}`), { signal })
+    if (!response.ok) throw new Error(`Nominatim geocoder returned ${response.status}`)
+    destinations = ((await response.json()) as NominatimResult[])
+      .map(fromNominatim)
+      .filter((destination) => isWithinPrishtinaMap(destination.coordinates))
+  } catch (error) {
+    if (signal?.aborted) throw error
+    primaryFailed = true
+  }
+  if (!destinations.length) {
+    try {
+      destinations = await searchPhoton(query, signal)
+    } catch (error) {
+      if (signal?.aborted || primaryFailed) throw error
+    }
+  }
   localStorage.setItem(cacheKey, JSON.stringify(destinations))
   return destinations
 }

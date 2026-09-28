@@ -9,16 +9,17 @@ let root: Root
 beforeEach(() => { host = document.createElement('div'); document.body.append(host); root = createRoot(host) })
 afterEach(async () => { await act(async () => root.unmount()); host.remove() })
 
-it('keeps one primary parking action and forwards every original callback', async () => {
-  const navigate = vi.fn(), details = vi.fn(), street = vi.fn()
+it('keeps one primary parking action and a details action', async () => {
+  const navigate = vi.fn(), details = vi.fn()
   await act(async () => root.render(<ParkingActions onNavigate={navigate} onDetails={details} />))
   const buttons = host.querySelectorAll('button')
   expect(buttons[0].textContent).toBe('Shko këtu')
+  expect(buttons[1].textContent).toBe('Detaje')
+  expect(buttons).toHaveLength(2)
   expect(host.querySelectorAll('.ui-primary')).toHaveLength(1)
   for (const button of buttons) await act(async () => button.click())
   expect(navigate).toHaveBeenCalledOnce()
   expect(details).toHaveBeenCalledOnce()
-  expect(street).toHaveBeenCalledOnce()
 })
 
 it('preserves the sheet DOM ref, controlled state and pointer event handler', async () => {

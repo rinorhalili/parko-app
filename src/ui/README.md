@@ -17,7 +17,7 @@ Presentation primitives for the existing parking journey. No new dependency or a
 - `PrimaryButton`: consistent primary action; does not submit a form by default.
 - `MapFloatingControl`: common map-control surface with caller-owned labels/state/callbacks.
 - `BottomSheet` / `SheetHandle`: common sheet surface and keyboard-accessible handle. Existing screens retain their snap states and gesture handlers.
-- `ParkingActions`: one full-width “Shko këtu” CTA, followed by secondary details/street-view actions.
+- `ParkingActions`: one full-width “Shko këtu” CTA, followed by a secondary details action.
 - `StatusBadge` / `InfoRow`: status and supporting metadata, never color-only.
 - `TripSummary`: supplied time/ETA/distance values; no calculations or invented fallback estimates.
 - `parkingMarkerHtml`: Leaflet-compatible P-marker presentation. Numbers remain cluster counts; restricted access has a dashed outline.
