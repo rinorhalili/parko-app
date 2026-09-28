@@ -33,18 +33,11 @@ export const DEFAULT_MAP_SETTINGS: MapSettings = {
 }
 
 // Retain the original stored IDs so existing preferences still work.
-const MAPTILER_STYLES: Record<MapVariant, string> = {
-  standard: 'streets-v4',
-  minimal: 'dataviz-v4-light',
-  dark: 'streets-v4-dark',
-  satellite: 'hybrid-v4',
-}
-
-const FALLBACK_TILES = {
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    subdomains: 'abc',
-    maxZoom: 19,
-    attribution: 'Harta: <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>',
+const OPENFREEMAP_STYLES: Record<MapVariant, string> = {
+  standard: 'https://tiles.openfreemap.org/styles/liberty',
+  minimal: 'https://tiles.openfreemap.org/styles/positron',
+  dark: 'https://tiles.openfreemap.org/styles/dark',
+  satellite: 'https://tiles.openfreemap.org/styles/bright',
 }
 
 function priceClass(price: number | null | undefined) {
@@ -300,39 +293,35 @@ export default function LiveParkingMap({
     if (baseTileLayerRef.current) map.removeLayer(baseTileLayerRef.current)
     baseTileLayerRef.current = null
     setBasemapError(null)
-    if (MAPTILER_KEY) {
-      // Keep Leaflet's parking layers and interactions above the GL basemap.
-      const layer = maplibreGL({
-        style: `https://api.maptiler.com/maps/${MAPTILER_STYLES[mapSettings.variant]}/style.json?key=${encodeURIComponent(MAPTILER_KEY)}`,
+    const useMapTilerSatellite = mapSettings.variant === 'satellite' && Boolean(MAPTILER_KEY)
+    const style = useMapTilerSatellite
+      ? `https://api.maptiler.com/maps/hybrid-v4/style.json?key=${encodeURIComponent(MAPTILER_KEY!)}`
+      : OPENFREEMAP_STYLES[mapSettings.variant]
+    // Keep Leaflet's parking layers and interactions above the GL basemap.
+    const layer = maplibreGL({
+      style,
+      ...(useMapTilerSatellite ? {
         attributionControl: {
           customAttribution: '&copy; <a href="https://www.maptiler.com/" target="_blank" rel="noopener noreferrer">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>',
         },
-      })
-      try {
-        layer.addTo(map)
-        baseTileLayerRef.current = layer
-        const glMap = layer.getMaplibreMap()
-        const onError = () => setBasemapError('Harta MapTiler nuk u ngarkua. Kontrollo lidhjen dhe çelësin API.')
-        const onIdle = () => setBasemapError(null)
-        glMap.on('error', onError)
-        glMap.on('idle', onIdle)
-        return () => {
-          glMap.off('error', onError)
-          glMap.off('idle', onIdle)
-        }
-      } catch {
-        if (map.hasLayer(layer)) map.removeLayer(layer)
-        setBasemapError('MapLibre nuk mund të hapet. Po shfaqet harta rezervë.')
+      } : {}),
+    })
+    try {
+      layer.addTo(map)
+      baseTileLayerRef.current = layer
+      const glMap = layer.getMaplibreMap()
+      const onError = () => setBasemapError('Harta nuk u ngarkua. Kontrollo lidhjen dhe provo përsëri.')
+      const onIdle = () => setBasemapError(null)
+      glMap.on('error', onError)
+      glMap.on('idle', onIdle)
+      return () => {
+        glMap.off('error', onError)
+        glMap.off('idle', onIdle)
       }
-    } else {
-      setBasemapError(null)
+    } catch {
+      if (map.hasLayer(layer)) map.removeLayer(layer)
+      setBasemapError('Harta nuk mund të hapet. Kontrollo lidhjen dhe provo përsëri.')
     }
-    const tiles = FALLBACK_TILES
-    baseTileLayerRef.current = L.tileLayer(tiles.url, {
-      subdomains: tiles.subdomains,
-      maxZoom: tiles.maxZoom,
-      attribution: tiles.attribution,
-    }).addTo(map)
   }, [mapSettings.variant])
 
   useEffect(() => {
