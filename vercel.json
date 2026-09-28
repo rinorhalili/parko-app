@@ -1,5 +1,9 @@
 {
   "rewrites": [
+    {
+      "source": "/api/v1/:path*",
+      "destination": "https://parko-api-mz8b.onrender.com/api/v1/:path*"
+    },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
