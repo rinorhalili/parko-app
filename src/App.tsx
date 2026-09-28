@@ -38,7 +38,7 @@ import {
   loadDrivingRoute,
   loadWalkingRoute,
 } from "./routingApi";
-import { kartaViewUrl, walkingDirectionsUrl } from "./streetView";
+import { walkingDirectionsUrl } from "./streetView";
 import { handleOpenExternal } from "./externalLinks";
 import { captureEvent } from "./telemetry";
 import {
@@ -563,47 +563,6 @@ function ParkingCard({
   );
 }
 
-function StreetViewPanel({
-  parking,
-  onClose,
-}: {
-  parking: Parking;
-  onClose: () => void;
-}) {
-  const target = parking.accessPoint ?? parking.coordinates;
-  return (
-    <section
-      className="street-view-panel"
-      role="dialog"
-      aria-modal="true"
-      aria-label={`KartaView për ${parking.name}`}
-    >
-      <header>
-        <button type="button" onClick={onClose} aria-label="Mbyll KartaView">
-          ×
-        </button>
-        <span>
-          <small>KartaView</small>
-          <strong>{parking.name}</strong>
-        </span>
-      </header>
-      <iframe
-        title={`KartaView ${parking.name}`}
-        src={kartaViewUrl(parking)}
-        loading="lazy"
-        referrerPolicy="strict-origin-when-cross-origin"
-        allow="fullscreen"
-      />
-      <p>
-        <b>
-          {target.lat.toFixed(5)}, {target.lng.toFixed(5)}
-        </b>
-        <span>{parking.address || "Lokacioni i parkingut"}</span>
-      </p>
-    </section>
-  );
-}
-
 type ParkingTypeFilter = Extract<
   Filters["type"],
   "all" | "public" | "private" | "street" | "municipal"
@@ -976,7 +935,6 @@ function HomeView({
   userLocation,
   onDetails,
   onNavigate,
-  onStreetView,
   onCloseParkingPreview,
   onProfile,
   onSettings,
@@ -1031,7 +989,6 @@ function HomeView({
   userLocation: Parking["coordinates"];
   onDetails: () => void;
   onNavigate: () => void;
-  onStreetView: () => void;
   onCloseParkingPreview: () => void;
   onProfile: () => void;
   onSettings: () => void;
@@ -1837,7 +1794,7 @@ function HomeView({
             )}
           </div>
           <InfoRow icon="pin" label="Adresa e parkingut">{selected.address || "Adresa nuk është konfirmuar"}</InfoRow>
-          <ParkingActions onNavigate={onNavigate} onDetails={onDetails} onStreetView={onStreetView} />
+          <ParkingActions onNavigate={onNavigate} onDetails={onDetails} />
         </BottomSheet>
       )}
       {longPressLocation && (
@@ -1954,7 +1911,7 @@ function HomeView({
                   showDriving={locationStatus === "ready"}
                   onOpen={onDetails}
                 />
-                <ParkingActions onNavigate={onNavigate} onDetails={onDetails} onStreetView={onStreetView} />
+                <ParkingActions onNavigate={onNavigate} onDetails={onDetails} />
               </>
             ) : sheetState === "medium" ? (
               <div className="empty-state">
@@ -2784,7 +2741,6 @@ function DetailsView({
   onToggleSaved,
   onBack,
   onNavigate,
-  onStreetView,
 }: {
   parking: Parking;
   report?: ParkingReport;
@@ -2802,7 +2758,6 @@ function DetailsView({
   onToggleSaved: () => void;
   onBack: () => void;
   onNavigate: () => void;
-  onStreetView: () => void;
 }) {
   const [reportOpen, setReportOpen] = useState(false);
   const [sheetState, setSheetState] = useState<"peek" | "half" | "full">("half");
@@ -3042,14 +2997,6 @@ function DetailsView({
             </p>
           )}
         </section>
-        <button
-          className="street-view-inline street-view-inline--details"
-          onClick={onStreetView}
-          aria-label={`Hap Street View për ${parking.name}`}
-        >
-          ◎ Hap Street View 360°
-        </button>
-
         <h2>Detajet</h2>
         <div className="detail-tags">
           {parking.open24h && <span>24/7 hapur</span>}
@@ -3355,9 +3302,6 @@ export default function App() {
   const [locationStatus, setLocationStatus] = useState<LocationStatus>("idle");
   const [locationTimestamp, setLocationTimestamp] = useState<number | null>(null);
   const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null);
-  const [streetViewParking, setStreetViewParking] = useState<Parking | null>(
-    null,
-  );
 
   useEffect(() => {
     if (!user) return;
@@ -4381,7 +4325,6 @@ export default function App() {
                 return;
               }
             }}
-            onStreetView={() => setStreetViewParking(currentSelected)}
             onCloseParkingPreview={() => setParkingPreviewOpen(false)}
             onProfile={() => setScreen("profile")}
             onSettings={() => setScreen("settings")}
@@ -4497,7 +4440,6 @@ export default function App() {
                 return;
               }
             }}
-            onStreetView={() => setStreetViewParking(currentSelected)}
           />
         )}
         {screen === "navigation" && (
@@ -4536,12 +4478,6 @@ export default function App() {
               onFinish={() => setScreen("home")}
             />
           )}
-        {streetViewParking && (
-          <StreetViewPanel
-            parking={streetViewParking}
-            onClose={() => setStreetViewParking(null)}
-          />
-        )}
       </div>
       <p className="desktop-caption">
         Parko • prototip interaktiv për Prishtinën

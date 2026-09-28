@@ -18,12 +18,11 @@ export function MapFloatingControl({ children, className = '', ...props }: Butto
   return <button type="button" className={`map-action-button ${className}`} {...props}>{children}</button>
 }
 
-export function ParkingActions({ onNavigate, onDetails, onStreetView }: { onNavigate: () => void; onDetails: () => void; onStreetView: () => void }) {
+export function ParkingActions({ onNavigate, onDetails }: { onNavigate: () => void; onDetails: () => void }) {
   return <div className="parking-actions">
     <PrimaryButton onClick={onNavigate}><AppIcon name="route" />Shko këtu</PrimaryButton>
     <div className="parking-actions__secondary">
       <button type="button" onClick={onDetails}><AppIcon name="info" size={18} />Detaje</button>
-      <button type="button" onClick={onStreetView}><AppIcon name="street" size={18} />Street View</button>
     </div>
   </div>
 }

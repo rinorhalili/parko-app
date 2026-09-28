@@ -11,7 +11,7 @@ afterEach(async () => { await act(async () => root.unmount()); host.remove() })
 
 it('keeps one primary parking action and forwards every original callback', async () => {
   const navigate = vi.fn(), details = vi.fn(), street = vi.fn()
-  await act(async () => root.render(<ParkingActions onNavigate={navigate} onDetails={details} onStreetView={street} />))
+  await act(async () => root.render(<ParkingActions onNavigate={navigate} onDetails={details} />))
   const buttons = host.querySelectorAll('button')
   expect(buttons[0].textContent).toBe('Shko këtu')
   expect(host.querySelectorAll('.ui-primary')).toHaveLength(1)
