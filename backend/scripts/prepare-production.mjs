@@ -13,22 +13,11 @@ try {
   await prisma.$disconnect();
 }
 
-// The repository contains additive migrations without a historical baseline.
-// A failed first boot can leave Prisma's migration ledger blocking startup;
-// roll that specific bootstrap attempt back before syncing the schema.
-try {
-  execFileSync("npx", [
-    "prisma",
-    "migrate",
-    "resolve",
-    "--rolled-back",
-    "20260911221000_community_favorites_alerts_media",
-  ], { stdio: "inherit" });
-} catch {
-  // A fresh database has no failed migration to resolve.
-}
-
-// Sync the fresh Render database from the checked-in schema first.
+// Render's existing database may not have a Prisma migration ledger because
+// it predates the checked-in migration history. Sync the schema directly so
+// startup does not fail while trying to resolve a migration that is unknown
+// to that database. db push does not reset existing data unless explicitly
+// requested with --force-reset.
 const schemaArgs = hasBaseSchema
   ? ["prisma", "db", "push", "--skip-generate"]
   : ["prisma", "db", "push", "--force-reset", "--skip-generate"];
