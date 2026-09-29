@@ -17,9 +17,11 @@ try {
 // it predates the checked-in migration history. Sync the schema directly so
 // startup does not fail while trying to resolve a migration that is unknown
 // to that database. db push does not reset existing data unless explicitly
-// requested with --force-reset.
+// requested with --force-reset. The production schema adds nullable unique
+// identifiers over time; accepting Prisma's warning lets it create the
+// constraint without resetting the existing database.
 const schemaArgs = hasBaseSchema
-  ? ["prisma", "db", "push", "--skip-generate"]
+  ? ["prisma", "db", "push", "--accept-data-loss", "--skip-generate"]
   : ["prisma", "db", "push", "--force-reset", "--skip-generate"];
 execFileSync("npx", schemaArgs, { stdio: "inherit" });
 execFileSync("npm", ["run", "import:parking"], { stdio: "inherit" });
