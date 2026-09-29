@@ -15,6 +15,8 @@
     "dev:desktop": "node scripts/electron-launcher.mjs --dev",
     "android:add": "npm run build:android:web && cap add android",
     "android:sync": "npm run build:android:web && cap sync android",
+    "android:dev": "npm run build:android:web && npx cap sync android && npx cap run android",
+    "dev:android": "npm run android:dev",
     "android:open": "cap open android",
     "android:check": "node scripts/check-android-release.mjs",
     "android:assets": "node scripts/generate-android-assets.mjs",
