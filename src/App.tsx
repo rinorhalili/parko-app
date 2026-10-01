@@ -14,6 +14,7 @@ import {
 import LiveParkingMap, { DEFAULT_MAP_SETTINGS } from "./LiveParkingMap";
 import {
   reverseGeocodeLocation,
+  normalizeSearch,
   searchDestinationOnline,
   searchLocalDestinations,
 } from "./geocodingApi";
