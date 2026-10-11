@@ -107,6 +107,14 @@ Copy `.env.example` to `.env`. All integrations are optional:
 - `PARKO_TELEMETRY_URL`: privacy-filtered error/event collector.
 - `VITE_PUSH_PUBLIC_KEY` and `PARKO_PUSH_SUBSCRIPTION_URL`: Web Push reminders that can fire after the PWA is closed.
 
+## Google sign-in
+
+Google sign-in uses the native Credential Manager flow on Android and Google Identity Services on the web. Set the same OAuth **Web application client ID** in `VITE_GOOGLE_CLIENT_ID` (the frontend build environment) and `GOOGLE_CLIENT_ID` (the backend environment). The ID is public client configuration, not a client secret.
+
+For Android, create OAuth Android clients in the same Google Cloud project with package name `com.parko.app`. Register the SHA-1 certificate fingerprints for local debug builds and for the **Play App Signing** certificate shown in Play Console. The upload-key SHA-1 does not replace the Play App Signing SHA-1. Rebuild and upload a new Android bundle after changing native sign-in code or OAuth configuration.
+
+The web client ID is intentionally not committed. Without it, the app shows a setup message and Google sign-in stays unavailable; password sign-in continues to work.
+
 ## Community backend (Supabase)
 
 The map works without community data, but sign-in and live community reports require a Supabase project. Create a project, enable PostGIS, then run [`supabase/schema.sql`](supabase/schema.sql) once in the Supabase SQL editor. The script creates the profile trigger, secure RLS policies, PostGIS indexes, moderated-content tables, reputation audit trail, and Realtime publications.

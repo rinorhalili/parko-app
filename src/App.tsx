@@ -6,7 +6,7 @@ import { useRoutingOrigin } from "./hooks/useRoutingOrigin";
 import Onboarding from "./onboarding/Onboarding";
 import { useOnboarding } from "./onboarding/useOnboarding";
 import { LeavingButton, SpotVouching, useCrowdSourcing } from "./crowdsourcing";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   loadVerifiedAvailability,
   mergeVerifiedAvailability,
@@ -31,6 +31,7 @@ import {
   USER_LOCATION,
 } from "./parkingApi";
 import { parkingAccessPoint } from "./parkingGeometry";
+import { searchParkingDestinations } from "./parkingSearch";
 import { PRISHTINA_PARKING_RULES_URL } from "./prishtinaParkingRules";
 import { loadPreferences, savePreferences } from "./persistence";
 import {
@@ -942,9 +943,11 @@ function HomeView({
   mapMarkerFilter,
   onMapMarkerFilter,
   loadStatus,
+  refreshingData,
   canReport,
   onRequireLogin,
   onReport,
+  onRefresh,
 }: {
   mapParkings: Parking[];
   selected: Parking;
@@ -997,9 +1000,11 @@ function HomeView({
   mapMarkerCounts: Record<MapMarkerFilter, number>;
   onMapMarkerFilter: (filter: MapMarkerFilter) => void;
   loadStatus: ParkingLoadStatus;
+  refreshingData: boolean;
   canReport: boolean;
   onRequireLogin: () => void;
   onReport: (parkingId: string, patch: ParkingReportPatch) => Promise<void>;
+  onRefresh: () => void;
 }) {
   const [sheetState, setSheetState] = useState<SheetState>("medium");
   const [plannerOpen, setPlannerOpen] = useState(false);
@@ -1050,7 +1055,7 @@ function HomeView({
     [rankedParkings],
   );
   const localResults = searchResults.filter(
-    (result) => result.source === "local",
+    (result) => result.source === "local" || result.source === "map",
   );
   const remoteResults = searchResults.filter(
     (result) => result.source === "geocoder",
@@ -1343,7 +1348,7 @@ function HomeView({
               onKeyDown={(event) => {
                 if (event.key !== "Enter") return;
                 event.preventDefault();
-                const firstResult = localResults[0] ?? remoteResults[0];
+                const firstResult = searchResults[0];
                 if (firstResult) onSelectDestination(firstResult);
                 else onSearchOnline();
               }}
@@ -1572,6 +1577,18 @@ function HomeView({
               <AppIcon name="report" />
             </span>
             <b>Raporto</b>
+          </MapFloatingControl>
+          <MapFloatingControl
+            className={refreshingData ? "map-action-button--refreshing" : ""}
+            onClick={onRefresh}
+            disabled={refreshingData}
+            aria-label={refreshingData ? "Duke rifreskuar parkingjet" : "Rifresko parkingjet"}
+            title="Rifresko parkingjet dhe zënien"
+          >
+            <span>
+              <AppIcon name="refresh" />
+            </span>
+            <b>{refreshingData ? "Duke rifreskuar" : "Rifresko"}</b>
           </MapFloatingControl>
         </div>
         {!pickingDestination && locationStatus !== "idle" && locationStatus !== "ready" && (
@@ -3260,6 +3277,7 @@ export default function App() {
     getPrishtinaParkingSnapshot,
   );
   const [loadStatus, setLoadStatus] = useState<ParkingLoadStatus>("loading");
+  const [refreshingData, setRefreshingData] = useState(false);
   const [route, setRoute] = useState<DrivingRoute | null>(null);
   const [routeNotice, setRouteNotice] = useState("");
   const [routeLoading, setRouteLoading] = useState(false);
@@ -3321,6 +3339,87 @@ export default function App() {
   const parkingSelectedByUserRef = useRef(false);
   const parkingDetailsAttemptedRef = useRef(new Set<string>());
   const onlineSearchRequestRef = useRef(0);
+  const parkingRefreshControllerRef = useRef<AbortController | null>(null);
+  const availabilityRefreshControllerRef = useRef<AbortController | null>(null);
+
+  const refreshParkingData = useCallback(async (force = false) => {
+    const activeController = parkingRefreshControllerRef.current;
+    if (activeController) {
+      if (!force) return;
+      activeController.abort();
+    }
+
+    const controller = new AbortController();
+    parkingRefreshControllerRef.current = controller;
+    try {
+      const results = await loadPrishtinaParkings(controller.signal, (next) => {
+        if (controller.signal.aborted) return;
+        setParkings(next);
+        setLoadStatus("live");
+      }, { forceOsmRefresh: force });
+      if (controller.signal.aborted) return;
+      setParkings(results);
+      setLoadStatus("live");
+      const restored = results.find(
+        (parking) => parking.id === persistedPreferences.selectedParkingId,
+      );
+      setSelected((current) => {
+        if (parkingSelectedByUserRef.current) return current;
+        return restored ?? (current.id === EMPTY_SELECTED_PARKING.id ? results[0] ?? current : current);
+      });
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setParkings((current) => current.length ? current : getPrishtinaParkingSnapshot());
+      setLoadStatus((current) => current === "loading" ? "fallback" : current);
+      captureEvent("parking_data_refresh_failed", {
+        reason: error instanceof Error ? error.name : "unknown",
+      });
+    } finally {
+      if (parkingRefreshControllerRef.current === controller)
+        parkingRefreshControllerRef.current = null;
+    }
+  }, [persistedPreferences.selectedParkingId]);
+
+  const refreshAvailabilityData = useCallback(async (force = false) => {
+    const activeController = availabilityRefreshControllerRef.current;
+    if (activeController) {
+      if (!force) return;
+      activeController.abort();
+    }
+
+    const controller = new AbortController();
+    availabilityRefreshControllerRef.current = controller;
+    try {
+      const feed = await loadVerifiedAvailability(controller.signal);
+      if (feed && !controller.signal.aborted) {
+        setParkings((current) => mergeVerifiedAvailability(current, feed));
+        captureEvent("occupancy_feed_refreshed", {
+          source: feed.source,
+          count: feed.parkings.length,
+        });
+      }
+    } catch {
+      if (!controller.signal.aborted) captureEvent("occupancy_feed_failed");
+    } finally {
+      if (availabilityRefreshControllerRef.current === controller)
+        availabilityRefreshControllerRef.current = null;
+    }
+  }, []);
+
+  const refreshNetworkData = useCallback(async (force = false) => {
+    await refreshParkingData(force);
+    await refreshAvailabilityData(force);
+  }, [refreshAvailabilityData, refreshParkingData]);
+
+  const handleRefreshData = useCallback(async () => {
+    setRefreshingData(true);
+    try {
+      await refreshNetworkData(true);
+    } finally {
+      setRefreshingData(false);
+    }
+  }, [refreshNetworkData]);
+
   const userLocationInPrishtina =
     locationStatus === "ready" && isWithinPrishtinaMap(userLocation);
   const activeUserLocation = userLocationInPrishtina
@@ -3417,63 +3516,28 @@ export default function App() {
   }, [selected.id]);
 
   useEffect(() => {
-    const controller = new AbortController();
-    loadPrishtinaParkings(controller.signal, setParkings)
-      .then((results) => {
-        setParkings(results);
-        setLoadStatus("live");
-        const restored = results.find(
-          (parking) => parking.id === persistedPreferences.selectedParkingId,
-        );
-        if (restored && !parkingSelectedByUserRef.current)
-          setSelected(restored);
-        else if (results[0] && selected.id === EMPTY_SELECTED_PARKING.id)
-          setSelected(results[0]);
-      })
-      .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === "AbortError")
-          return;
-        setParkings(getPrishtinaParkingSnapshot());
-        setLoadStatus("fallback");
-      });
-    return () => controller.abort();
-  }, []);
-
-  useEffect(() => {
-    let disposed = false;
-    const refresh = async () => {
-      const controller = new AbortController();
-      try {
-        const feed = await loadVerifiedAvailability(controller.signal);
-        if (feed && !disposed) {
-          setParkings((current) => mergeVerifiedAvailability(current, feed));
-          captureEvent("occupancy_feed_refreshed", {
-            source: feed.source,
-            count: feed.parkings.length,
-          });
-        }
-      } catch {
-        captureEvent("occupancy_feed_failed");
-      }
-      return controller;
+    const refreshIfAvailable = () => {
+      if (navigator.onLine && document.visibilityState === "visible")
+        void refreshNetworkData();
     };
-    void refresh();
-    const interval = window.setInterval(() => void refresh(), 60_000);
+    const updateConnection = () => {
+      setOnline(navigator.onLine);
+      refreshIfAvailable();
+    };
+    const interval = window.setInterval(refreshIfAvailable, 5 * 60_000);
+    void refreshNetworkData();
+    window.addEventListener("online", updateConnection);
+    window.addEventListener("offline", updateConnection);
+    document.addEventListener("visibilitychange", refreshIfAvailable);
     return () => {
-      disposed = true;
       window.clearInterval(interval);
+      window.removeEventListener("online", updateConnection);
+      window.removeEventListener("offline", updateConnection);
+      document.removeEventListener("visibilitychange", refreshIfAvailable);
+      parkingRefreshControllerRef.current?.abort();
+      availabilityRefreshControllerRef.current?.abort();
     };
-  }, []);
-
-  useEffect(() => {
-    const update = () => setOnline(navigator.onLine);
-    window.addEventListener("online", update);
-    window.addEventListener("offline", update);
-    return () => {
-      window.removeEventListener("online", update);
-      window.removeEventListener("offline", update);
-    };
-  }, []);
+  }, [refreshNetworkData]);
 
   function updateLocationFromPosition(
     position: GeolocationPosition,
@@ -3607,9 +3671,13 @@ export default function App() {
     () => searchLocalDestinations(query),
     [query],
   );
+  const parkingSearchResults = useMemo(
+    () => searchParkingDestinations(locatedParkings, query),
+    [locatedParkings, query],
+  );
   const searchResults = useMemo(() => {
     const seen = new Set<string>();
-    return [...localSearchResults, ...onlineSearchResults]
+    return [...parkingSearchResults, ...localSearchResults, ...onlineSearchResults]
       .filter((result) => {
         const key = `${result.name.toLowerCase()}-${result.coordinates.lat.toFixed(4)}-${result.coordinates.lng.toFixed(4)}`;
         if (seen.has(key)) return false;
@@ -3617,7 +3685,7 @@ export default function App() {
         return true;
       })
       .slice(0, 9);
-  }, [localSearchResults, onlineSearchResults]);
+  }, [localSearchResults, onlineSearchResults, parkingSearchResults]);
 
   const candidates = useMemo(
     () =>
@@ -4335,9 +4403,11 @@ export default function App() {
               setFilters((current) => ({ ...current, mapMarkerFilter }))
             }
             loadStatus={loadStatus}
+            refreshingData={refreshingData}
             canReport={Boolean(user)}
             onRequireLogin={() => setShowLoginModal(true)}
             onReport={reportParking}
+            onRefresh={() => void handleRefreshData()}
           />
         )}
         {screen === "profile" && (

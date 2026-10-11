@@ -18,6 +18,8 @@ export const PRISHTINA_MAP_BOUNDS = {
 } as const;
 const PRISHTINA_PARKING_BOUNDS = "42.625,21.115,42.690,21.215";
 const USER_LOCATION = { lat: 42.6582, lng: 21.1585 };
+const OSM_CACHE_TTL_MS = 30 * 60_000;
+let osmParkingCache: { parkings: Parking[]; fetchedAt: number } | null = null;
 
 function isBundledParkingId(id: string) {
   return id.startsWith("osm-") || id.startsWith("prishtina-parking-") || id.startsWith("google-maps-");
@@ -453,7 +455,12 @@ async function loadBackendParkingSpots(signal?: AbortSignal) {
     });
 }
 
-async function loadOsmParkings(signal?: AbortSignal) {
+async function loadOsmParkings(signal?: AbortSignal, force = false) {
+  if (
+    !force &&
+    osmParkingCache &&
+    Date.now() - osmParkingCache.fetchedAt < OSM_CACHE_TTL_MS
+  ) return osmParkingCache.parkings;
   const query = `[out:json][timeout:30];nwr["amenity"="parking"](${PRISHTINA_PARKING_BOUNDS});out body center geom;`;
   let payload: OverpassResponse | null = null;
   let lastError: unknown = new Error("Overpass is unavailable");
@@ -497,9 +504,11 @@ async function loadOsmParkings(signal?: AbortSignal) {
     officialParkings,
     30,
   );
-  return [...officialParkings, ...osmWithoutDuplicates].sort(
+  const parkings = [...officialParkings, ...osmWithoutDuplicates].sort(
     (a, b) => a.distanceMeters - b.distanceMeters,
   );
+  osmParkingCache = { parkings, fetchedAt: Date.now() };
+  return parkings;
 }
 
 export function mergeParkingSources(mapped: Parking[], backend: Parking[]) {
@@ -527,22 +536,35 @@ export function mergeParkingSources(mapped: Parking[], backend: Parking[]) {
 export async function loadPrishtinaParkings(
   signal?: AbortSignal,
   onUpdate?: (parkings: Parking[]) => void,
+  options: { forceOsmRefresh?: boolean } = {},
 ) {
   const mapped = getPrishtinaParkingSnapshot();
   let backend: Parking[] = [];
+  let osm: Parking[] = [];
+  const combine = () =>
+    mergeParkingSources(
+      [...mapped, ...withoutDuplicates(osm, mapped, 30)],
+      backend,
+    );
   const publish = () => {
-    if (!signal?.aborted) onUpdate?.(mergeParkingSources(mapped, backend));
+    if (!signal?.aborted) onUpdate?.(combine());
   };
   const results = await Promise.allSettled([
     loadBackendParkingSpots(signal).then((data) => {
       backend = data;
       publish();
     }),
+    loadOsmParkings(signal, options.forceOsmRefresh).then((data) => {
+      osm = data;
+      publish();
+    }),
   ]);
   if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
   if (results.every((result) => result.status === "rejected"))
-    throw new Error("Parking updates unavailable");
-  return mergeParkingSources(mapped, backend);
+    throw results[0].status === "rejected"
+      ? results[0].reason
+      : new Error("Parking updates unavailable");
+  return combine();
 }
 
 type OsmApiElement = {

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
+import { SocialLogin } from '@capgo/capacitor-social-login'
 import { ApiError } from './api/client'
 import { googleLogin, login, register } from './api/authService'
 import { useDialogFocus } from './hooks/useDialogFocus'
@@ -41,6 +42,7 @@ declare global {
 const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim()
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim()
 let googleScriptPromise: Promise<void> | null = null
+let nativeGoogleInitialization: Promise<void> | null = null
 
 type AuthMode = 'login' | 'register'
 
@@ -73,6 +75,19 @@ function loadGoogleIdentityScript() {
   })
 
   return googleScriptPromise
+}
+
+function initializeNativeGoogleLogin() {
+  if (!googleClientId) return Promise.reject(new Error('Google OAuth Client ID is missing'))
+  if (!nativeGoogleInitialization) {
+    nativeGoogleInitialization = SocialLogin.initialize({
+      google: { webClientId: googleClientId, mode: 'online' },
+    }).catch((error: unknown) => {
+      nativeGoogleInitialization = null
+      throw error
+    })
+  }
+  return nativeGoogleInitialization
 }
 
 export default function Login({ onClose }: LoginProps) {
@@ -170,11 +185,51 @@ export default function Login({ onClose }: LoginProps) {
     }
   }
 
+  const handleNativeGoogleLogin = async () => {
+    setError('')
+    setGoogleError('')
+    if (mode === 'register' && !acceptedTerms) {
+      setError('Prano Kushtet e Përdorimit dhe Politikën e Privatësisë para se të krijosh llogari.')
+      return
+    }
+    setGoogleLoading(true)
+    try {
+      const response = await SocialLogin.login({
+        provider: 'google',
+        options: { scopes: ['email', 'profile'], style: 'standard', filterByAuthorizedAccounts: false },
+      })
+      const credential = 'idToken' in response.result ? response.result.idToken : null
+      if (!credential) throw new Error('Google nuk ktheu ID token')
+      await handleGoogleCredential(credential)
+    } catch (authError) {
+      setError(authError instanceof ApiError
+        ? authError.message
+        : 'Hyrja me Google dështoi. Kontrollo OAuth Client ID dhe SHA-1 në Google Cloud, pastaj provo përsëri.')
+    } finally {
+      setGoogleLoading(false)
+    }
+  }
+
   googleCredentialHandlerRef.current = (credential) => { void handleGoogleCredential(credential) }
 
   useEffect(() => {
-    if (!googleClientId || Capacitor.isNativePlatform() || !googleButtonRef.current) return
+    if (!googleClientId || (!Capacitor.isNativePlatform() && !googleButtonRef.current)) return
     let cancelled = false
+
+    if (Capacitor.isNativePlatform()) {
+      void initializeNativeGoogleLogin().then(() => {
+        if (!cancelled) {
+          setGoogleReady(true)
+          setGoogleError('')
+        }
+      }).catch(() => {
+        if (!cancelled) setGoogleError('Hyrja me Google nuk u inicializua. Kontrollo Client ID dhe konfigurimin Android.')
+      })
+      return () => {
+        cancelled = true
+        setGoogleReady(false)
+      }
+    }
 
     void loadGoogleIdentityScript().then(() => {
       const parent = googleButtonRef.current
@@ -304,6 +359,8 @@ export default function Login({ onClose }: LoginProps) {
         .google-login-area { margin-bottom: 18px; }
         .google-button-host { display: flex; min-height: 44px; justify-content: center; width: 100%; }
         .google-button-host > div { max-width: 100%; }
+        .google-native-button { width: 100%; min-height: 44px; border: 1px solid #dadce0; border-radius: 6px; background: #fff; color: #3c4043; font-size: 14px; font-weight: 600; cursor: pointer; }
+        .google-native-button:disabled { opacity: .6; cursor: not-allowed; }
         .google-login-area--busy { opacity: .65; pointer-events: none; }
         .google-auth-note { margin: 0; padding: 10px 12px; border: 1px solid #e4e9ef; border-radius: 6px; color: #65758a; background: #f7f9fb; font-size: 12px; line-height: 1.45; }
         .login-divider { display: flex; align-items: center; gap: 12px; margin: 0 0 18px; color: #7a8796; font-size: 11px; font-weight: 650; }
@@ -356,8 +413,16 @@ export default function Login({ onClose }: LoginProps) {
         </label>}
 
         <div className={`google-login-area${googleLoading ? ' google-login-area--busy' : ''}`} aria-busy={googleLoading}>
-          {Capacitor.isNativePlatform() ? (
-            <p className="google-auth-note">Hyrja me Google është e disponueshme në web. Në aplikacion përdor hyrjen me email.</p>
+          {Capacitor.isNativePlatform() ? !googleClientId ? (
+            <p className="google-auth-note" role="status">Hyrja me Google kërkon OAuth Web Client ID në konfigurimin e aplikacionit dhe Client ID Android me SHA-1 në Google Cloud.</p>
+          ) : (
+            <>
+              <button type="button" className="google-native-button" onClick={() => void handleNativeGoogleLogin()} disabled={!googleReady || googleLoading || (mode === 'register' && !acceptedTerms)}>
+                {googleLoading ? 'Duke hyrë me Google…' : mode === 'login' ? 'Vazhdo me Google' : 'Regjistrohu me Google'}
+              </button>
+              {googleError && <p className="google-auth-note" role="status">{googleError}</p>}
+              {!googleReady && !googleError && <p className="google-auth-note" role="status">Duke përgatitur hyrjen me Google…</p>}
+            </>
           ) : mode === 'register' && !acceptedTerms ? (
             <p className="google-auth-note" role="status">Prano kushtet më sipër për të vazhduar me Google.</p>
           ) : !googleClientId ? (

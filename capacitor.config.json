@@ -12,6 +12,18 @@
     "cleartext": false
   },
   "plugins": {
+    "SocialLogin": {
+      "providers": {
+        "google": true,
+        "facebook": false,
+        "apple": false,
+        "twitter": false,
+        "telegram": false,
+        "linkedin": false,
+        "tiktok": false
+      },
+      "logLevel": 1
+    },
     "SplashScreen": {
       "launchShowDuration": 1200,
       "launchAutoHide": true,

@@ -1403,6 +1403,18 @@ input:focus-visible {
   color: #d97706;
 }
 
+.map-action-button--refreshing .app-icon {
+  animation: parko-refresh-spin 900ms linear infinite;
+}
+
+@keyframes parko-refresh-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-action-button--refreshing .app-icon { animation: none; }
+}
+
 .quick-parking-report-backdrop {
   position: absolute;
   inset: 0;

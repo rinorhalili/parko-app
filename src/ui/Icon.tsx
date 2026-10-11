@@ -14,7 +14,8 @@ export type AppIconName =
   | "more"
   | "report"
   | "mute"
-  | "recenter";
+  | "recenter"
+  | "refresh";
 
 export function AppIcon({ name, size = 20 }: { name: AppIconName; size?: number }) {
   const common = {
@@ -59,6 +60,12 @@ export function AppIcon({ name, size = 20 }: { name: AppIconName; size?: number 
       {name === "location" && (
         <>
           <path d="m20 4-7.5 16-2.1-6.4L4 11.5 20 4Z" {...common} />
+        </>
+      )}
+      {name === "refresh" && (
+        <>
+          <path d="M20 7v5h-5M4 17v-5h5" {...common} />
+          <path d="M5.6 9a7 7 0 0 1 11.8-2L20 12M4 12l2.6 5a7 7 0 0 0 11.8-2" {...common} />
         </>
       )}
       {name === "map" && (
