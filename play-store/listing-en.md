@@ -1,21 +1,24 @@
-# Parko — Parking in Prishtina
+# Parko — Easier Parking in Prishtina
 
 ## Short description
 
-Find parking, check prices, and help the community in Prishtina.
+Find, report, and manage parking more easily in Prishtina.
 
 ## Full description
 
-Parko helps you find parking in Prishtina with less searching and stress.
+Parko helps you find and use parking in a simpler and more practical way.
 
-- Explore municipal, private, and public parking on the map.
-- Check price, opening hours, parking type, and location.
-- Get driving and walking directions.
-- Report free spaces, new parking, obstacles, or incorrect information.
-- Save favorite parking and your parking history.
-- Follow community updates and report inappropriate content.
+With the Parko app, you can:
 
-Parking conditions can change. Always check local signs, restrictions, and payment requirements before parking.
+- Find parking locations in Prishtina.
+- View information about parking locations.
+- Report parking problems or changes.
+- Navigate more easily to your desired parking location.
+- Save time while searching for parking.
+
+Parko was created to make parking faster, clearer, and more convenient for the citizens and visitors of Prishtina.
+
+Download Parko and park more easily!
 
 ## Category
 

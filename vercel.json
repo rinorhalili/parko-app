@@ -4,6 +4,30 @@
       "source": "/api/v1/:path*",
       "destination": "https://parko-api-mz8b.onrender.com/api/v1/:path*"
     },
+    {
+      "source": "/api/overpass",
+      "destination": "https://overpass-api.de/api/interpreter"
+    },
+    {
+      "source": "/api/route/:path*",
+      "destination": "https://router.project-osrm.org/route/v1/driving/:path*"
+    },
+    {
+      "source": "/api/table/:path*",
+      "destination": "https://router.project-osrm.org/table/v1/driving/:path*"
+    },
+    {
+      "source": "/api/geocode",
+      "destination": "https://nominatim.openstreetmap.org/search"
+    },
+    {
+      "source": "/api/reverse",
+      "destination": "https://nominatim.openstreetmap.org/reverse"
+    },
+    {
+      "source": "/api/osm/:path*",
+      "destination": "https://api.openstreetmap.org/api/0.6/:path*"
+    },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

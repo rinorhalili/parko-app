@@ -1,31 +1,31 @@
 # Parko — Parking në Prishtinë
 
-## Përshkrimi i shkurtër (80 karaktere)
+## Përshkrim i shkurtër
 
-Gjej parking, shiko çmimet dhe ndihmo komunitetin në Prishtinë.
+Gjej parking, kontrollo çmimet dhe ndihmo komunitetin në Prishtinë.
 
-## Përshkrimi i plotë
+## Përshkrim i plotë
 
-Parko të ndihmon të gjesh parking në Prishtinë më shpejt dhe me më pak stres.
+Parko të ndihmon të gjesh parking në Prishtinë me më pak kërkim dhe stres.
 
-- Shiko parkingjet komunale, private dhe publike në hartë.
-- Kontrollo çmimin, orarin, llojin dhe lokacionin e parkingut.
-- Merr udhëzime për vozitje dhe ecje deri te destinacioni.
-- Raporto vende të lira, parking të ri, pengesa ose informacion të pasaktë.
-- Ruaj parkingjet e preferuara dhe historikun tënd.
-- Merr përditësime nga komuniteti dhe raporto përmbajtje të papërshtatshme.
+- Eksploro parkingjet komunale, private dhe publike në hartë.
+- Kontrollo çmimin, orarin, llojin dhe vendndodhjen e parkingut.
+- Merr udhëzime për të shkuar me makinë ose në këmbë.
+- Raporto vende të lira, parkingje të reja, pengesa ose informacione të pasakta.
+- Ruaj parkingjet e preferuara dhe historikun e parkingut.
+- Ndiq përditësimet e komunitetit dhe raporto përmbajtje të papërshtatshme.
 
-Informacioni i parkingut mund të ndryshojë. Gjithmonë kontrollo shenjat, kufizimet dhe pagesën në vend para parkimit.
+Kushtet e parkingut mund të ndryshojnë. Gjithmonë kontrollo tabelat lokale, kufizimet dhe kërkesat për pagesë para se të parkosh.
 
 ## Kategoria
 
-Maps & Navigation
+Harta dhe navigim
 
 ## Email i suportit
 
-Vendos të njëjtin email real si `VITE_SUPPORT_EMAIL`.
+doriangalaxyeu@gmail.com
 
 ## URL-të
 
-- Privacy policy: `https://DOMENI/privacy`
-- Account deletion: `https://DOMENI/delete-account`
+- Politika e privatësisë: https://parko-app.vercel.app/privacy
+- Fshirja e llogarisë: https://parko-app.vercel.app/delete-account
